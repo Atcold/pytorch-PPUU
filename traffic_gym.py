@@ -4,18 +4,11 @@ import random
 import numpy
 import sys
 
-from gym.envs.registration import register
 from gym import core
 
 seed = 123
 random.seed(seed)
 numpy.random.seed(seed)
-
-register(
-    id='Traffic-v0',
-    entry_point='traffic_gym:StatefulEnv',
-    tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
-)
 
 white   = (255, 255, 255)
 black   = (000, 000, 000)
@@ -65,10 +58,8 @@ class Spaceship:
 
 
 class StatefulEnv(core.Env):
-    def __init__(self):
-        pass
 
-    def setup(self, screen_size=600, display=True, dt=4, thrust=0.1, G=0.015, n_planets=3):
+    def __init__(self, screen_size=600, display=True, dt=4, thrust=0.1, G=0.015, n_planets=3):
         self.display = display
         self.screen_size = screen_size
         self.thrust = thrust
@@ -82,10 +73,14 @@ class StatefulEnv(core.Env):
 
         self.clock = pygame.time.Clock()
         self.circle = pygame.Surface((30, 30,))
-        self.reset()
+        self.planets = []
+        self.waypoints = []
+        self.ship = None
+        self.t = 0
+        self.stars = None
+        # self.reset()
 
     def reset(self):
-        self.running = True
         self.t = 0
         self.stars = [(random.randint(0, self.screen_size - 1), random.randint(0, self.screen_size - 1)) for x in range(140)]
         self.planets = []
@@ -132,13 +127,15 @@ class StatefulEnv(core.Env):
         s = [float(i) for i in s]
         return s
 
-    def _collect_action(self, ux, uy, discrete_action):
+    @staticmethod
+    def _collect_action(ux, uy, discrete_action):
         one_hot = numpy.zeros(4)
         one_hot[discrete_action] = 1
         a = numpy.concatenate((numpy.array((ux, uy)), one_hot))
         return a
 
-    def _detect_collision(self, object1, object2):
+    @staticmethod
+    def _detect_collision(object1, object2):
         dx = object1.x - object2.x
         dy = object1.y - object2.y
         distance = math.hypot(dx, dy)

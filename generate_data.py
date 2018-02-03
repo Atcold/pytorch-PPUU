@@ -1,5 +1,7 @@
-import torch, random, numpy, math, argparse, pickle, os, gym
+import torch, random, math, argparse, pickle, os, gym
+import numpy as np
 import traffic_gym  # initialise the gym environment
+from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-screen_size', type=int, default=600)
@@ -13,7 +15,7 @@ opt = parser.parse_args()
 opt.display = (opt.display == 1)
 
 random.seed(opt.seed)
-numpy.random.seed(opt.seed)
+np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
@@ -23,72 +25,82 @@ data_file = '{}/traffic_data_planets={}-episodes={}-dt={}=size={}-seed={}.pkl'.f
                                                                                       opt.screen_size, opt.seed)
 print(f'Will save as {data_file}')
 
+register(
+    id='Traffic-v0',
+    entry_point='traffic_gym:StatefulEnv',
+    tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
+    kwargs={'screen_size': opt.screen_size,
+            'dt': opt.dt,
+            'display': opt.display,
+            'n_planets': opt.n_planets},
+)
+
 env = gym.make('Traffic-v0')
-env.setup(screen_size=opt.screen_size, dt=opt.dt, display=opt.display, n_planets=opt.n_planets)
 env.reset()
 
 
-class PID:
-    def __init__(self, target):
-        self.Kp = 0.003 + numpy.random.normal() * 0.001
-        self.Kd = 0.002 + numpy.random.normal() * 0.001
-        self.last_err_x = 0
-        self.last_err_y = 0
-        self.target = target
-
-    @staticmethod
-    def _detect_collision(object1, object2):
-        dx = object1.x - object2.x
-        dy = object1.y - object2.y
-        distance = math.hypot(dx, dy)
-        if distance < (object1.r + object2.r):
-            return True
-        return False
-
-    def act(self, ship, planets, waypoints):
-        # compute errors and error derivatives
-        err_x = waypoints[self.target].x - ship.x
-        err_y = waypoints[self.target].y - ship.y
-        derr_x = err_x - self.last_err_x
-        derr_y = err_y - self.last_err_y
-        self.last_err_x = err_x
-        self.last_err_y = err_y
-
-        # compute continuous control (PD controller)
-        ux = self.Kp * err_x + self.Kd * derr_x
-        uy = self.Kp * err_y + self.Kd * derr_y
-        norm = math.sqrt(ux ** 2 + uy ** 2)
-        u_clip = 0.15
-        if norm > u_clip:
-            ux /= (norm / u_clip)
-            uy /= (norm / u_clip)
-
-        discrete_action = 0  # no-op by default
-        # if it reaches a waypoint, executes random action
-        reached_waypoint = False
-        for k in range(len(waypoints)):
-            if self._detect_collision(waypoints[k], ship):
-                reached_waypoint = True
-                if random.random() > 0.5:
-                    if random.random() > 0.5:
-                        discrete_action = k + 1
-                    else:
-                        discrete_action = random.choice([x for x in [0, 1, 2, 3] if x != k + 1])
-
-        # occasionally drops cargo
-        if not reached_waypoint:
-            if random.random() > 0.999:
-                discrete_action = random.randint(1, 3)
-
-        one_hot = numpy.zeros(4)
-        one_hot[discrete_action] = 1
-        a = numpy.concatenate((numpy.array((ux, uy)), one_hot))
-        return a
+# class PID:
+#     def __init__(self, target):
+#         self.Kp = 0.003 + np.random.normal() * 0.001
+#         self.Kd = 0.002 + np.random.normal() * 0.001
+#         self.last_err_x = 0
+#         self.last_err_y = 0
+#         self.target = target
+#
+#     @staticmethod
+#     def _detect_collision(object1, object2):
+#         dx = object1.x - object2.x
+#         dy = object1.y - object2.y
+#         distance = math.hypot(dx, dy)
+#         if distance < (object1.r + object2.r):
+#             return True
+#         return False
+#
+#     def act(self, ship, planets, waypoints):
+#         # compute errors and error derivatives
+#         err_x = waypoints[self.target].x - ship.x
+#         err_y = waypoints[self.target].y - ship.y
+#         derr_x = err_x - self.last_err_x
+#         derr_y = err_y - self.last_err_y
+#         self.last_err_x = err_x
+#         self.last_err_y = err_y
+#
+#         # compute continuous control (PD controller)
+#         ux = self.Kp * err_x + self.Kd * derr_x
+#         uy = self.Kp * err_y + self.Kd * derr_y
+#         norm = math.sqrt(ux ** 2 + uy ** 2)
+#         u_clip = 0.15
+#         if norm > u_clip:
+#             ux /= (norm / u_clip)
+#             uy /= (norm / u_clip)
+#
+#         discrete_action = 0  # no-op by default
+#         # if it reaches a waypoint, executes random action
+#         reached_waypoint = False
+#         for k in range(len(waypoints)):
+#             if self._detect_collision(waypoints[k], ship):
+#                 reached_waypoint = True
+#                 if random.random() > 0.5:
+#                     if random.random() > 0.5:
+#                         discrete_action = k + 1
+#                     else:
+#                         discrete_action = random.choice([x for x in [0, 1, 2, 3] if x != k + 1])
+#
+#         # occasionally drops cargo
+#         if not reached_waypoint:
+#             if random.random() > 0.999:
+#                 discrete_action = random.randint(1, 3)
+#
+#         one_hot = np.zeros(4)
+#         one_hot[discrete_action] = 1
+#         a = np.concatenate((np.array((ux, uy)), one_hot))
+#         return a
 
 
 def run_episode():
-    target = random.randint(0, 3 - 1)
-    agent = PID(target)
+    # target = random.randint(0, 3 - 1)
+    # agent = PID(target)
+    action = np.array([0, 0, 1, 0, 0, 0])
     states, actions, rewards = [], [], []
     # exit_condition = 0
     done = False
@@ -97,7 +109,7 @@ def run_episode():
     states.append(state)
     while not done:
         ship, planets, waypoints = objects
-        action = agent.act(ship, planets, waypoints)
+        # action = agent.act(ship, planets, waypoints)
         state, reward, done, objects = env.step(action)
         states.append(state)
         actions.append(action)
