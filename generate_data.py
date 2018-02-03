@@ -4,10 +4,9 @@ import traffic_gym  # initialise the gym environment
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-screen_size', type=int, default=600)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=1)
-parser.add_argument('-n_planets', type=int, default=0)
+parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-dt', type=int, default=4)
 parser.add_argument('-n_episodes', type=int, default=10000)
 parser.add_argument('-data_dir', type=str, default='data/')
@@ -20,19 +19,16 @@ torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
 
-data_file = '{}/traffic_data_planets={}-episodes={}-dt={}=size={}-seed={}.pkl'.format(opt.data_dir, opt.n_planets,
-                                                                                      opt.n_episodes, opt.dt,
-                                                                                      opt.screen_size, opt.seed)
+data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-dt={opt.dt}=-seed={opt.seed}.pkl'
 print(f'Will save as {data_file}')
 
 register(
     id='Traffic-v0',
     entry_point='traffic_gym:StatefulEnv',
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
-    kwargs={'screen_size': opt.screen_size,
-            'dt': opt.dt,
+    kwargs={'dt': opt.dt,
             'display': opt.display,
-            'n_planets': opt.n_planets},
+            'nb_lanes': opt.lanes},
 )
 
 env = gym.make('Traffic-v0')
@@ -108,7 +104,7 @@ def run_episode():
     state, objects = env.reset()
     states.append(state)
     while not done:
-        ship, planets, waypoints = objects
+        # ship, planets, waypoints = objects
         # action = agent.act(ship, planets, waypoints)
         state, reward, done, objects = env.step(action)
         states.append(state)
@@ -121,7 +117,7 @@ def run_episode():
 
 episodes = []
 for i in range(opt.n_episodes):
-    print('episode {}/{}'.format(i + 1, opt.n_episodes))
+    print(f'episode {i + 1}/{opt.n_episodes}')
     states, actions, rewards = run_episode()
     episodes.append({'states': states, 'actions': actions, 'rewards': rewards})
 
