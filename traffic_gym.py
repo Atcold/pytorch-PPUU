@@ -3,6 +3,7 @@ import math
 import random
 import numpy
 import sys
+from custom_graphics import draw_dashed_line
 
 from gym import core
 
@@ -124,8 +125,12 @@ class StatefulEnv(core.Env):
 
             # draw lanes
             for lane in self.lanes:
-                pygame.draw.line(self.screen, colours['white'], (0, lane['min']), (self.screen_size[0], lane['min']))
-                pygame.draw.line(self.screen, colours['white'], (0, lane['max']), (self.screen_size[0], lane['max']))
-                pygame.draw.line(self.screen, colours['red'], (0, lane['centre']), (self.screen_size[0], lane['centre']))
+                screen_width = self.screen_size[0]
+                # pygame.draw.line(self.screen, colours['white'], (0, lane['min']), (screen_width, lane['min']), 3)
+                # pygame.draw.line(self.screen, colours['white'], (0, lane['max']), (screen_width, lane['max']), 3)
+                # pygame.draw.line(self.screen, colours['red'], (0, lane['centre']), (screen_width, lane['centre']))
+                draw_dashed_line(self.screen, colours['white'], (0, lane['min']), (screen_width, lane['min']), 3)
+                draw_dashed_line(self.screen, colours['white'], (0, lane['max']), (screen_width, lane['max']), 3)
+                draw_dashed_line(self.screen, colours['red'], (0, lane['centre']), (screen_width, lane['centre']))
 
             pygame.display.flip()
