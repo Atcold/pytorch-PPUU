@@ -1,7 +1,7 @@
 import pygame
 import math
 import random
-import numpy
+import numpy as np
 import sys
 from custom_graphics import draw_dashed_line
 
@@ -9,103 +9,118 @@ from gym import core
 
 seed = 123
 random.seed(seed)
-numpy.random.seed(seed)
+np.random.seed(seed)
+
+# Conversion LANE_W from real world to pixels
+# A US highway lane width is 3.7 metres, here 50 pixels
+LANE_W = 50  # pixels / 3.7 m, lane width
+SCALE = LANE_W / 3.7
 
 colours = {
-    'white': (255, 255, 255),
-    'black': (000, 000, 000),
-    'red': (255, 000, 000),
-    'green': (000, 255, 000),
-    'magenta': (255, 000, 255),
-    'blue': (000, 000, 255),
+    'w': (255, 255, 255),
+    'k': (000, 000, 000),
+    'r': (255, 000, 000),
+    'g': (000, 255, 000),
+    'm': (255, 000, 255),
+    'b': (000, 000, 255),
+    'c': (000, 255, 255),
 }
 
 
-# class Planet:
-#     def __init__(self, x, y, r):
-#         self.x = x
-#         self.y = y
-#         self.r = r
+# Car coordinate system, origin under the centre of the read axis
 #
-#     def draw(self, screen):
-#         pygame.draw.circle(screen, white, (int(self.x), int(self.y)), self.r)
+#      ^ y                       (x, y, x., y.)
+#      |
+#   +--=-------=--+
+#   |  | z        |
+# -----o-------------->
+#   |  |          |    x
+#   +--=-------=--+
+#      |
 #
+# Will approximate this as having the rear axis on the back of the car!
 #
-# class Waypoint:
-#     def __init__(self, x, y, color_id):
-#         self.x = x
-#         self.y = y
-#         self.r = 10
-#         self.colors = [red, green, blue]
-#         self.color_id = color_id
-#         self.done = 0
-#
-#     def draw(self, screen):
-#         pygame.draw.circle(screen, self.colors[self.color_id], (int(self.x), int(self.y)), int(self.r), 1)
-#
-#
-# class Spaceship:
-#     def __init__(self, x, y):
-#         self.x = x
-#         self.y = y
-#         self.r = 20
-#         self.dx = 0
-#         self.dy = 0
-#         self.ux = 0
-#         self.uy = 0
-#         self.colors = [magenta, red, green, blue]
-#
-#     def draw(self, action, screen):
-#         pygame.draw.circle(screen, self.colors[action], (int(self.x), int(self.y)), int(self.r), 1)
-#         pygame.draw.line(screen, red, (int(self.x), int(self.y)), (int(self.x + self.ux*self.r*2), int(self.y + self.uy*self.r*2)))
+# Car sizes:
+# type    | width [m] | length [m]
+# ---------------------------------
+# Sedan   |    1.8    |    4.8
+# SUV     |    2.0    |    5.3
+# Compact |    1.7    |    4.5
+
+class Car:
+    def __init__(self, nb_lanes, offset, fps):
+        """
+        Initialise a sedan on a random lane
+        :param nb_lanes:
+        """
+        self.length = round(4.8 * SCALE)
+        self.width = round(1.8 * SCALE)
+        self.direction = np.array((1, 0), np.float)
+        self.position = np.array((
+            -self.length,
+            offset + (random.randrange(nb_lanes) + 0.5) * LANE_W - self.width // 2
+        ), np.float)
+        self.speed = 100 * 1000 / 3600 * SCALE  # m / s
+        self.fps = fps
+
+    def draw(self, screen, colour):
+        x, y = self.position
+        rectangle = (int(x), int(y), self.length, self.width)
+        pygame.draw.rect(screen, colour, rectangle)
+
+    def step(self):
+        self.position += self.speed * self.direction / self.fps
 
 
 class StatefulEnv(core.Env):
 
-    lane_width = 50
-    offset = 25
-
-    def __init__(self, display=True, dt=4, nb_lanes=4):
+    def __init__(self, display=True, nb_lanes=4, fps=30, dt=None):
         self.display = display
-        self.screen_size = (600, (nb_lanes + 1) * self.lane_width)
+        self.screen_size = (20 * LANE_W, (nb_lanes + 1) * LANE_W)
+        self.fps = fps
         self.dt = dt
         self.nb_lanes = nb_lanes
         self.clock = pygame.time.Clock()
-        self.t = 0
+        self.frame = 0
         if self.display:
             pygame.init()
             self.screen = pygame.display.set_mode(self.screen_size)
+        self.offset = LANE_W // 2
         self.lanes = self.build_lanes(nb_lanes)
+        self.vehicles = list()
 
-    @classmethod
-    def build_lanes(cls, nb_lanes):
-        lane_width = cls.lane_width
-        offset = cls.offset
-        return tuple({'min': offset + n * lane_width,
-                      'centre': offset + lane_width / 2 + n * lane_width,
-                      'max': offset + (n + 1) * lane_width}
-                     for n in range(nb_lanes))
+    def build_lanes(self, nb_lanes):
+        return tuple(
+            {'min': self.offset + n * LANE_W,
+             'centre': self.offset + LANE_W / 2 + n * LANE_W,
+             'max': self.offset + (n + 1) * LANE_W}
+            for n in range(nb_lanes)
+        )
 
     def reset(self):
-        self.t = 0
+        self.frame = 0
         state = list()
         objects = list()
+        self.vehicles = [Car(self.nb_lanes, self.offset, self.fps)]
         return state, objects
 
     def step(self, action):
+
+        for v in self.vehicles:
+            v.step()
 
         # default reward if nothing happens
         reward = -0.001
         done = False
         state = list()
 
-        if self.t >= 80:
+        if self.frame >= 80:
             done = True
 
         if done:
-            print(f'Episode ended, reward: {reward}, t={self.t}')
+            print(f'Episode ended, reward: {reward}, t={self.frame}')
 
-        self.t += 1
+        self.frame += 1
 
         objects = list()
         return state, reward, done, objects
@@ -117,20 +132,20 @@ class StatefulEnv(core.Env):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: sys.exit()
 
-            # slow down
-            self.clock.tick(90)
+            # measure time elapsed, enforce it to be >= 1/fps
+            self.clock.tick(self.fps)
 
             # clear the screen
-            self.screen.fill(colours['black'])
+            self.screen.fill(colours['k'])
 
             # draw lanes
             for lane in self.lanes:
                 screen_width = self.screen_size[0]
-                # pygame.draw.line(self.screen, colours['white'], (0, lane['min']), (screen_width, lane['min']), 3)
-                # pygame.draw.line(self.screen, colours['white'], (0, lane['max']), (screen_width, lane['max']), 3)
-                # pygame.draw.line(self.screen, colours['red'], (0, lane['centre']), (screen_width, lane['centre']))
-                draw_dashed_line(self.screen, colours['white'], (0, lane['min']), (screen_width, lane['min']), 3)
-                draw_dashed_line(self.screen, colours['white'], (0, lane['max']), (screen_width, lane['max']), 3)
-                draw_dashed_line(self.screen, colours['red'], (0, lane['centre']), (screen_width, lane['centre']))
+                draw_dashed_line(self.screen, colours['w'], (0, lane['min']), (screen_width, lane['min']), 3)
+                draw_dashed_line(self.screen, colours['w'], (0, lane['max']), (screen_width, lane['max']), 3)
+                draw_dashed_line(self.screen, colours['r'], (0, lane['centre']), (screen_width, lane['centre']))
+
+            for v in self.vehicles:
+                v.draw(self.screen, colours['c'])
 
             pygame.display.flip()
