@@ -40,3 +40,12 @@ def draw_dashed_line(surf, color, start_pos, end_pos, width=1, dash_length=10):
         start = origin + (slope * index * dash_length)
         end = origin + (slope * (index + 1) * dash_length)
         pygame.draw.line(surf, color, start.get(), end.get(), width)
+
+
+def draw_text(screen, text, xy):
+    font = pygame.font.SysFont(None, 30)
+    text = font.render(text, True, (255, 255, 255))
+    text_rect = text.get_rect()
+    text_rect.left = xy[0]
+    text_rect.top = xy[1]
+    screen.blit(text, text_rect)
