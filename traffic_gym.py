@@ -60,7 +60,8 @@ class Car:
             -self.length,
             random.choice(lanes)['mid'] - self.width // 2
         ), np.float)
-        self.speed = 100 * 1000 / 3600 * SCALE  # m / s
+        self.target_speed = random.randrange(80, 120) * 1000 / 3600 * SCALE  # m / s
+        self.speed = self.target_speed
         self.dt = dt
 
     def draw(self, screen, colour):
@@ -72,6 +73,7 @@ class Car:
         x, y = self.position
         rectangle = (int(x), int(y), self.length, self.width)
         pygame.draw.rect(screen, colour, rectangle)
+        pygame.draw.rect(screen, tuple(c/2 for c in colour), rectangle, 4)
 
     def step(self):  # takes also the parameter action = state temporal derivative
         """
@@ -164,9 +166,10 @@ class StatefulEnv(core.Env):
     def render(self, mode='human'):
         if self.display:
 
-            # capture the closing window event
+            # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: sys.exit()
+                elif event.type == pygame.MOUSEBUTTONUP: self._pause()
 
             # measure time elapsed, enforce it to be >= 1/fps
             self.clock.tick(self.fps)
@@ -187,3 +190,13 @@ class StatefulEnv(core.Env):
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
 
             pygame.display.flip()
+
+    def _pause(self):
+        pause = True
+        while pause:
+            self.clock.tick(15)
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    sys.exit()
+                elif e.type == pygame.MOUSEBUTTONUP:
+                    pause = False
