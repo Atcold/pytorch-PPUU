@@ -48,7 +48,7 @@ colours = {
 # Compact |    1.7    |    4.5
 
 class Car:
-    def __init__(self, lanes, dt):
+    def __init__(self, lanes, free_lanes, dt):
         """
         Initialise a sedan on a random lane
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
@@ -57,14 +57,15 @@ class Car:
         self.length = round(4.8 * SCALE)
         self.width = round(1.8 * SCALE)
         self.direction = np.array((1, 0), np.float)
+        lane = random.choice(tuple(free_lanes))
         self.position = np.array((
             -self.length,
-            random.choice(lanes)['mid'] - self.width // 2
+            lanes[lane]['mid'] - self.width // 2
         ), np.float)
-        self.target_speed = random.randrange(80, 120) * 1000 / 3600 * SCALE  # m / s
+        self.target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
         self.speed = self.target_speed
         self.dt = dt
-        self.acceleration = 0
+        # self.acceleration = 0
         self.colour = colours['c']
         self._braked = False
 
@@ -83,8 +84,8 @@ class Car:
         """
         Update current position, given current velocity and acceleration
         """
-        self.position += max(self.speed + self.acceleration * self.dt, 0) * self.direction * self.dt
-        self.acceleration = 0
+        self.position += self.speed * self.direction * self.dt
+        # self.acceleration = 0
 
     def get_lane_set(self, lanes):
         """
@@ -101,7 +102,7 @@ class Car:
         return busy_lanes
 
     def safe_distance(self):
-        factor = 2  # 0.9 Germany, 2 safe
+        factor = .9  # 0.9 Germany, 2 safe
         return self.speed * factor
 
     def front(self):
@@ -112,7 +113,8 @@ class Car:
 
     def brake(self, fraction):
         g, mu = 9.81, 0.9  # gravity and friction coefficient
-        self.acceleration = -fraction * g * mu * SCALE
+        acceleration = -fraction * g * mu * SCALE
+        self.speed += acceleration * self.dt
         self.colour = colours['y']
         self._braked = True
 
@@ -121,7 +123,8 @@ class StatefulEnv(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30):
         self.display = display
-        self.screen_size = (80 * LANE_W, (nb_lanes + 1) * LANE_W)
+        self.offset = int(1.5 * LANE_W)
+        self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
         self.fps = fps
         self.delta_t = 1 / fps
         self.nb_lanes = nb_lanes
@@ -130,13 +133,12 @@ class StatefulEnv(core.Env):
         if self.display:
             pygame.init()
             self.screen = pygame.display.set_mode(self.screen_size)
-            pygame.display.set_caption('Traffic simulator')
-        self.offset = LANE_W // 2
         self.lanes = self.build_lanes(nb_lanes)
         self.vehicles = None
-        self.traffic_rate = 10  # new cars per second
+        self.traffic_rate = 5  # new cars per second
         self.lane_occupancy = None
         self.collision = None
+        self.episode = 0
 
     def build_lanes(self, nb_lanes):
         return tuple(
@@ -151,12 +153,15 @@ class StatefulEnv(core.Env):
         self.frame = 0
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in self.lanes]
+        self.episode += 1
+        pygame.display.set_caption(f'Traffic simulator, episode {self.episode}')
         state = list()
         objects = list()
         return state, objects
 
     def step(self, action):
 
+        self.collision = False
         free_lanes = set(range(self.nb_lanes))
 
         for v in self.vehicles:
@@ -174,7 +179,7 @@ class StatefulEnv(core.Env):
         # Randomly add vehicles
         if random.random() < self.traffic_rate * self.delta_t:
             if free_lanes:
-                car = Car([self.lanes[lane] for lane in free_lanes], self.delta_t)
+                car = Car(self.lanes, free_lanes, self.delta_t)
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
                     self.lane_occupancy[l].append(car)
@@ -187,7 +192,7 @@ class StatefulEnv(core.Env):
                 distance = lane[i - 1].back() - lane[i].front()
                 safe_distance = lane[i].safe_distance()
                 if distance < safe_distance:
-                    lane[i].brake(10)
+                    lane[i].brake(max(0.005 * safe_distance / distance, 1))
                 if distance <= 0:
                     lane[i].colour = colours['r']
                     # Accident, do something!!!

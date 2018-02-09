@@ -29,7 +29,6 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-env.reset()
 
 
 # class PID:
@@ -94,22 +93,22 @@ def run_episode():
     # target = random.randint(0, 3 - 1)
     # agent = PID(target)
     action = np.array([0, 0, 1, 0, 0, 0])
-    states, actions, rewards = [], [], []
+    states_, actions_, rewards_ = [], [], []
     # exit_condition = 0
     done = False
 
     state, objects = env.reset()
-    states.append(state)
+    states_.append(state)
     while not done:
         # ship, planets, waypoints = objects
         # action = agent.act(ship, planets, waypoints)
         state, reward, done, objects = env.step(action)
-        states.append(state)
-        actions.append(action)
-        rewards.append(reward)
+        states_.append(state)
+        actions_.append(action)
+        rewards_.append(reward)
         env.render()
 
-    return states, actions, rewards
+    return states_, actions_, rewards_
 
 
 episodes = []
