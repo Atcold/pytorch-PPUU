@@ -12,7 +12,7 @@ np.random.seed(seed)
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
-LANE_W = 50  # pixels / 3.7 m, lane width
+LANE_W = 20  # pixels / 3.7 m, lane width
 SCALE = LANE_W / 3.7
 
 colours = {
@@ -23,6 +23,7 @@ colours = {
     'm': (255, 000, 255),
     'b': (000, 000, 255),
     'c': (000, 255, 255),
+    'y': (255, 255, 000),
 }
 
 
@@ -63,23 +64,27 @@ class Car:
         self.target_speed = random.randrange(80, 120) * 1000 / 3600 * SCALE  # m / s
         self.speed = self.target_speed
         self.dt = dt
+        self.acceleration = 0
+        self.colour = colours['c']
+        self._braked = False
 
-    def draw(self, screen, colour):
+    def draw(self, screen):
         """
         Draw current car on screen with a specific colour
         :param screen: PyGame ``Surface`` where to draw
-        :param colour: in a (R, G, B) format
         """
         x, y = self.position
         rectangle = (int(x), int(y), self.length, self.width)
-        pygame.draw.rect(screen, colour, rectangle)
-        pygame.draw.rect(screen, tuple(c/2 for c in colour), rectangle, 4)
+        pygame.draw.rect(screen, self.colour, rectangle)
+        pygame.draw.rect(screen, tuple(c/2 for c in self.colour), rectangle, 4)
+        if self._braked: self.colour = colours['g']
 
     def step(self):  # takes also the parameter action = state temporal derivative
         """
         Update current position, given current velocity and acceleration
         """
-        self.position += self.speed * self.direction * self.dt
+        self.position += max(self.speed + self.acceleration * self.dt, 0) * self.direction * self.dt
+        self.acceleration = 0
 
     def get_lane_set(self, lanes):
         """
@@ -95,12 +100,28 @@ class Car:
                 busy_lanes.add(lane_idx)
         return busy_lanes
 
+    def safe_distance(self):
+        factor = 2  # 0.9 Germany, 2 safe
+        return self.speed * factor
+
+    def front(self):
+        return int(self.position[0] + self.length)
+
+    def back(self):
+        return int(self.position[0])
+
+    def brake(self, fraction):
+        g, mu = 9.81, 0.9  # gravity and friction coefficient
+        self.acceleration = -fraction * g * mu * SCALE
+        self.colour = colours['y']
+        self._braked = True
+
 
 class StatefulEnv(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30):
         self.display = display
-        self.screen_size = (20 * LANE_W, (nb_lanes + 1) * LANE_W)
+        self.screen_size = (80 * LANE_W, (nb_lanes + 1) * LANE_W)
         self.fps = fps
         self.delta_t = 1 / fps
         self.nb_lanes = nb_lanes
@@ -112,8 +133,10 @@ class StatefulEnv(core.Env):
             pygame.display.set_caption('Traffic simulator')
         self.offset = LANE_W // 2
         self.lanes = self.build_lanes(nb_lanes)
-        self.vehicles = list()
-        self.traffic_rate = 2  # new cars per second
+        self.vehicles = None
+        self.traffic_rate = 10  # new cars per second
+        self.lane_occupancy = None
+        self.collision = None
 
     def build_lanes(self, nb_lanes):
         return tuple(
@@ -124,10 +147,12 @@ class StatefulEnv(core.Env):
         )
 
     def reset(self):
+        # Initialise environment state
         self.frame = 0
+        self.vehicles = list()
+        self.lane_occupancy = [[] for _ in self.lanes]
         state = list()
         objects = list()
-        self.vehicles = list()
         return state, objects
 
     def step(self, action):
@@ -136,23 +161,44 @@ class StatefulEnv(core.Env):
 
         for v in self.vehicles:
             v.step()
+            lanes_occupied = v.get_lane_set(self.lanes)
             # Remove from the environment cars outside the screen
             if v.position[0] > self.screen_size[0]:
                 self.vehicles.remove(v)
+                for l in lanes_occupied:
+                    self.lane_occupancy[l].remove(v)
             # Check available lanes
-            if v.position[0] < 0 + v.length:  # v.length as safety distance for the moment
-                free_lanes -= v.get_lane_set(self.lanes)
+            if v.position[0] < v.safe_distance():  # at most safe_distance ahead
+                free_lanes -= lanes_occupied
 
         # Randomly add vehicles
         if random.random() < self.traffic_rate * self.delta_t:
-            self.vehicles.append(Car([self.lanes[lane] for lane in free_lanes], self.delta_t))
+            if free_lanes:
+                car = Car([self.lanes[lane] for lane in free_lanes], self.delta_t)
+                self.vehicles.append(car)
+                for l in car.get_lane_set(self.lanes):
+                    self.lane_occupancy[l].append(car)
+
+        # Compute distances
+        # distances = list()
+        for lane in self.lane_occupancy:
+            # distances.append([lane[i].back() - lane[i + 1].front() for i in range(len(lane) - 1)])
+            for i in range(1, len(lane)):
+                distance = lane[i - 1].back() - lane[i].front()
+                safe_distance = lane[i].safe_distance()
+                if distance < safe_distance:
+                    lane[i].brake(10)
+                if distance <= 0:
+                    lane[i].colour = colours['r']
+                    # Accident, do something!!!
+                    self.collision = lane[i]
 
         # default reward if nothing happens
         reward = -0.001
         done = False
         state = list()
 
-        if self.frame >= 800:
+        if self.frame >= 10000:
             done = True
 
         if done:
@@ -165,6 +211,8 @@ class StatefulEnv(core.Env):
 
     def render(self, mode='human'):
         if self.display:
+
+            # self._pause()
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
@@ -185,11 +233,13 @@ class StatefulEnv(core.Env):
                 draw_dashed_line(self.screen, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
             for v in self.vehicles:
-                v.draw(self.screen, colours['c'])
+                v.draw(self.screen)
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
 
             pygame.display.flip()
+
+            if self.collision: self._pause()
 
     def _pause(self):
         pause = True
@@ -200,3 +250,4 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif e.type == pygame.MOUSEBUTTONUP:
                     pause = False
+
