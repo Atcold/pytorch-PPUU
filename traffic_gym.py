@@ -101,13 +101,16 @@ class Car:
                 busy_lanes.add(lane_idx)
         return busy_lanes
 
+    @property
     def safe_distance(self):
-        factor = .9  # 0.9 Germany, 2 safe
+        factor = random.gauss(1, .03)  # 0.9 Germany, 2 safe
         return self.speed * factor
 
+    @property
     def front(self):
         return int(self.position[0] + self.length)
 
+    @property
     def back(self):
         return int(self.position[0])
 
@@ -173,11 +176,11 @@ class StatefulEnv(core.Env):
                 for l in lanes_occupied:
                     self.lane_occupancy[l].remove(v)
             # Check available lanes
-            if v.position[0] < v.safe_distance():  # at most safe_distance ahead
+            if v.position[0] < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles
-        if random.random() < self.traffic_rate * self.delta_t:
+        if random.random() < (self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t)) * self.delta_t:
             if free_lanes:
                 car = Car(self.lanes, free_lanes, self.delta_t)
                 self.vehicles.append(car)
@@ -187,11 +190,10 @@ class StatefulEnv(core.Env):
         # Compute distances
         # distances = list()
         for lane in self.lane_occupancy:
-            # distances.append([lane[i].back() - lane[i + 1].front() for i in range(len(lane) - 1)])
             for i in range(1, len(lane)):
-                distance = lane[i - 1].back() - lane[i].front()
-                safe_distance = lane[i].safe_distance()
-                if distance < safe_distance:
+                distance = lane[i - 1].back - lane[i].front
+                safe_distance = lane[i].safe_distance
+                if safe_distance > distance > 0:
                     lane[i].brake(max(0.005 * safe_distance / distance, 1))
                 if distance <= 0:
                     lane[i].colour = colours['r']
@@ -255,4 +257,3 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif e.type == pygame.MOUSEBUTTONUP:
                     pause = False
-

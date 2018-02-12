@@ -1,6 +1,10 @@
-import torch, random, math, argparse, pickle, os, gym
+import argparse
+import gym
 import numpy as np
-import traffic_gym  # initialise the gym environment
+import os
+import pickle
+import random
+import torch
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
