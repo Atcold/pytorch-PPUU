@@ -1,3 +1,5 @@
+import bisect
+
 import pygame
 import math
 import random
@@ -68,6 +70,8 @@ class Car:
         # self.acceleration = 0
         self.colour = colours['c']
         self._braked = False
+        self._passing = False
+        self.target_lane = self.position[1]
 
     def draw(self, screen):
         """
@@ -84,6 +88,9 @@ class Car:
         """
         Update current position, given current velocity and acceleration
         """
+        error = 0.01 * (self.target_lane - self.position[1])
+        if error == 0: self._passing = False
+        self.direction = np.array((1, error)) / np.sqrt(1 + error ** 2)
         self.position += self.speed * self.direction * self.dt
         # self.acceleration = 0
 
@@ -115,33 +122,58 @@ class Car:
         return int(self.position[0])
 
     def brake(self, fraction):
+        # Maximum braking acceleration, eq. (1) from
+        # http://www.tandfonline.com/doi/pdf/10.1080/16484142.2007.9638118
         g, mu = 9.81, 0.9  # gravity and friction coefficient
-        acceleration = -fraction * g * mu * SCALE
-        self.speed += acceleration * self.dt
-        self.colour = colours['y']
-        self._braked = True
+        if not self._passing:
+            acceleration = -fraction * g * mu * SCALE
+            self.speed += acceleration * self.dt
+            self.colour = colours['y']
+            self._braked = True
+
+    def pass_(self, lanes):
+        if not self._passing and self.get_lane_set(lanes).pop() > 0:
+            self.target_lane = self.position[1] - LANE_W
+        self._passing = True
+
+    def __gt__(self, other):
+        """
+        Check if self is in front of other: self.back > other.front
+        """
+        return self.back > other.front
+
+    def __lt__(self, other):
+        """
+        Check if self is behind of other: self.front < other.back
+        """
+        return self.front < other.back
+
+    # def __eq__(self, other):
+    #     return self.front >= other.back and self.back <= other.front
 
 
 class StatefulEnv(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30):
-        self.display = display
+
         self.offset = int(1.5 * LANE_W)
         self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
-        self.fps = fps
-        self.delta_t = 1 / fps
-        self.nb_lanes = nb_lanes
-        self.clock = pygame.time.Clock()
-        self.frame = 0
-        if self.display:
-            pygame.init()
-            self.screen = pygame.display.set_mode(self.screen_size)
-        self.lanes = self.build_lanes(nb_lanes)
-        self.vehicles = None
-        self.traffic_rate = 5  # new cars per second
-        self.lane_occupancy = None
-        self.collision = None
-        self.episode = 0
+        self.fps = fps  # updates per second
+        self.delta_t = 1 / fps  # simulation timing interval
+        self.nb_lanes = nb_lanes  # total number of lanes
+        self.frame = 0  # frame index
+        self.lanes = self.build_lanes(nb_lanes)  # create lanes object, list of dicts
+        self.vehicles = None  # vehicles list
+        self.traffic_rate = 15  # new cars per second
+        self.lane_occupancy = None  # keeps track of what vehicle are in each lane
+        self.collision = None  # an accident happened
+        self.episode = 0  # episode counter
+
+        self.display = display
+        if self.display:  # if display is required
+            pygame.init()  # init PyGame
+            self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
+            self.clock = pygame.time.Clock()  # set up timing
 
     def build_lanes(self, nb_lanes):
         return tuple(
@@ -165,40 +197,55 @@ class StatefulEnv(core.Env):
     def step(self, action):
 
         self.collision = False
-        free_lanes = set(range(self.nb_lanes))
+        # Free lane beginnings
+        # free_lanes = set(range(self.nb_lanes))
+        free_lanes = set(range(1, self.nb_lanes))
 
+        # For every vehicle
+        #   t <- t + dt
+        #   leave or enter lane
+        #   remove itself if out of screen
+        #   update free lane beginnings
         for v in self.vehicles:
             v.step()
             lanes_occupied = v.get_lane_set(self.lanes)
+            # Check for any passing and update lane_occupancy
+            for l in range(self.nb_lanes):
+                if l in lanes_occupied and v not in self.lane_occupancy[l]:
+                    # Enter lane
+                    bisect.insort(self.lane_occupancy[l], v)
+                elif l not in lanes_occupied and v in self.lane_occupancy[l]:
+                    # Leave lane
+                    self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
             if v.position[0] > self.screen_size[0]:
                 self.vehicles.remove(v)
-                for l in lanes_occupied:
-                    self.lane_occupancy[l].remove(v)
-            # Check available lanes
+                for l in lanes_occupied: self.lane_occupancy[l].remove(v)
+            # Update available lane beginnings
             if v.position[0] < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
 
-        # Randomly add vehicles
-        if random.random() < (self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t)) * self.delta_t:
+        # Randomly add vehicles, up to 1 / dt per second
+        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t:
             if free_lanes:
                 car = Car(self.lanes, free_lanes, self.delta_t)
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
-                    self.lane_occupancy[l].append(car)
+                    # Prepend the new car to each lane it can be found
+                    self.lane_occupancy[l].insert(0, car)
 
-        # Compute distances
-        # distances = list()
-        for lane in self.lane_occupancy:
-            for i in range(1, len(lane)):
-                distance = lane[i - 1].back - lane[i].front
-                safe_distance = lane[i].safe_distance
+        # Compute distances, therefore brake or pass
+        for vehicle_list in self.lane_occupancy:
+            for i in range(len(vehicle_list) - 1):
+                distance = vehicle_list[i + 1].back - vehicle_list[i].front
+                safe_distance = vehicle_list[i].safe_distance
                 if safe_distance > distance > 0:
-                    lane[i].brake(max(0.005 * safe_distance / distance, 1))
+                    if random.random() < 0.1: vehicle_list[i].pass_(self.lanes)
+                    else: vehicle_list[i].brake(max(0.005 * safe_distance / distance, 1))
                 if distance <= 0:
-                    lane[i].colour = colours['r']
+                    vehicle_list[i].colour = colours['r']
                     # Accident, do something!!!
-                    self.collision = lane[i]
+                    self.collision = vehicle_list[i]
 
         # default reward if nothing happens
         reward = -0.001
@@ -243,6 +290,7 @@ class StatefulEnv(core.Env):
                 v.draw(self.screen)
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
+            draw_text(self.screen, f'frame #: {self.frame}', (120, 2))
 
             pygame.display.flip()
 
