@@ -67,7 +67,6 @@ class Car:
         self.target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
         self.speed = self.target_speed
         self.dt = dt
-        # self.acceleration = 0
         self.colour = colours['c']
         self._braked = False
         self._passing = False
@@ -88,11 +87,12 @@ class Car:
         """
         Update current position, given current velocity and acceleration
         """
-        error = 0.01 * (self.target_lane - self.position[1])
-        if error == 0: self._passing = False
-        self.direction = np.array((1, error)) / np.sqrt(1 + error ** 2)
-        self.position += self.speed * self.direction * self.dt
-        # self.acceleration = 0
+        error = 0.01 * round(self.target_lane - self.position[1])
+        if error == 0:
+            self._passing = False
+            self.colour = colours['c']
+        self.direction = np.array((1, error)) / np.sqrt(1 + error ** 2)  # function of theta
+        self.position += self.speed * self.direction * self.dt  # function of newer speed
 
     def get_lane_set(self, lanes):
         """
@@ -131,10 +131,12 @@ class Car:
             self.colour = colours['y']
             self._braked = True
 
-    def pass_(self, lanes):
-        if not self._passing and self.get_lane_set(lanes).pop() > 0:
+    def pass_(self):
+        if not self._passing:
             self.target_lane = self.position[1] - LANE_W
-        self._passing = True
+            self._passing = True
+            self.colour = colours['m']
+            self._braked = False
 
     def __gt__(self, other):
         """
@@ -151,6 +153,11 @@ class Car:
     # def __eq__(self, other):
     #     return self.front >= other.back and self.back <= other.front
 
+    def __sub__(self, other):
+        """
+        Return the distance between self.back and other.front
+        """
+        return self.back - other.front
 
 class StatefulEnv(core.Env):
 
@@ -237,10 +244,11 @@ class StatefulEnv(core.Env):
         # Compute distances, therefore brake or pass
         for vehicle_list in self.lane_occupancy:
             for i in range(len(vehicle_list) - 1):
-                distance = vehicle_list[i + 1].back - vehicle_list[i].front
+                distance = vehicle_list[i + 1] - vehicle_list[i]
                 safe_distance = vehicle_list[i].safe_distance
                 if safe_distance > distance > 0:
-                    if random.random() < 0.1: vehicle_list[i].pass_(self.lanes)
+                    if self._safe(vehicle_list[i]):
+                        vehicle_list[i].pass_()
                     else: vehicle_list[i].brake(max(0.005 * safe_distance / distance, 1))
                 if distance <= 0:
                     vehicle_list[i].colour = colours['r']
@@ -262,6 +270,21 @@ class StatefulEnv(core.Env):
 
         objects = list()
         return state, reward, done, objects
+
+    def _safe(self, v):
+        if v.back < v.safe_distance: return False  # Cannot see in the future
+        current_lane = v.get_lane_set(self.lanes).pop()
+        if current_lane == 0: return False
+        # Find car behind me one lane up / left
+        target_lane = self.lane_occupancy[current_lane - 1]
+        me = bisect.bisect(target_lane, v)
+        if me > 0:
+            behind = target_lane[me - 1]
+            if v - behind < behind.safe_distance: return False
+        if me < len(target_lane):
+            ahead = target_lane[me]
+            if ahead - v < v.safe_distance: return False
+        return True
 
     def render(self, mode='human'):
         if self.display:
