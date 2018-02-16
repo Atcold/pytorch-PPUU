@@ -71,6 +71,7 @@ class Car:
         self._braked = False
         self._passing = False
         self.target_lane = self.position[1]
+        self.a = {'brake': 0, 'pass': 1, 'crash': -1}
 
     def draw(self, screen):
         """
@@ -83,14 +84,18 @@ class Car:
         pygame.draw.rect(screen, tuple(c/2 for c in self.colour), rectangle, 4)
         if self._braked: self.colour = colours['g']
 
-    def step(self):  # takes also the parameter action = state temporal derivative
+    def step(self, action):  # takes also the parameter action = state temporal derivative
         """
         Update current position, given current velocity and acceleration
         """
+        if action[0] == self.a['brake']: self.brake(action[1])
+        if action[0] == self.a['pass']: self.pass_()
         error = 0.01 * round(self.target_lane - self.position[1])
-        if error == 0:
+        if self._passing and error == 0:
             self._passing = False
             self.colour = colours['c']
+        # theta += d_theta
+        # speed += acceleration * dt
         self.direction = np.array((1, error)) / np.sqrt(1 + error ** 2)  # function of theta
         self.position += self.speed * self.direction * self.dt  # function of newer speed
 
@@ -132,11 +137,10 @@ class Car:
             self._braked = True
 
     def pass_(self):
-        if not self._passing:
-            self.target_lane = self.position[1] - LANE_W
-            self._passing = True
-            self.colour = colours['m']
-            self._braked = False
+        self.target_lane = self.position[1] - LANE_W
+        self._passing = True
+        self.colour = colours['m']
+        self._braked = False
 
     def __gt__(self, other):
         """
@@ -150,14 +154,38 @@ class Car:
         """
         return self.front < other.back
 
-    # def __eq__(self, other):
-    #     return self.front >= other.back and self.back <= other.front
-
     def __sub__(self, other):
         """
         Return the distance between self.back and other.front
         """
         return self.back - other.front
+
+    def policy(self, state):
+        """
+        Bring together _pass, brake
+        :return: acceleration, d\theta
+        """
+        action = (None, None)
+        car_ahead = state[1][1]
+        if car_ahead:
+            distance = car_ahead - self
+            if self.safe_distance > distance > 0:
+                if self._safe(state): action = (self.a['pass'], None)
+                else: action = (self.a['brake'], min(0.1 * (self.safe_distance / distance)**0.5, 1))
+            elif distance <= 0:
+                self.colour = colours['r']
+                # Accident, do something!!!
+                action = (self.a['crash'], self)
+        return action
+
+    def _safe(self, state):
+        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self._passing: return False
+        if not state[0]: return False
+        if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
+        if state[0][1] and state[0][1] - self < self.safe_distance: return False
+        return True
+
 
 class StatefulEnv(core.Env):
 
@@ -214,7 +242,6 @@ class StatefulEnv(core.Env):
         #   remove itself if out of screen
         #   update free lane beginnings
         for v in self.vehicles:
-            v.step()
             lanes_occupied = v.get_lane_set(self.lanes)
             # Check for any passing and update lane_occupancy
             for l in range(self.nb_lanes):
@@ -241,19 +268,29 @@ class StatefulEnv(core.Env):
                     # Prepend the new car to each lane it can be found
                     self.lane_occupancy[l].insert(0, car)
 
-        # Compute distances, therefore brake or pass
-        for vehicle_list in self.lane_occupancy:
-            for i in range(len(vehicle_list) - 1):
-                distance = vehicle_list[i + 1] - vehicle_list[i]
-                safe_distance = vehicle_list[i].safe_distance
-                if safe_distance > distance > 0:
-                    if self._safe(vehicle_list[i]):
-                        vehicle_list[i].pass_()
-                    else: vehicle_list[i].brake(max(0.005 * safe_distance / distance, 1))
-                if distance <= 0:
-                    vehicle_list[i].colour = colours['r']
-                    # Accident, do something!!!
-                    self.collision = vehicle_list[i]
+        # Generate state representation for each vehicle
+        for v in self.vehicles:
+            lane_set = v.get_lane_set(self.lanes)
+            # If v is in one lane only
+            # Provide a list of (up to) 6 neighbouring vehicles
+            current_lane_idx = lane_set.pop()
+            # Given that I'm not in the left/right-most lane
+            left_vehicles = self._get_neighbours(current_lane_idx, - 1, v)\
+                if current_lane_idx > 0 and len(lane_set) == 0 else None
+            mid_vehicles = self._get_neighbours(current_lane_idx, 0, v)
+            right_vehicles = self._get_neighbours(current_lane_idx, + 1, v)\
+                if current_lane_idx < len(self.lanes) - 1 else None
+            state = left_vehicles, mid_vehicles, right_vehicles if len(lane_set) == 0\
+                else mid_vehicles, right_vehicles
+
+            # Compute the action
+            action = v.policy(state)
+
+            # Check for accident
+            if action[0] and action[0] < 0: self.collision = v
+
+            # Act accordingly
+            v.step(action)
 
         # default reward if nothing happens
         reward = -0.001
@@ -271,20 +308,15 @@ class StatefulEnv(core.Env):
         objects = list()
         return state, reward, done, objects
 
-    def _safe(self, v):
-        if v.back < v.safe_distance: return False  # Cannot see in the future
-        current_lane = v.get_lane_set(self.lanes).pop()
-        if current_lane == 0: return False
-        # Find car behind me one lane up / left
-        target_lane = self.lane_occupancy[current_lane - 1]
-        me = bisect.bisect(target_lane, v)
-        if me > 0:
-            behind = target_lane[me - 1]
-            if v - behind < behind.safe_distance: return False
-        if me < len(target_lane):
-            ahead = target_lane[me]
-            if ahead - v < v.safe_distance: return False
-        return True
+    def _get_neighbours(self, current_lane_idx, d_lane, v):
+        target_lane = self.lane_occupancy[current_lane_idx + d_lane]
+        # Find me in the lane
+        if d_lane == 0: my_idx = target_lane.index(v)
+        else: my_idx = bisect.bisect(target_lane, v)
+        behind = target_lane[my_idx - 1] if my_idx > 0 else None
+        if d_lane == 0: my_idx += 1
+        ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
+        return behind, ahead
 
     def render(self, mode='human'):
         if self.display:
