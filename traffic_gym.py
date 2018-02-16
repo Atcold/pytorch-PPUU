@@ -171,7 +171,7 @@ class Car:
             distance = car_ahead - self
             if self.safe_distance > distance > 0:
                 if self._safe(state): action = (self.a['pass'], None)
-                else: action = (self.a['brake'], min(0.1 * (self.safe_distance / distance)**0.5, 1))
+                else: action = (self.a['brake'], min((self.safe_distance / distance)**0.2 - 1, 1))
             elif distance <= 0:
                 self.colour = colours['r']
                 # Accident, do something!!!
