@@ -56,48 +56,52 @@ class Car:
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
         :param dt: temporal updating interval
         """
-        self.length = round(4.8 * SCALE)
-        self.width = round(1.8 * SCALE)
-        self.direction = np.array((1, 0), np.float)
+        self._length = round(4.8 * SCALE)
+        self._width = round(1.8 * SCALE)
+        self._direction = np.array((1, 0), np.float)
         lane = random.choice(tuple(free_lanes))
-        self.position = np.array((
-            -self.length,
-            lanes[lane]['mid'] - self.width // 2
+        self._position = np.array((
+            -self._length,
+            lanes[lane]['mid'] - self._width // 2
         ), np.float)
-        self.target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
-        self.speed = self.target_speed
-        self.dt = dt
-        self.colour = colours['c']
+        self._target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
+        self._speed = self._target_speed
+        self._dt = dt
+        self._colour = colours['c']
         self._braked = False
         self._passing = False
-        self.target_lane = self.position[1]
-        self.a = {'brake': 0, 'pass': 1, 'crash': -1}
+        self._target_lane = self._position[1]
+        self.crashed = False
+        self._error = 0
 
     def draw(self, screen):
         """
         Draw current car on screen with a specific colour
         :param screen: PyGame ``Surface`` where to draw
         """
-        x, y = self.position
-        rectangle = (int(x), int(y), self.length, self.width)
-        pygame.draw.rect(screen, self.colour, rectangle)
-        pygame.draw.rect(screen, tuple(c/2 for c in self.colour), rectangle, 4)
-        if self._braked: self.colour = colours['g']
+        x, y = self._position
+        rectangle = (int(x), int(y), self._length, self._width)
+        pygame.draw.rect(screen, self._colour, rectangle)
+        pygame.draw.rect(screen, tuple(c/2 for c in self._colour), rectangle, 4)
+        if self._braked: self._colour = colours['g']
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
         """
         Update current position, given current velocity and acceleration
         """
-        if action[0] == self.a['brake']: self.brake(action[1])
-        if action[0] == self.a['pass']: self.pass_()
-        error = 0.01 * round(self.target_lane - self.position[1])
-        if self._passing and error == 0:
+        # Vehicle state definition
+        vehicle_state = np.array((*self._position, *self._direction, self._speed))
+        # State integration
+        vehicle_state += action * self._dt
+        # Split individual components (and normalise direction)
+        self._position = vehicle_state[0:2]
+        self._direction = vehicle_state[2:4] / np.sqrt(np.linalg.norm(vehicle_state[2:4]))
+        self._speed = vehicle_state[4]
+
+        # Deal with latent variable and visual indicator
+        if self._passing and self._error == 0:
             self._passing = False
-            self.colour = colours['c']
-        # theta += d_theta
-        # speed += acceleration * dt
-        self.direction = np.array((1, error)) / np.sqrt(1 + error ** 2)  # function of theta
-        self.position += self.speed * self.direction * self.dt  # function of newer speed
+            self._colour = colours['c']
 
     def get_lane_set(self, lanes):
         """
@@ -106,8 +110,8 @@ class Car:
         :return: busy lanes set
         """
         busy_lanes = set()
-        y = self.position[1]
-        w = self.width
+        y = self._position[1]
+        w = self._width
         for lane_idx, lane in enumerate(lanes):
             if lane['min'] <= y <= lane['max'] or lane['min'] <= y + w <= lane['max']:
                 busy_lanes.add(lane_idx)
@@ -116,30 +120,30 @@ class Car:
     @property
     def safe_distance(self):
         factor = random.gauss(1, .03)  # 0.9 Germany, 2 safe
-        return self.speed * factor
+        return self._speed * factor
 
     @property
     def front(self):
-        return int(self.position[0] + self.length)
+        return int(self._position[0] + self._length)
 
     @property
     def back(self):
-        return int(self.position[0])
+        return int(self._position[0])
 
-    def brake(self, fraction):
+    def _brake(self, fraction):
+        if self._passing: return 0
         # Maximum braking acceleration, eq. (1) from
         # http://www.tandfonline.com/doi/pdf/10.1080/16484142.2007.9638118
         g, mu = 9.81, 0.9  # gravity and friction coefficient
-        if not self._passing:
-            acceleration = -fraction * g * mu * SCALE
-            self.speed += acceleration * self.dt
-            self.colour = colours['y']
-            self._braked = True
+        acceleration = -fraction * g * mu * SCALE
+        self._colour = colours['y']
+        self._braked = True
+        return acceleration
 
-    def pass_(self):
-        self.target_lane = self.position[1] - LANE_W
+    def _pass(self):
+        self._target_lane = self._position[1] - LANE_W
         self._passing = True
-        self.colour = colours['m']
+        self._colour = colours['m']
         self._braked = False
 
     def __gt__(self, other):
@@ -160,22 +164,38 @@ class Car:
         """
         return self.back - other.front
 
-    def policy(self, state):
+    def policy(self, observation):
         """
         Bring together _pass, brake
         :return: acceleration, d\theta
         """
-        action = (None, None)
-        car_ahead = state[1][1]
+        d_position_dt = self._speed * self._direction
+        d_direction_dt = np.zeros(2)
+        d_velocity_dt = 0
+
+        car_ahead = observation[1][1]
         if car_ahead:
             distance = car_ahead - self
             if self.safe_distance > distance > 0:
-                if self._safe(state): action = (self.a['pass'], None)
-                else: action = (self.a['brake'], min((self.safe_distance / distance)**0.2 - 1, 1))
+                if self._safe(observation):
+                    self._pass()
+                else:
+                    d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
             elif distance <= 0:
-                self.colour = colours['r']
-                # Accident, do something!!!
-                action = (self.a['crash'], self)
+                self._colour = colours['r']
+                self.crashed = True
+
+        if d_velocity_dt == 0:
+            d_velocity_dt = 1 * (self._target_speed - self._speed)
+
+        if self._passing:
+            error = -round(self._target_lane - self._position[1])
+            d_error = error - self._error
+            self._error = error
+            ortho_direction = np.array((self._direction[1], -self._direction[0]))
+            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
+
+        action = np.array((*d_position_dt, *d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
 
     def _safe(self, state):
@@ -252,11 +272,11 @@ class StatefulEnv(core.Env):
                     # Leave lane
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
-            if v.position[0] > self.screen_size[0]:
+            if v.back > self.screen_size[0]:
                 self.vehicles.remove(v)
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
             # Update available lane beginnings
-            if v.position[0] < v.safe_distance:  # at most safe_distance ahead
+            if v.back < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
@@ -287,7 +307,7 @@ class StatefulEnv(core.Env):
             action = v.policy(state)
 
             # Check for accident
-            if action[0] and action[0] < 0: self.collision = v
+            if v.crashed: self.collision = v
 
             # Act accordingly
             v.step(action)
