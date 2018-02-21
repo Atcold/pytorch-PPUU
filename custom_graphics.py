@@ -1,5 +1,6 @@
 import pygame
 import math
+import numpy as np
 
 
 class Point:
@@ -49,3 +50,13 @@ def draw_text(screen, text, xy):
     text_rect.left = xy[0]
     text_rect.top = xy[1]
     screen.blit(text, text_rect)
+
+
+def draw_rect(screen, colour, rect, thickness=None, direction=(1, 0)):
+    x, y, l, w = rect
+    xy = np.array(((x, y - w/2), (x, y + w/2), (x + l, y + w/2), (x + l, y - w/2)))
+    c, s = direction
+    rot = np.array(((c, -s), (s, c)))
+    xy = (rot @ (xy - (x, y)).T).T + (x, y)
+    pygame.draw.polygon(screen, colour, xy, thickness)
+    pygame.draw.circle(screen, colour, (x, y), 2 * thickness)

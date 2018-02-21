@@ -5,7 +5,7 @@ import math
 import random
 import numpy as np
 import sys
-from custom_graphics import draw_dashed_line, draw_text
+from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
 
 seed = 123
@@ -62,7 +62,7 @@ class Car:
         lane = random.choice(tuple(free_lanes))
         self._position = np.array((
             -self._length,
-            lanes[lane]['mid'] - self._width // 2
+            lanes[lane]['mid']
         ), np.float)
         self._target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
         self._speed = self._target_speed
@@ -81,8 +81,7 @@ class Car:
         """
         x, y = self._position
         rectangle = (int(x), int(y), self._length, self._width)
-        pygame.draw.rect(screen, self._colour, rectangle)
-        pygame.draw.rect(screen, tuple(c/2 for c in self._colour), rectangle, 4)
+        draw_rect(screen, self._colour, rectangle, 3, self._direction)
         if self._braked: self._colour = colours['g']
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
@@ -111,9 +110,9 @@ class Car:
         """
         busy_lanes = set()
         y = self._position[1]
-        w = self._width
+        half_w = self._width // 2
         for lane_idx, lane in enumerate(lanes):
-            if lane['min'] <= y <= lane['max'] or lane['min'] <= y + w <= lane['max']:
+            if lane['min'] <= y - half_w <= lane['max'] or lane['min'] <= y + half_w <= lane['max']:
                 busy_lanes.add(lane_idx)
         return busy_lanes
 
@@ -201,7 +200,7 @@ class Car:
     def _safe(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
-        if not state[0]: return False
+        if not state[0]: return False  # On the leftmost lane
         if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
         if state[0][1] and state[0][1] - self < self.safe_distance: return False
         return True
