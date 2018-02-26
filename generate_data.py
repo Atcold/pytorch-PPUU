@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-lanes', type=int, default=3)
+parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=10000)
 parser.add_argument('-data_dir', type=str, default='data/')
 opt = parser.parse_args()
@@ -29,7 +30,8 @@ register(
     entry_point='traffic_gym:StatefulEnv',
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
-            'nb_lanes': opt.lanes},
+            'nb_lanes': opt.lanes, 
+            'traffic_rate': opt.traffic_rate},
 )
 
 env = gym.make('Traffic-v0')
