@@ -1,6 +1,6 @@
 import bisect
 
-import pygame
+import pygame, pdb, torch
 import math
 import random
 import numpy as np
@@ -28,6 +28,7 @@ colours = {
     'y': (255, 255, 000),
 }
 
+step = 0
 
 # Car coordinate system, origin under the centre of the read axis
 #
@@ -74,13 +75,102 @@ class Car:
         self.crashed = False
         self._error = 0
 
-    def draw(self, screen):
+
+    def get_state(self):
+        state = torch.zeros(4)
+        state[0] = self._position[0] # x 
+        state[1] = self._position[1] # y
+        state[2] = self._direction[0]*self._speed # dx
+        state[3] = self._direction[1]*self._speed # dy
+        return state
+
+
+    def get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
+        x, y = self._position
+        pos = torch.Tensor([x, y])
+        obs = torch.zeros(6, 2, 2)
+        mask = torch.zeros(6)
+        radius = 200
+
+        obs = obs.view(6, 4)
+
+        if left_vehicles[0] != None:
+            obs[0].copy_(left_vehicles[0].get_state())
+            obs[0].add_(-self.get_state())
+            mask[0] = 1
+
+        '''
+        else:
+            obs[0][:2].copy_(torch.Tensor([-radius, -LANE_W]))
+            obs[0][:2].copy_(torch.Tensor([-radius, -LANE_W]))
+        '''
+
+        if left_vehicles[1] != None:
+            obs[1].copy_(left_vehicles[1].get_state())
+            obs[1].add_(-self.get_state())
+            mask[1] = 1
+        '''
+        else:
+            obs[1][:2].copy_(torch.Tensor([+radius, -LANE_W]))
+        '''
+
+
+        if mid_vehicles[0] != None:
+            obs[2].copy_(mid_vehicles[0].get_state())
+            obs[2].add_(-self.get_state())
+            mask[2] = 1
+        '''
+        else:
+            obs[2][:2].copy_(torch.Tensor([-radius, 0]))
+        '''
+
+
+        if mid_vehicles[1] != None:
+            obs[3].copy_(mid_vehicles[1].get_state())
+            obs[3].add_(-self.get_state())
+            mask[3] = 1
+
+        '''
+        else:
+            obs[3][:2].copy_(torch.Tensor([+radius, 0]))
+        '''
+
+            
+        if right_vehicles[0] != None:
+            obs[4].copy_(right_vehicles[0].get_state())
+            obs[4].add_(-self.get_state())
+            mask[4] = 1
+
+
+        '''
+        else:
+            obs[4][:2].copy_(torch.Tensor([-radius, +LANE_W]))
+        '''
+
+
+        if right_vehicles[1] != None:
+            obs[5].copy_(right_vehicles[1].get_state())
+            obs[5].add_(-self.get_state())
+            mask[5] = 1
+
+        '''
+        else:
+            obs[5][:2].copy_(torch.Tensor([+radius, +LANE_W]))
+        '''
+
+        return obs, mask
+        
+        
+
+    def draw(self, screen, c=None):
         """
         Draw current car on screen with a specific colour
         :param screen: PyGame ``Surface`` where to draw
         """
         x, y = self._position
         rectangle = (int(x), int(y), self._length, self._width)
+        if c != None:
+            self._colour = c
         draw_rect(screen, self._colour, rectangle, 3, self._direction)
         if self._braked: self._colour = colours['g']
 
@@ -91,7 +181,10 @@ class Car:
         # Vehicle state definition
         vehicle_state = np.array((*self._position, *self._direction, self._speed))
         # State integration
-        vehicle_state += action * self._dt
+        d_position_dt = self._speed * self._direction
+        vehicle_state[:2] += d_position_dt * self._dt
+        vehicle_state[2:] += action * self._dt
+        
         # Split individual components (and normalise direction)
         self._position = vehicle_state[0:2]
         self._direction = vehicle_state[2:4] / np.sqrt(np.linalg.norm(vehicle_state[2:4]))
@@ -194,7 +287,7 @@ class Car:
             ortho_direction = np.array((self._direction[1], -self._direction[0]))
             d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
 
-        action = np.array((*d_position_dt, *d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
+        action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
 
     def _safe(self, state):
@@ -208,7 +301,7 @@ class Car:
 
 class StatefulEnv(core.Env):
 
-    def __init__(self, display=True, nb_lanes=4, fps=30):
+    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15):
 
         self.offset = int(1.5 * LANE_W)
         self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
@@ -218,7 +311,7 @@ class StatefulEnv(core.Env):
         self.frame = 0  # frame index
         self.lanes = self.build_lanes(nb_lanes)  # create lanes object, list of dicts
         self.vehicles = None  # vehicles list
-        self.traffic_rate = 15  # new cars per second
+        self.traffic_rate = traffic_rate  # new cars per second
         self.lane_occupancy = None  # keeps track of what vehicle are in each lane
         self.collision = None  # an accident happened
         self.episode = 0  # episode counter
@@ -247,6 +340,10 @@ class StatefulEnv(core.Env):
         state = list()
         objects = list()
         return state, objects
+
+
+
+
 
     def step(self, action):
 
@@ -288,6 +385,8 @@ class StatefulEnv(core.Env):
                     self.lane_occupancy[l].insert(0, car)
 
         # Generate state representation for each vehicle
+        vid = 0
+        obs, actions = [], []
         for v in self.vehicles:
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
@@ -295,12 +394,18 @@ class StatefulEnv(core.Env):
             current_lane_idx = lane_set.pop()
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v)\
-                if current_lane_idx > 0 and len(lane_set) == 0 else None
+                if current_lane_idx > 0 and len(lane_set) == 0 else (None, None)
             mid_vehicles = self._get_neighbours(current_lane_idx, 0, v)
             right_vehicles = self._get_neighbours(current_lane_idx, + 1, v)\
-                if current_lane_idx < len(self.lanes) - 1 else None
+                if current_lane_idx < len(self.lanes) - 1 else (None, None)
+
+            '''
+            MH: think there is a bug here:
             state = left_vehicles, mid_vehicles, right_vehicles if len(lane_set) == 0\
                 else mid_vehicles, right_vehicles
+            '''
+
+            state = left_vehicles, mid_vehicles, right_vehicles
 
             # Compute the action
             action = v.policy(state)
@@ -308,8 +413,12 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
+            obs.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
+            actions.append(action)
+
             # Act accordingly
             v.step(action)
+            vid += 1
 
         # default reward if nothing happens
         reward = -0.001
@@ -324,8 +433,10 @@ class StatefulEnv(core.Env):
 
         self.frame += 1
 
-        objects = list()
-        return state, reward, done, objects
+        return state, reward, done, obs
+
+
+
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         target_lane = self.lane_occupancy[current_lane_idx + d_lane]
@@ -360,8 +471,14 @@ class StatefulEnv(core.Env):
                 draw_dashed_line(self.screen, colours['w'], (0, lane['max']), (sw, lane['max']), 3)
                 draw_dashed_line(self.screen, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
+            vid = 0
             for v in self.vehicles:
-                v.draw(self.screen)
+                if vid == 0: 
+                    c = colours['r']
+                else: 
+                    c = None
+                v.draw(self.screen, c)
+                vid += 1
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2))
