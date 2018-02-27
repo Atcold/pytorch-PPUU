@@ -51,7 +51,7 @@ step = 0
 # Compact |    1.7    |    4.5
 
 class Car:
-    def __init__(self, lanes, free_lanes, dt):
+    def __init__(self, lanes, free_lanes, dt, car_id):
         """
         Initialise a sedan on a random lane
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
@@ -60,6 +60,7 @@ class Car:
         self._length = round(4.8 * SCALE)
         self._width = round(1.8 * SCALE)
         self._direction = np.array((1, 0), np.float)
+        self._id = car_id
         lane = random.choice(tuple(free_lanes))
         self._position = np.array((
             -self._length,
@@ -74,6 +75,8 @@ class Car:
         self._target_lane = self._position[1]
         self.crashed = False
         self._error = 0
+        self._states = []
+        self._actions = []
 
 
     def get_state(self):
@@ -336,6 +339,8 @@ class StatefulEnv(core.Env):
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in self.lanes]
         self.episode += 1
+        # keep track of car IDs so we can track the same car over several timesteps
+        self.car_id = 0
         pygame.display.set_caption(f'Traffic simulator, episode {self.episode}')
         state = list()
         objects = list()
@@ -369,8 +374,9 @@ class StatefulEnv(core.Env):
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
             if v.back > self.screen_size[0]:
-                self.vehicles.remove(v)
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
+                self.vehicles.remove(v)
+
             # Update available lane beginnings
             if v.back < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
@@ -378,7 +384,8 @@ class StatefulEnv(core.Env):
         # Randomly add vehicles, up to 1 / dt per second
         if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t:
             if free_lanes:
-                car = Car(self.lanes, free_lanes, self.delta_t)
+                car = Car(self.lanes, free_lanes, self.delta_t, self.car_id)
+                self.car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
                     # Prepend the new car to each lane it can be found
@@ -386,7 +393,6 @@ class StatefulEnv(core.Env):
 
         # Generate state representation for each vehicle
         vid = 0
-        obs, actions = [], []
         for v in self.vehicles:
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
@@ -399,12 +405,6 @@ class StatefulEnv(core.Env):
             right_vehicles = self._get_neighbours(current_lane_idx, + 1, v)\
                 if current_lane_idx < len(self.lanes) - 1 else (None, None)
 
-            '''
-            MH: think there is a bug here:
-            state = left_vehicles, mid_vehicles, right_vehicles if len(lane_set) == 0\
-                else mid_vehicles, right_vehicles
-            '''
-
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Compute the action
@@ -413,8 +413,17 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            obs.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
-            actions.append(action)
+
+            v._states.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
+            print(torch.Tensor(action))
+            v._actions.append(torch.Tensor(action))
+
+            if vid == 0:
+                print(v._states[-1])
+
+
+            
+
 
             # Act accordingly
             v.step(action)
@@ -423,7 +432,6 @@ class StatefulEnv(core.Env):
         # default reward if nothing happens
         reward = -0.001
         done = False
-        state = list()
 
         if self.frame >= 10000:
             done = True
@@ -432,8 +440,10 @@ class StatefulEnv(core.Env):
             print(f'Episode ended, reward: {reward}, t={self.frame}')
 
         self.frame += 1
-
-        return state, reward, done, obs
+        
+        obs = []
+        # TODO: obs should be the observation of the controlled car
+        return obs, reward, done, self.vehicles
 
 
 
