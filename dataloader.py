@@ -1,10 +1,13 @@
-import numpy, random, pdb, math, pickle
+import numpy, random, pdb, math, pickle, glob
 import torch
 
 class DataLoader():
     def __init__(self, fname, opt):
         self.opt = opt
-        self.data = pickle.load(open(fname, 'rb'))
+        self.data = []
+        for f in glob.glob(fname):
+            print(f'loading {f}')
+            self.data += pickle.load(open(f, 'rb'))
         self.states = []
         self.actions = []
         self.masks = []
@@ -51,4 +54,4 @@ class DataLoader():
         masks = masks[:, :self.opt.ncond].clone()
         actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
 
-        return states, masks, actions
+        return states.cuda(), masks.cuda(), actions.cuda()

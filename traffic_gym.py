@@ -100,67 +100,41 @@ class Car:
 
         if left_vehicles[0] != None:
             obs[1].copy_(left_vehicles[0].get_state())
-#            obs[0].add_(-self.get_state())
             mask[1] = 1
-
-        '''
         else:
-            obs[0][:2].copy_(torch.Tensor([-radius, -LANE_W]))
-            obs[0][:2].copy_(torch.Tensor([-radius, -LANE_W]))
-        '''
+            # for bag-of-cars this will be ignored by the mask, 
+            # but fill in with a similar value to not mess up batch norm
+            obs[1].copy_(self.get_state())
 
         if left_vehicles[1] != None:
             obs[2].copy_(left_vehicles[1].get_state())
-#            obs[1].add_(-self.get_state())
             mask[2] = 1
-        '''
         else:
-            obs[1][:2].copy_(torch.Tensor([+radius, -LANE_W]))
-        '''
-
+            obs[2].copy_(self.get_state())
 
         if mid_vehicles[0] != None:
             obs[3].copy_(mid_vehicles[0].get_state())
-#            obs[2].add_(-self.get_state())
             mask[3] = 1
-        '''
         else:
-            obs[2][:2].copy_(torch.Tensor([-radius, 0]))
-        '''
-
+            obs[3].copy_(self.get_state())
 
         if mid_vehicles[1] != None:
             obs[4].copy_(mid_vehicles[1].get_state())
-#            obs[3].add_(-self.get_state())
             mask[4] = 1
-
-        '''
         else:
-            obs[3][:2].copy_(torch.Tensor([+radius, 0]))
-        '''
-
+            obs[4].copy_(self.get_state())
 
         if right_vehicles[0] != None:
             obs[5].copy_(right_vehicles[0].get_state())
-#            obs[4].add_(-self.get_state())
             mask[5] = 1
-
-
-        '''
         else:
-            obs[4][:2].copy_(torch.Tensor([-radius, +LANE_W]))
-        '''
-
+            obs[5].copy_(self.get_state())
 
         if right_vehicles[1] != None:
             obs[6].copy_(right_vehicles[1].get_state())
-#            obs[5].add_(-self.get_state())
             mask[6] = 1
-
-        '''
         else:
-            obs[5][:2].copy_(torch.Tensor([+radius, +LANE_W]))
-        '''
+            obs[6].copy_(self.get_state())
 
         return obs, mask
 

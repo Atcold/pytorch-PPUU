@@ -13,26 +13,35 @@ class PolicyMLP(nn.Module):
         self.opt = opt
 
         self.j_network = nn.Sequential(
+            nn.BatchNorm1d(opt.n_inputs), 
             nn.Linear(opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
         self.i_network = nn.Sequential(
+            nn.BatchNorm1d(2*opt.n_inputs), 
             nn.Linear(2*opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
         self.a_network = nn.Sequential(
-            nn.Linear(opt.ncond*opt.n_hidden, opt.n_hidden),
+            nn.BatchNorm1d(2*opt.ncond*opt.n_hidden), 
+            nn.Linear(2*opt.ncond*opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.Linear(opt.n_hidden, opt.n_actions*opt.npred)
             )
 
@@ -50,8 +59,9 @@ class PolicyMLP(nn.Module):
         h_i = torch.sum(h_i, 2)
         h_j = self.j_network(s_j.view(-1, self.opt.n_inputs))
         h_j = h_j.view(bsize, self.opt.ncond, self.opt.n_hidden)
-        h = (h_i + h_j).view(bsize, -1)
-        a = self.a_network(h)
+        h_i = h_i.view(bsize, self.opt.ncond*self.opt.n_hidden)
+        h_j = h_j.view(bsize, self.opt.ncond*self.opt.n_hidden)
+        a = self.a_network(torch.cat((h_i, h_j), 1))
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
         return a
 
