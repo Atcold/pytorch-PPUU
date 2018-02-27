@@ -12,7 +12,6 @@ class PolicyMLP(nn.Module):
         super(PolicyMLP, self).__init__()
         self.opt = opt
 
-
         self.j_network = nn.Sequential(
             nn.Linear(opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
@@ -21,7 +20,6 @@ class PolicyMLP(nn.Module):
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
-
         self.i_network = nn.Sequential(
             nn.Linear(2*opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
@@ -29,8 +27,6 @@ class PolicyMLP(nn.Module):
             nn.ReLU(),
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
-
-
 
         self.a_network = nn.Sequential(
             nn.Linear(opt.ncond*opt.n_hidden, opt.n_hidden),
@@ -43,7 +39,7 @@ class PolicyMLP(nn.Module):
     def forward(self, s, m):
         bsize = s.size(0)
         m = m[:, :, 1:].clone()
-        s_j = s[:, :, 0].clone().view(-1, self.opt.ncond, 1, 4)
+        s_j = s[:, :, 0].clone().view(-1, self.opt.ncond, 1, self.opt.n_inputs)
         s_i = s[:, :, 1:]
         s_i = torch.cat((s_j.expand(s_i.size()), s_i), 3)
         s_i = s_i.view(-1, 2*self.opt.n_inputs)
