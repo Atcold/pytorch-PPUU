@@ -30,11 +30,27 @@ register(
     entry_point='traffic_gym:StatefulEnv',
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
-            'nb_lanes': opt.lanes, 
+            'nb_lanes': opt.lanes,
             'traffic_rate': opt.traffic_rate},
 )
 
 env = gym.make('Traffic-v0')
+
+# parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
+# not used for images.
+def prepare_trajectory(states, actions):
+    # parse out the masks
+    T = len(states)
+    s, m = [], []
+    for t in range(T):
+        s.append(states[t][0])
+        m.append(states[t][1])
+
+    s = torch.stack(s)
+    m = torch.stack(m)
+    a = torch.stack(actions)
+    return s, m, a
+
 
 def run_episode():
     action = np.array([0, 0, 1, 0, 0, 0])
@@ -48,7 +64,8 @@ def run_episode():
 
     runs = []
     for v in vehicles:
-        runs.append({'states': v._states, 'actions': v._actions})
+        states, masks, actions = prepare_trajectory(v._states, v._actions)
+        runs.append({'states': states, 'masks': masks, 'actions': actions})
 
     return runs
 

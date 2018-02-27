@@ -81,7 +81,7 @@ class Car:
 
     def get_state(self):
         state = torch.zeros(4)
-        state[0] = self._position[0] # x 
+        state[0] = self._position[0] # x
         state[1] = self._position[1] # y
         state[2] = self._direction[0]*self._speed # dx
         state[3] = self._direction[1]*self._speed # dy
@@ -138,7 +138,7 @@ class Car:
             obs[3][:2].copy_(torch.Tensor([+radius, 0]))
         '''
 
-            
+
         if right_vehicles[0] != None:
             obs[4].copy_(right_vehicles[0].get_state())
             obs[4].add_(-self.get_state())
@@ -162,8 +162,8 @@ class Car:
         '''
 
         return obs, mask
-        
-        
+
+
 
     def draw(self, screen, c=None):
         """
@@ -187,7 +187,7 @@ class Car:
         d_position_dt = self._speed * self._direction
         vehicle_state[:2] += d_position_dt * self._dt
         vehicle_state[2:] += action * self._dt
-        
+
         # Split individual components (and normalise direction)
         self._position = vehicle_state[0:2]
         self._direction = vehicle_state[2:4] / np.sqrt(np.linalg.norm(vehicle_state[2:4]))
@@ -415,14 +415,13 @@ class StatefulEnv(core.Env):
 
 
             v._states.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
-            print(torch.Tensor(action))
             v._actions.append(torch.Tensor(action))
 
-            if vid == 0:
-                print(v._states[-1])
+#            if vid == 0:
+#                print(v._states[-1])
 
 
-            
+
 
 
             # Act accordingly
@@ -440,7 +439,7 @@ class StatefulEnv(core.Env):
             print(f'Episode ended, reward: {reward}, t={self.frame}')
 
         self.frame += 1
-        
+
         obs = []
         # TODO: obs should be the observation of the controlled car
         return obs, reward, done, self.vehicles
@@ -483,9 +482,9 @@ class StatefulEnv(core.Env):
 
             vid = 0
             for v in self.vehicles:
-                if vid == 0: 
+                if vid == 0:
                     c = colours['r']
-                else: 
+                else:
                     c = None
                 v.draw(self.screen, c)
                 vid += 1
