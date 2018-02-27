@@ -91,16 +91,17 @@ class Car:
     def get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         x, y = self._position
         pos = torch.Tensor([x, y])
-        obs = torch.zeros(6, 2, 2)
-        mask = torch.zeros(6)
-        radius = 200
+        n_cars = 1 + 6 # this car + 6 neighbors
+        obs = torch.zeros(n_cars, 2, 2)
+        mask = torch.zeros(n_cars)
+        obs = obs.view(n_cars, 4)
 
-        obs = obs.view(6, 4)
+        obs[0].copy_(self.get_state())
 
         if left_vehicles[0] != None:
-            obs[0].copy_(left_vehicles[0].get_state())
-            obs[0].add_(-self.get_state())
-            mask[0] = 1
+            obs[1].copy_(left_vehicles[0].get_state())
+#            obs[0].add_(-self.get_state())
+            mask[1] = 1
 
         '''
         else:
@@ -109,9 +110,9 @@ class Car:
         '''
 
         if left_vehicles[1] != None:
-            obs[1].copy_(left_vehicles[1].get_state())
-            obs[1].add_(-self.get_state())
-            mask[1] = 1
+            obs[2].copy_(left_vehicles[1].get_state())
+#            obs[1].add_(-self.get_state())
+            mask[2] = 1
         '''
         else:
             obs[1][:2].copy_(torch.Tensor([+radius, -LANE_W]))
@@ -119,9 +120,9 @@ class Car:
 
 
         if mid_vehicles[0] != None:
-            obs[2].copy_(mid_vehicles[0].get_state())
-            obs[2].add_(-self.get_state())
-            mask[2] = 1
+            obs[3].copy_(mid_vehicles[0].get_state())
+#            obs[2].add_(-self.get_state())
+            mask[3] = 1
         '''
         else:
             obs[2][:2].copy_(torch.Tensor([-radius, 0]))
@@ -129,9 +130,9 @@ class Car:
 
 
         if mid_vehicles[1] != None:
-            obs[3].copy_(mid_vehicles[1].get_state())
-            obs[3].add_(-self.get_state())
-            mask[3] = 1
+            obs[4].copy_(mid_vehicles[1].get_state())
+#            obs[3].add_(-self.get_state())
+            mask[4] = 1
 
         '''
         else:
@@ -140,9 +141,9 @@ class Car:
 
 
         if right_vehicles[0] != None:
-            obs[4].copy_(right_vehicles[0].get_state())
-            obs[4].add_(-self.get_state())
-            mask[4] = 1
+            obs[5].copy_(right_vehicles[0].get_state())
+#            obs[4].add_(-self.get_state())
+            mask[5] = 1
 
 
         '''
@@ -152,9 +153,9 @@ class Car:
 
 
         if right_vehicles[1] != None:
-            obs[5].copy_(right_vehicles[1].get_state())
-            obs[5].add_(-self.get_state())
-            mask[5] = 1
+            obs[6].copy_(right_vehicles[1].get_state())
+#            obs[5].add_(-self.get_state())
+            mask[6] = 1
 
         '''
         else:

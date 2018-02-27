@@ -21,7 +21,10 @@ class DataLoader():
         self.valid_indx = range(self.n_train+1, self.n_train+self.n_valid)
         self.test_indx = range(self.n_train+self.n_valid+1, self.n_episodes)
 
-    def get_batch(self, split):
+
+    # get batch to use for imitation learning:
+    # a sequence of ncond consecutive states, and a sequence of npred actions
+    def get_batch_il(self, split):
         if split == 'train':
             indx = self.train_indx
         elif split == 'valid':
@@ -30,16 +33,22 @@ class DataLoader():
             indx = self.test_indx
 
         states, masks, actions = [], [], []
-        for _ in range(self.opt.batch_size):
+        nb = 0
+        while nb < self.opt.batch_size:
             s = random.choice(indx)
-            T = len(self.states[s])
-            t = random.randint(0, T - self.opt.T)
-            states.append(self.states[s][t:t+self.opt.T+1])
-            masks.append(self.masks[s][t:t+self.opt.T])
-            actions.append(self.actions[s][t:t+self.opt.T])
+            T = len(self.states[s]) - 1
+            if T > (self.opt.ncond + self.opt.npred):
+                t = random.randint(0, T - (self.opt.ncond+self.opt.npred))
+                states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)+1])
+                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
+                actions.append(self.actions[s][t:t+(self.opt.ncond+self.opt.npred)])
+                nb += 1
 
         states = torch.stack(states)
         actions = torch.stack(actions)
         masks = torch.stack(masks)
+        states = states[:, :self.opt.ncond].clone()
+        masks = masks[:, :self.opt.ncond].clone()
+        actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
 
         return states, masks, actions
