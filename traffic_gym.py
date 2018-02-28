@@ -293,7 +293,7 @@ class Car:
         if not state[2]: return False  # On the rightmost lane
         if state[2][0] and self - state[2][0] < state[2][0].safe_distance: return False
         if state[2][1] and state[2][1] - self < self.safe_distance: return False
-        return False # for now
+        return False # return False for now
 #        return True
 
 
