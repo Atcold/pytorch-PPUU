@@ -28,8 +28,6 @@ colours = {
     'y': (255, 255, 000),
 }
 
-step = 0
-
 # Car coordinate system, origin under the centre of the read axis
 #
 #      ^ y                       (x, y, x., y.)
@@ -78,27 +76,23 @@ class Car:
         self._states = []
         self._actions = []
 
-
     def get_state(self):
         state = torch.zeros(4)
-        state[0] = self._position[0] # x
-        state[1] = self._position[1] # y
-        state[2] = self._direction[0]*self._speed # dx
-        state[3] = self._direction[1]*self._speed # dy
+        state[0] = self._position[0]  # x
+        state[1] = self._position[1]  # y
+        state[2] = self._direction[0] * self._speed  # dx
+        state[3] = self._direction[1] * self._speed  # dy
         return state
 
-
     def get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
-        x, y = self._position
-        pos = torch.Tensor([x, y])
-        n_cars = 1 + 6 # this car + 6 neighbors
+        n_cars = 1 + 6  # this car + 6 neighbors
         obs = torch.zeros(n_cars, 2, 2)
         mask = torch.zeros(n_cars)
         obs = obs.view(n_cars, 4)
 
         obs[0].copy_(self.get_state())
 
-        if left_vehicles[0] != None:
+        if left_vehicles[0] is not None:
             obs[1].copy_(left_vehicles[0].get_state())
             mask[1] = 1
         else:
@@ -106,31 +100,31 @@ class Car:
             # but fill in with a similar value to not mess up batch norm
             obs[1].copy_(self.get_state())
 
-        if left_vehicles[1] != None:
+        if left_vehicles[1] is not None:
             obs[2].copy_(left_vehicles[1].get_state())
             mask[2] = 1
         else:
             obs[2].copy_(self.get_state())
 
-        if mid_vehicles[0] != None:
+        if mid_vehicles[0] is not None:
             obs[3].copy_(mid_vehicles[0].get_state())
             mask[3] = 1
         else:
             obs[3].copy_(self.get_state())
 
-        if mid_vehicles[1] != None:
+        if mid_vehicles[1] is not None:
             obs[4].copy_(mid_vehicles[1].get_state())
             mask[4] = 1
         else:
             obs[4].copy_(self.get_state())
 
-        if right_vehicles[0] != None:
+        if right_vehicles[0] is not None:
             obs[5].copy_(right_vehicles[0].get_state())
             mask[5] = 1
         else:
             obs[5].copy_(self.get_state())
 
-        if right_vehicles[1] != None:
+        if right_vehicles[1] is not None:
             obs[6].copy_(right_vehicles[1].get_state())
             mask[6] = 1
         else:
@@ -138,16 +132,15 @@ class Car:
 
         return obs, mask
 
-
-
     def draw(self, screen, c=None):
         """
         Draw current car on screen with a specific colour
         :param screen: PyGame ``Surface`` where to draw
+        :param c: default colour
         """
         x, y = self._position
         rectangle = (int(x), int(y), self._length, self._width)
-        if c != None:
+        if c is not None:
             self._colour = c
         draw_rect(screen, self._colour, rectangle, 3, self._direction)
         if self._braked: self._colour = colours['g']
@@ -239,7 +232,6 @@ class Car:
         Bring together _pass, brake
         :return: acceleration, d\theta
         """
-        d_position_dt = self._speed * self._direction
         d_direction_dt = np.zeros(2)
         d_velocity_dt = 0
 
@@ -293,6 +285,7 @@ class StatefulEnv(core.Env):
         self.lane_occupancy = None  # keeps track of what vehicle are in each lane
         self.collision = None  # an accident happened
         self.episode = 0  # episode counter
+        self.car_id = None  # car counter init
 
         self.display = display
         if self.display:  # if display is required
@@ -320,10 +313,6 @@ class StatefulEnv(core.Env):
         state = list()
         objects = list()
         return state, objects
-
-
-
-
 
     def step(self, action):
 
@@ -374,10 +363,10 @@ class StatefulEnv(core.Env):
             # Provide a list of (up to) 6 neighbouring vehicles
             current_lane_idx = lane_set.pop()
             # Given that I'm not in the left/right-most lane
-            left_vehicles = self._get_neighbours(current_lane_idx, - 1, v)\
+            left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
                 if current_lane_idx > 0 and len(lane_set) == 0 else (None, None)
             mid_vehicles = self._get_neighbours(current_lane_idx, 0, v)
-            right_vehicles = self._get_neighbours(current_lane_idx, + 1, v)\
+            right_vehicles = self._get_neighbours(current_lane_idx, + 1, v) \
                 if current_lane_idx < len(self.lanes) - 1 else (None, None)
 
             state = left_vehicles, mid_vehicles, right_vehicles
@@ -388,16 +377,11 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-
             v._states.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
             v._actions.append(torch.Tensor(action))
 
-#            if vid == 0:
-#                print(v._states[-1])
-
-
-
-
+            #            if vid == 0:
+            #                print(v._states[-1])
 
             # Act accordingly
             v.step(action)
@@ -419,14 +403,13 @@ class StatefulEnv(core.Env):
         # TODO: obs should be the observation of the controlled car
         return obs, reward, done, self.vehicles
 
-
-
-
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         target_lane = self.lane_occupancy[current_lane_idx + d_lane]
         # Find me in the lane
-        if d_lane == 0: my_idx = target_lane.index(v)
-        else: my_idx = bisect.bisect(target_lane, v)
+        if d_lane == 0:
+            my_idx = target_lane.index(v)
+        else:
+            my_idx = bisect.bisect(target_lane, v)
         behind = target_lane[my_idx - 1] if my_idx > 0 else None
         if d_lane == 0: my_idx += 1
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
@@ -439,8 +422,10 @@ class StatefulEnv(core.Env):
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
-                if event.type == pygame.QUIT: sys.exit()
-                elif event.type == pygame.MOUSEBUTTONUP: self._pause()
+                if event.type == pygame.QUIT:
+                    sys.exit()
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    self._pause()
 
             # measure time elapsed, enforce it to be >= 1/fps
             self.clock.tick(self.fps)
