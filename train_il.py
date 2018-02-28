@@ -7,7 +7,7 @@ import torch.optim as optim
 
 parser = argparse.ArgumentParser()
 # data params
-parser.add_argument('-model', type=str, default='policy-vae')
+parser.add_argument('-model', type=str, default='policy-mlp')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
 parser.add_argument('-n_episodes', type=int, default=100)
@@ -75,7 +75,7 @@ def test(nbatches):
 for _ in range(100):
     train_loss_mse, train_loss_kl = train(opt.epoch_size)
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
-    log_string = f'train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, {valid_loss_kl}]'
+    log_string = f'train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
     policy.cpu()
