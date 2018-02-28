@@ -8,10 +8,6 @@ import sys
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
 
-seed = 123
-random.seed(seed)
-np.random.seed(seed)
-
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
 LANE_W = 20  # pixels / 3.7 m, lane width
@@ -96,7 +92,7 @@ class Car:
             obs[1].copy_(left_vehicles[0].get_state())
             mask[1] = 1
         else:
-            # for bag-of-cars this will be ignored by the mask, 
+            # for bag-of-cars this will be ignored by the mask,
             # but fill in with a similar value to not mess up batch norm
             obs[1].copy_(self.get_state())
 
@@ -132,7 +128,7 @@ class Car:
 
         return obs, mask
 
-    def draw(self, screen, c=None):
+    def draw(self, screen, c=False):
         """
         Draw current car on screen with a specific colour
         :param screen: PyGame ``Surface`` where to draw
@@ -140,8 +136,9 @@ class Car:
         """
         x, y = self._position
         rectangle = (int(x), int(y), self._length, self._width)
-        if c is not None:
-            self._colour = c
+        if c:
+            pygame.draw.rect(screen, (0, 255, 0), (int(x-15), int(y-15), self._length + 20, self._width + 20), 2)
+
         draw_rect(screen, self._colour, rectangle, 3, self._direction)
         if self._braked: self._colour = colours['g']
 
@@ -307,14 +304,15 @@ class StatefulEnv(core.Env):
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in self.lanes]
         self.episode += 1
-        # keep track of car IDs so we can track the same car over several timesteps
-        self.car_id = 0
+        # keep track of the car we are controlling
+        self.policy_car_id = -1
+        self.next_car_id = 0
         pygame.display.set_caption(f'Traffic simulator, episode {self.episode}')
         state = list()
         objects = list()
         return state, objects
 
-    def step(self, action):
+    def step(self, policy_action=None):
 
         self.collision = False
         # Free lane beginnings
@@ -338,6 +336,9 @@ class StatefulEnv(core.Env):
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
             if v.back > self.screen_size[0]:
+                # if this is the controlled car, pick new car
+                if v._id == self.policy_car_id:
+                    self.policy_car_id = self.vehicles[-1]._id
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
                 self.vehicles.remove(v)
 
@@ -348,12 +349,15 @@ class StatefulEnv(core.Env):
         # Randomly add vehicles, up to 1 / dt per second
         if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t:
             if free_lanes:
-                car = Car(self.lanes, free_lanes, self.delta_t, self.car_id)
-                self.car_id += 1
+                car = Car(self.lanes, free_lanes, self.delta_t, self.next_car_id)
+                self.next_car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
                     # Prepend the new car to each lane it can be found
                     self.lane_occupancy[l].insert(0, car)
+
+        if self.policy_car_id == -1:
+            self.policy_car_id = 0
 
         # Generate state representation for each vehicle
         vid = 0
@@ -372,7 +376,10 @@ class StatefulEnv(core.Env):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Compute the action
-            action = v.policy(state)
+            if v._id == self.policy_car_id and policy_action is not None:
+                action = policy_action
+            else:
+                action = v.policy(state)
 
             # Check for accident
             if v.crashed: self.collision = v
@@ -380,8 +387,6 @@ class StatefulEnv(core.Env):
             v._states.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
             v._actions.append(torch.Tensor(action))
 
-            #            if vid == 0:
-            #                print(v._states[-1])
 
             # Act accordingly
             v.step(action)
@@ -440,14 +445,9 @@ class StatefulEnv(core.Env):
                 draw_dashed_line(self.screen, colours['w'], (0, lane['max']), (sw, lane['max']), 3)
                 draw_dashed_line(self.screen, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
-            vid = 0
             for v in self.vehicles:
-                if vid == 0:
-                    c = colours['r']
-                else:
-                    c = None
+                c = (v._id == self.policy_car_id)
                 v.draw(self.screen, c)
-                vid += 1
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2))
