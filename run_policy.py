@@ -64,7 +64,7 @@ def run_episode():
             states, masks, actions = prepare_trajectory(v._states, v._actions)
             states = Variable(states[-opt.ncond:].unsqueeze(0))
             masks = Variable(masks[-opt.ncond:].unsqueeze(0))
-            action = policy(states, masks)
+            action = policy(states, masks, None)
             print(action)
             action = action.data[0][0].numpy()
         else:
