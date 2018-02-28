@@ -24,6 +24,7 @@ colours = {
     'y': (255, 255, 000),
 }
 
+
 # Car coordinate system, origin under the centre of the read axis
 #
 #      ^ y                       (x, y, x., y.)
@@ -69,8 +70,9 @@ class Car:
         self._target_lane = self._position[1]
         self.crashed = False
         self._error = 0
-        self._states = []
-        self._actions = []
+        self._states = list()
+        self._states_image = list()
+        self._actions = list()
 
     def get_state(self):
         state = torch.zeros(4)
@@ -80,7 +82,7 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
-    def get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
+    def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
         obs = torch.zeros(n_cars, 2, 2)
         mask = torch.zeros(n_cars)
@@ -88,18 +90,22 @@ class Car:
 
         obs[0].copy_(self.get_state())
 
-        if left_vehicles[0] is not None:
-            obs[1].copy_(left_vehicles[0].get_state())
-            mask[1] = 1
-        else:
-            # for bag-of-cars this will be ignored by the mask,
-            # but fill in with a similar value to not mess up batch norm
-            obs[1].copy_(self.get_state())
+        if left_vehicles:
+            if left_vehicles[0] is not None:
+                obs[1].copy_(left_vehicles[0].get_state())
+                mask[1] = 1
+            else:
+                # for bag-of-cars this will be ignored by the mask,
+                # but fill in with a similar value to not mess up batch norm
+                obs[1].copy_(self.get_state())
 
-        if left_vehicles[1] is not None:
-            obs[2].copy_(left_vehicles[1].get_state())
-            mask[2] = 1
+            if left_vehicles[1] is not None:
+                obs[2].copy_(left_vehicles[1].get_state())
+                mask[2] = 1
+            else:
+                obs[2].copy_(self.get_state())
         else:
+            obs[1].copy_(self.get_state())
             obs[2].copy_(self.get_state())
 
         if mid_vehicles[0] is not None:
@@ -114,33 +120,43 @@ class Car:
         else:
             obs[4].copy_(self.get_state())
 
-        if right_vehicles[0] is not None:
-            obs[5].copy_(right_vehicles[0].get_state())
-            mask[5] = 1
+        if right_vehicles:
+            if right_vehicles[0] is not None:
+                obs[5].copy_(right_vehicles[0].get_state())
+                mask[5] = 1
+            else:
+                obs[5].copy_(self.get_state())
+
+            if right_vehicles[1] is not None:
+                obs[6].copy_(right_vehicles[1].get_state())
+                mask[6] = 1
+            else:
+                obs[6].copy_(self.get_state())
         else:
             obs[5].copy_(self.get_state())
-
-        if right_vehicles[1] is not None:
-            obs[6].copy_(right_vehicles[1].get_state())
-            mask[6] = 1
-        else:
             obs[6].copy_(self.get_state())
 
         return obs, mask
 
-    def draw(self, screen, c=False):
+    def draw(self, surface, c=False, mode='human', offset=0):
         """
         Draw current car on screen with a specific colour
-        :param screen: PyGame ``Surface`` where to draw
+        :param surface: PyGame ``Surface`` where to draw
         :param c: default colour
+        :param mode: human or machine
+        :param offset: for representation cropping
         """
-        x, y = self._position
+        x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
-        if c:
-            pygame.draw.rect(screen, (0, 255, 0), (int(x-15), int(y-15), self._length + 20, self._width + 20), 2)
-
-        draw_rect(screen, self._colour, rectangle, 3, self._direction)
-        if self._braked: self._colour = colours['g']
+        if mode == 'human':
+            if c:
+                pygame.draw.rect(surface, (0, 255, 0), (int(x - 15), int(y - 15), self._length + 20, self._width + 20),
+                                 2)
+            draw_rect(surface, self._colour, rectangle, self._direction, 3)
+            draw_text(surface, str(self._id), (x, y - self._width // 2), 20, colours['b'])
+            if self._braked: self._colour = colours['g']
+        if mode == 'machine':
+            draw_rect(surface, colours['g'], rectangle, self._direction)
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
         """
@@ -155,7 +171,7 @@ class Car:
 
         # Split individual components (and normalise direction)
         self._position = vehicle_state[0:2]
-        self._direction = vehicle_state[2:4] / np.sqrt(np.linalg.norm(vehicle_state[2:4]))
+        self._direction = vehicle_state[2:4] / np.linalg.norm(vehicle_state[2:4])
         self._speed = vehicle_state[4]
 
         # Deal with latent variable and visual indicator
@@ -212,7 +228,6 @@ class Car:
         self._colour = colours['m']
         self._braked = False
 
-
     def __gt__(self, other):
         """
         Check if self is in front of other: self.back > other.front
@@ -234,7 +249,7 @@ class Car:
     def policy(self, observation):
         """
         Bring together _pass, brake
-        :return: acceleration, d\theta
+        :return: acceleration, d_theta
         """
         d_direction_dt = np.zeros(2)
         d_velocity_dt = 0
@@ -278,7 +293,7 @@ class Car:
     def _safe_left(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
-        if not state[0]: return False  # On the leftmost lane
+        if state[0] is None: return False  # On the leftmost lane
         if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
         if state[0][1] and state[0][1] - self < self.safe_distance: return False
         return True
@@ -290,17 +305,36 @@ class Car:
     def _safe_right(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
-        if not state[2]: return False  # On the rightmost lane
+        if state[2] is None: return False  # On the rightmost lane
         if state[2][0] and self - state[2][0] < state[2][0].safe_distance: return False
         if state[2][1] and state[2][1] - self < self.safe_distance: return False
-        return False # return False for now
-#        return True
+        return True
 
+    def _get_observation_image(self, m, screen_surface, width_height):
+        d = abs(self._direction)
+        x_y = np.ceil(np.array((d @ width_height, d @ width_height[::-1])))
+        centre = self._position + (self._length // 2, 0)
+        # pygame.draw.rect(screen_surface, (0, 128, 128), (*(centre + m - x_y / 2), *x_y), 1)
+        sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
+        theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
+        rot_surface = pygame.transform.rotate(sub_surface, -theta)
+        width_height = np.array(width_height)
+        sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
+        sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
+        return sub_rot_array
+
+    def store(self, object_name, object_):
+        if object_name == 'action':
+            self._actions.append(torch.Tensor(object_))
+        elif object_name == 'state':
+            self._states.append(self._get_obs(*object_))
+        elif object_name == 'state_image':
+            self._states_image.append(self._get_observation_image(*object_))
 
 
 class StatefulEnv(core.Env):
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15):
+    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=False):
 
         self.offset = int(1.5 * LANE_W)
         self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
@@ -315,6 +349,8 @@ class StatefulEnv(core.Env):
         self.collision = None  # an accident happened
         self.episode = 0  # episode counter
         self.car_id = None  # car counter init
+        self.state_image = state_image
+        self.mean_fps = None
 
         self.display = display
         if self.display:  # if display is required
@@ -339,6 +375,7 @@ class StatefulEnv(core.Env):
         # keep track of the car we are controlling
         self.policy_car_id = -1
         self.next_car_id = 0
+        self.mean_fps = None
         pygame.display.set_caption(f'Traffic simulator, episode {self.episode}')
         state = list()
         objects = list()
@@ -356,7 +393,7 @@ class StatefulEnv(core.Env):
         #   leave or enter lane
         #   remove itself if out of screen
         #   update free lane beginnings
-        for v in self.vehicles:
+        for v in self.vehicles[:]:
             lanes_occupied = v.get_lane_set(self.lanes)
             # Check for any passing and update lane_occupancy
             for l in range(self.nb_lanes):
@@ -400,10 +437,10 @@ class StatefulEnv(core.Env):
             current_lane_idx = lane_set.pop()
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
-                if current_lane_idx > 0 and len(lane_set) == 0 else (None, None)
+                if current_lane_idx > 0 and len(lane_set) == 0 else None
             mid_vehicles = self._get_neighbours(current_lane_idx, 0, v)
             right_vehicles = self._get_neighbours(current_lane_idx, + 1, v) \
-                if current_lane_idx < len(self.lanes) - 1 else (None, None)
+                if current_lane_idx < len(self.lanes) - 1 else None
 
             state = left_vehicles, mid_vehicles, right_vehicles
 
@@ -416,13 +453,15 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            v._states.append(v.get_obs(left_vehicles, mid_vehicles, right_vehicles))
-            v._actions.append(torch.Tensor(action))
-
+            v.store('state', state)
+            v.store('action', action)
 
             # Act accordingly
             v.step(action)
             vid += 1
+
+        if self.state_image:
+            self.render(mode='machine', width_height=(10 * LANE_W, 4 * LANE_W))
 
         # default reward if nothing happens
         reward = -0.001
@@ -452,8 +491,8 @@ class StatefulEnv(core.Env):
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
         return behind, ahead
 
-    def render(self, mode='human'):
-        if self.display:
+    def render(self, mode='human', width_height=None):
+        if mode == 'human' and self.display:
 
             # self._pause()
 
@@ -465,7 +504,8 @@ class StatefulEnv(core.Env):
                     self._pause()
 
             # measure time elapsed, enforce it to be >= 1/fps
-            self.clock.tick(self.fps)
+            fps = int(1 / self.clock.tick(self.fps) * 1e3)
+            self.mean_fps = 0.9 * self.mean_fps + 0.1 * fps if self.mean_fps is not None else fps
 
             # clear the screen
             self.screen.fill(colours['k'])
@@ -483,10 +523,29 @@ class StatefulEnv(core.Env):
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2))
+            draw_text(self.screen, f'fps: {self.mean_fps:.0f}', (270, 2))
 
             pygame.display.flip()
 
             if self.collision: self._pause()
+
+        if mode == 'machine':
+            m = max_extension = np.linalg.norm(width_height)
+            screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+
+            # draw lanes
+            for lane in self.lanes:
+                sw = self.screen_size[0] + 2 * max_extension  # screen width
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m))
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m))
+
+            # draw vehicles
+            for v in self.vehicles:
+                v.draw(screen_surface, mode=mode, offset=max_extension)
+
+            # extract states
+            for i, v in enumerate(self.vehicles):
+                v.store('state_image', (max_extension, screen_surface, width_height))
 
     def _pause(self):
         pause = True
