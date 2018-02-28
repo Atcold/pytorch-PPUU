@@ -55,7 +55,7 @@ def run_episode():
     done = False
 
     state, objects = env.reset()
-    for t in range(1000):
+    for t in range(2000):
         if t > 20:
             v = None
             for v_ in vehicles:
@@ -64,7 +64,7 @@ def run_episode():
             states, masks, actions = prepare_trajectory(v._states, v._actions)
             states = Variable(states[-opt.ncond:].unsqueeze(0))
             masks = Variable(masks[-opt.ncond:].unsqueeze(0))
-            action = policy(states, masks)
+            action = policy(states, masks, None)
             print(action)
             action = action.data[0][0].numpy()
         else:
@@ -72,17 +72,7 @@ def run_episode():
         state, reward, done, vehicles = env.step(action)
         env.render()
 
-    runs = []
-    for v in vehicles:
-        runs.append({'states': states, 'masks': masks, 'actions': actions})
 
-    return runs
-
-
-episodes = []
 for i in range(opt.n_episodes):
     print(f'episode {i + 1}/{opt.n_episodes}')
     runs = run_episode()
-    episodes += runs
-
-pickle.dump(episodes, open(data_file, 'wb'))
