@@ -200,11 +200,18 @@ class Car:
         self._braked = True
         return acceleration
 
-    def _pass(self):
+    def _pass_left(self):
         self._target_lane = self._position[1] - LANE_W
         self._passing = True
         self._colour = colours['m']
         self._braked = False
+
+    def _pass_right(self):
+        self._target_lane = self._position[1] + LANE_W
+        self._passing = True
+        self._colour = colours['m']
+        self._braked = False
+
 
     def __gt__(self, other):
         """
@@ -236,10 +243,21 @@ class Car:
         if car_ahead:
             distance = car_ahead - self
             if self.safe_distance > distance > 0:
-                if self._safe(observation):
-                    self._pass()
+                if random.random() < 0.5:
+                    if self._safe_left(observation):
+                        self._pass_left()
+                    elif self._safe_right(observation):
+                        self._pass_right()
+                    else:
+                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
                 else:
-                    d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+                    if self._safe_right(observation):
+                        self._pass_right()
+                    elif self._safe_left(observation):
+                        self._pass_left()
+                    else:
+                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+
             elif distance <= 0:
                 self._colour = colours['r']
                 self.crashed = True
@@ -257,13 +275,27 @@ class Car:
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
 
-    def _safe(self, state):
+    def _safe_left(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
         if not state[0]: return False  # On the leftmost lane
         if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
         if state[0][1] and state[0][1] - self < self.safe_distance: return False
         return True
+
+    # MH: it would be good to allow passing from the right.
+    # However this isn't working yet - the cars try to merge from the bottom lane
+    # maybe I'm missing something?
+
+    def _safe_right(self, state):
+        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self._passing: return False
+        if not state[2]: return False  # On the rightmost lane
+        if state[2][0] and self - state[2][0] < state[2][0].safe_distance: return False
+        if state[2][1] and state[2][1] - self < self.safe_distance: return False
+        return False # for now
+#        return True
+
 
 
 class StatefulEnv(core.Env):
