@@ -142,7 +142,7 @@ class Car:
 
         return obs, mask
 
-    def draw(self, surface, c=False, mode='human', offset=0, scale=1):
+    def draw(self, surface, c=False, mode='human', offset=0):
         """
         Draw current car on screen with a specific colour
         :param surface: PyGame ``Surface`` where to draw
@@ -151,8 +151,8 @@ class Car:
         :param offset: for representation cropping
         :param scale: draw with rescaled coordinates
         """
-        x, y = np.ceil(self._position * scale) + offset
-        rectangle = (int(x), int(y), np.ceil(self._length * scale), np.ceil(self._width * scale))
+        x, y = self._position + offset
+        rectangle = (int(x), int(y), self._length, self._width)
         if mode == 'human':
             if c:
                 pygame.draw.rect(surface, (0, 255, 0), (int(x - 15), int(y - 15), self._length + 20, self._width + 20),
@@ -323,16 +323,16 @@ class Car:
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = abs(self._direction)
         x_y = np.ceil(np.array((d @ width_height, d @ width_height[::-1])))
-        centre = np.ceil((self._position + (self._length // 2, 0)) * scale)
+        centre = self._position + (self._length // 2, 0)
         # pygame.draw.rect(screen_surface, (0, 128, 128), (*(centre + m - x_y / 2), *x_y), 1)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, -theta)
-        # width_height = np.array(width_height)
+        width_height = np.array(width_height)
         sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
-        # sub_rot_array = np.array(sub_rot_array)
-        # sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.25)
+        sub_rot_array = np.array(sub_rot_array)
+        sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
         return torch.from_numpy(sub_rot_array)
 
     def store(self, object_name, object_):
@@ -545,22 +545,18 @@ class StatefulEnv(core.Env):
             if self.collision: self._pause()
 
         if mode == 'machine':
-            width_height = np.ceil(np.array(width_height) * scale)
             m = max_extension = np.linalg.norm(width_height)
-            screen_size = np.ceil(np.array(self.screen_size) * scale) + 2 * max_extension
-            screen_surface = pygame.Surface(screen_size)
+            screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
             for lane in self.lanes:
-                sw = screen_size[0]  # screen width
-                y = np.ceil(lane['min'] * scale) + m
-                pygame.draw.line(screen_surface, colours['r'], (0, y), (sw, y))
-                y = np.ceil(lane['max'] * scale) + m
-                pygame.draw.line(screen_surface, colours['r'], (0, y), (sw, y))
+                sw = self.screen_size[0] + 2 * max_extension  # screen width
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m))
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m))
 
             # draw vehicles
             for v in self.vehicles:
-                v.draw(screen_surface, mode=mode, offset=max_extension, scale=scale)
+                v.draw(screen_surface, mode=mode, offset=max_extension)
 
             # extract states
             for i, v in enumerate(self.vehicles):
