@@ -78,7 +78,7 @@ class PolicyMLP(nn.Module):
         h_j = h_j.view(bsize, self.opt.ncond*self.opt.n_hidden)
         a = self.a_network(torch.cat((h_i, h_j), 1))
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
-        return a, Variable(torch.zeros(1).cuda())
+        return a, Variable(torch.zeros(1))
 
 
     def intype(self, t):

@@ -51,7 +51,7 @@ def train(nbatches):
         actions = Variable(actions)
         pred_a, loss_kl = policy(states, masks, actions)
         loss_mse = F.mse_loss(pred_a, actions)
-        loss = loss_mse + loss_kl
+        loss = loss_mse + loss_kl.cuda()
         loss.backward()
         optimizer.step()
         total_loss_mse += loss_mse.data[0]
