@@ -84,10 +84,12 @@ class PolicyMLP(nn.Module):
     def intype(self, t):
         if t == 'cpu':
             self.i_model.cpu()
+            self.i_model.i_network.cpu()
             self.j_network.cpu()
             self.a_network.cpu()
         elif t == 'gpu':
             self.i_model.cuda()
+            self.i_model.i_network.cuda()
             self.j_network.cuda()
             self.a_network.cuda()
 
