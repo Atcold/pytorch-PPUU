@@ -277,6 +277,13 @@ class Car:
                 self._colour = colours['r']
                 self.crashed = True
 
+
+        if random.random() < 0.05:
+            if self._safe_right(observation):
+                self._pass_right()
+                self._target_speed *= 0.95
+
+
         if d_velocity_dt == 0:
             d_velocity_dt = 1 * (self._target_speed - self._speed)
 
@@ -297,10 +304,6 @@ class Car:
         if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
         if state[0][1] and state[0][1] - self < self.safe_distance: return False
         return True
-
-    # MH: it would be good to allow passing from the right.
-    # However this isn't working yet - the cars try to merge from the bottom lane
-    # maybe I'm missing something?
 
     def _safe_right(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
