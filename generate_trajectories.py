@@ -5,6 +5,7 @@ import os
 import pickle
 import random
 import torch
+import scipy.misc
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
@@ -13,8 +14,11 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
+parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 opt = parser.parse_args()
+
+opt.state_image = (opt.state_image == 1)
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
@@ -31,14 +35,15 @@ register(
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
             'nb_lanes': opt.lanes,
-            'traffic_rate': opt.traffic_rate},
+            'traffic_rate': opt.traffic_rate,
+            'state_image': opt.state_image},
 )
 
 env = gym.make('Traffic-v0')
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
-def prepare_trajectory(states, actions):
+def prepare_trajectory_state(states, actions):
     # parse out the masks
     T = len(states)
     s, m = [], []
@@ -52,20 +57,49 @@ def prepare_trajectory(states, actions):
     return s, m, a
 
 
+def prepare_trajectory_state(states, actions):
+    # parse out the masks
+    T = len(states)
+    s, m = [], []
+    for t in range(T):
+        s.append(states[t][0])
+        m.append(states[t][1])
+
+    s = torch.stack(s)
+    m = torch.stack(m)
+    a = torch.stack(actions)
+    return s, m, a
+
+
+
 def run_episode():
     action = np.array([0, 0, 1, 0, 0, 0])
     states_, actions_, rewards_ = [], [], []
     done = False
 
     state, objects = env.reset()
-    for t in range(2000):
+    for t in range(1000):
         state, reward, done, vehicles = env.step(None)
         env.render()
 
     runs = []
+
+    '''
     for v in vehicles:
-        states, masks, actions = prepare_trajectory(v._states, v._actions)
-        runs.append({'states': states, 'masks': masks, 'actions': actions})
+        if v._id == 8:
+            im = v._states_image
+    for t in range(len(im)):
+        scipy.misc.imsave('images/im{:05d}.png'.format(t), im[t])
+    '''
+
+    for v in vehicles:
+        if opt.state_image:
+            states = torch.stack(v._states_image).permute(0, 3, 2, 1)
+            actions = torch.stack(v._actions)
+            runs.append({'states': states, 'actions': actions})
+        else:
+            states, masks, actions = prepare_trajectory_state(v._states, v._actions)
+            runs.append({'states': states, 'masks': masks, 'actions': actions})
 
     return runs
 

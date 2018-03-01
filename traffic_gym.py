@@ -4,6 +4,7 @@ import pygame, pdb, torch
 import math
 import random
 import numpy as np
+import scipy.misc
 import sys
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
@@ -288,11 +289,16 @@ class Car:
             d_velocity_dt = 1 * (self._target_speed - self._speed)
 
         if self._passing:
-            error = -round(self._target_lane - self._position[1])
+            error = -(self._target_lane - self._position[1])
             d_error = error - self._error
+            d_clip = 2
+            if abs(d_error) > d_clip:
+                d_error *= d_clip/abs(d_error)
             self._error = error
             ortho_direction = np.array((self._direction[1], -self._direction[0]))
-            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
+            ortho_direction /= np.linalg.norm(ortho_direction)
+            d_direction_dt = ortho_direction * self._speed * (1e-4 * error + 3.5e-3 * d_error)
+#            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
 
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
@@ -324,6 +330,8 @@ class Car:
         width_height = np.array(width_height)
         sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
+        sub_rot_array = np.array(sub_rot_array)
+        sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.5)
         return sub_rot_array
 
     def store(self, object_name, object_):
@@ -332,12 +340,12 @@ class Car:
         elif object_name == 'state':
             self._states.append(self._get_obs(*object_))
         elif object_name == 'state_image':
-            self._states_image.append(self._get_observation_image(*object_))
+            self._states_image.append(torch.from_numpy(self._get_observation_image(*object_)))
 
 
 class StatefulEnv(core.Env):
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=False):
+    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=True):
 
         self.offset = int(1.5 * LANE_W)
         self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)

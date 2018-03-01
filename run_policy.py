@@ -31,7 +31,7 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-policy = torch.load('models/model=policy-mlp-lrt=0.0001-nhidden=100-ncond=1-npred=10.model')
+policy = torch.load('models/model=policy-mlp-lrt=0.0001-nhidden=200-ncond=1-npred=10.model')
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
@@ -64,8 +64,8 @@ def run_episode():
             states, masks, actions = prepare_trajectory(v._states, v._actions)
             states = Variable(states[-opt.ncond:].unsqueeze(0))
             masks = Variable(masks[-opt.ncond:].unsqueeze(0))
-            action = policy(states, masks, None)
-            print(action)
+            action, _ = policy(states, masks, None)
+            print(f'dv = {action.data[0][0][2]}, (dx, dy) = ({action.data[0][0][0]}, {action.data[0][0][1]}')
             action = action.data[0][0].numpy()
         else:
             action = None
