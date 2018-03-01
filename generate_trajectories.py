@@ -57,49 +57,28 @@ def prepare_trajectory_state(states, actions):
     return s, m, a
 
 
-def prepare_trajectory_state(states, actions):
-    # parse out the masks
-    T = len(states)
-    s, m = [], []
-    for t in range(T):
-        s.append(states[t][0])
-        m.append(states[t][1])
-
-    s = torch.stack(s)
-    m = torch.stack(m)
-    a = torch.stack(actions)
-    return s, m, a
-
-
-
 def run_episode():
     action = np.array([0, 0, 1, 0, 0, 0])
     states_, actions_, rewards_ = [], [], []
     done = False
 
     state, objects = env.reset()
-    for t in range(2000):
+    for t in range(300):
         state, reward, done, vehicles = env.step(None)
         env.render()
 
     runs = []
 
-    '''
     for v in vehicles:
-        if v._id == 8:
+        if v._id == 3:
             im = v._states_image
     for t in range(len(im)):
         scipy.misc.imsave('images/im{:05d}.png'.format(t), im[t])
-    '''
 
     for v in vehicles:
-        if opt.state_image:
-            states = torch.stack(v._states_image).permute(0, 3, 2, 1)
-            actions = torch.stack(v._actions)
-            runs.append({'states': states, 'actions': actions})
-        else:
-            states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-            runs.append({'states': states, 'masks': masks, 'actions': actions})
+        images = torch.stack(v._states_image).permute(0, 3, 2, 1)
+        states, masks, actions = prepare_trajectory_state(v._states, v._actions)
+        runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
 
     return runs
 
