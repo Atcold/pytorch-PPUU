@@ -78,6 +78,6 @@ for _ in range(100):
     log_string = f'train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
-    policy.cpu()
+    policy.intype('cpu')
     torch.save(policy, opt.model_file + '.model')
-    policy.cuda()
+    policy.intype('cuda')

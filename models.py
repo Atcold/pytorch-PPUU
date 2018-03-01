@@ -14,13 +14,13 @@ class BOC(nn.Module):
         self.opt = opt
 
         self.i_network = nn.Sequential(
-            nn.BatchNorm1d(2*opt.n_inputs), 
+            nn.BatchNorm1d(2*opt.n_inputs),
             nn.Linear(2*opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
@@ -49,24 +49,24 @@ class PolicyMLP(nn.Module):
         self.i_model = BOC(opt)
 
         self.j_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_inputs), 
+            nn.BatchNorm1d(opt.n_inputs),
             nn.Linear(opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
         self.a_network = nn.Sequential(
-            nn.BatchNorm1d(2*opt.ncond*opt.n_hidden), 
+            nn.BatchNorm1d(2*opt.ncond*opt.n_hidden),
             nn.Linear(2*opt.ncond*opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_actions*opt.npred)
             )
 
@@ -81,6 +81,19 @@ class PolicyMLP(nn.Module):
         return a, Variable(torch.zeros(1).cuda())
 
 
+    def intype(t):
+        if t == 'cpu':
+            self.cpu()
+            self.i_model.cpu()
+            self.j_network.cpu()
+            self.a_network.cpu()
+        elif t == 'gpu':
+            self.cuda()()
+            self.i_model.cuda()
+            self.j_network.cuda()
+            self.a_network.cuda()
+
+
 
 # Bag-of-cars policy network (stochastic)
 class PolicyVAE(nn.Module):
@@ -91,35 +104,35 @@ class PolicyVAE(nn.Module):
         self.i_model = BOC(opt)
 
         self.j_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_inputs), 
+            nn.BatchNorm1d(opt.n_inputs),
             nn.Linear(opt.n_inputs, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
         self.z_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_actions*opt.npred), 
+            nn.BatchNorm1d(opt.n_actions*opt.npred),
             nn.Linear(opt.n_actions*opt.npred, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, 2*opt.nz)
             )
 
         self.a_network = nn.Sequential(
-            nn.BatchNorm1d(2*opt.ncond*opt.n_hidden + opt.nz), 
+            nn.BatchNorm1d(2*opt.ncond*opt.n_hidden + opt.nz),
             nn.Linear(2*opt.ncond*opt.n_hidden + opt.nz, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
             nn.Linear(opt.n_hidden, opt.n_actions*opt.npred)
             )
 
@@ -158,9 +171,9 @@ class PolicyVAE(nn.Module):
 
 
 
-        
 
-        
+
+
 
 
 
