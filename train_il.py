@@ -32,9 +32,11 @@ opt.n_inputs = 4
 opt.n_actions = 3
 
 if opt.model == 'policy-mlp':
-    policy = models.PolicyMLP(opt).cuda()
+    policy = models.PolicyMLP(opt)
 elif opt.model == 'policy-vae':
-    policy = models.PolicyVAE(opt).cuda()
+    policy = models.PolicyVAE(opt)
+
+policy.intype('gpu')
 
 optimizer = optim.Adam(policy.parameters(), opt.lrt)
 
@@ -80,4 +82,4 @@ for _ in range(100):
     utils.log(opt.model_file + '.log', log_string)
     policy.intype('cpu')
     torch.save(policy, opt.model_file + '.model')
-    policy.intype('cuda')
+    policy.intype('gpu')

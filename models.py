@@ -81,14 +81,12 @@ class PolicyMLP(nn.Module):
         return a, Variable(torch.zeros(1).cuda())
 
 
-    def intype(t):
+    def intype(self, t):
         if t == 'cpu':
-            self.cpu()
             self.i_model.cpu()
             self.j_network.cpu()
             self.a_network.cpu()
         elif t == 'gpu':
-            self.cuda()()
             self.i_model.cuda()
             self.j_network.cuda()
             self.a_network.cuda()
