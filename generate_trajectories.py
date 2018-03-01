@@ -69,11 +69,13 @@ def run_episode():
 
     runs = []
 
+    '''
     for v in vehicles:
         if v._id == 3:
             im = v._states_image
     for t in range(len(im)):
         scipy.misc.imsave('images/im{:05d}.png'.format(t), im[t])
+        '''
 
     for v in vehicles:
         images = torch.stack(v._states_image).permute(0, 3, 2, 1)
