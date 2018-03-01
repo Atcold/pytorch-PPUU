@@ -331,7 +331,7 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
         sub_rot_array = np.array(sub_rot_array)
-        sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.5)
+        sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.25)
         return sub_rot_array
 
     def store(self, object_name, object_):
