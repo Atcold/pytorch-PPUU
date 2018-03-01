@@ -331,8 +331,10 @@ class Car:
         width_height = np.array(width_height)
         sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
-        sub_rot_array = np.array(sub_rot_array)
+#        sub_rot_array = np.array(sub_rot_array)
         sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
+        sub_rot_array[:, :, 0] *= 4
+        assert(sub_rot_array.max() <= 255.0)
         return torch.from_numpy(sub_rot_array)
 
     def store(self, object_name, object_):
@@ -551,8 +553,8 @@ class StatefulEnv(core.Env):
             # draw lanes
             for lane in self.lanes:
                 sw = self.screen_size[0] + 2 * max_extension  # screen width
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m))
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m))
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
+                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
 
             # draw vehicles
             for v in self.vehicles:
