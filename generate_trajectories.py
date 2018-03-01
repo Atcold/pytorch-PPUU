@@ -15,7 +15,7 @@ parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
-parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
+parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data_images/')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -78,7 +78,7 @@ def run_episode():
     done = False
 
     state, objects = env.reset()
-    for t in range(1000):
+    for t in range(2000):
         state, reward, done, vehicles = env.step(None)
         env.render()
 

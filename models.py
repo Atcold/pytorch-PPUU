@@ -6,7 +6,6 @@ import torch.optim as optim
 from torch.autograd import Variable
 import random, pdb
 
-
 # generic model to encode interactions between cars
 class BOC(nn.Module):
     def __init__(self, opt):
@@ -38,6 +37,54 @@ class BOC(nn.Module):
         h_i = torch.sum(h_i, 2)
         h_i = h_i.view(bsize, self.opt.ncond*self.opt.n_hidden)
         return h_i
+
+
+
+
+class PolicyCNN(nn.Module):
+    def __init__(self, opt):
+        super(PolicyCNN, self).__init__()
+        self.opt = opt
+
+        self.convnet = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU(), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU(), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU()
+        )
+
+        self.hsize = opt.nfeature*6*2
+        self.fc = nn.Sequential(
+            nn.Linear(self.hsize, opt.n_hidden), 
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
+        )
+
+    def forward(self, states, actions):
+        bsize = states.size(0)
+        states = states.view(bsize, 3*self.opt.ncond, 50, 20)
+        h = self.convnet(states)
+        a = self.fc(h.view(bsize, self.hsize))
+        a = a.view(bsize, self.opt.npred, self.opt.n_actions)
+        return a, Variable(torch.zeros(1))
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
+
+
+
 
 
 # Bag-of-cars policy network (deterministic)
@@ -166,6 +213,19 @@ class PolicyVAE(nn.Module):
         KL = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return a, KL
 
+    def intype(self, t):
+        if t == 'cpu':
+            self.i_model.cpu()
+            self.i_model.i_network.cpu()
+            self.j_network.cpu()
+            self.a_network.cpu()
+            self.z_network.cpu()
+        elif t == 'gpu':
+            self.i_model.cuda()
+            self.i_model.i_network.cuda()
+            self.j_network.cuda()
+            self.a_network.cuda()
+            self.z_network.cuda()
 
 
 

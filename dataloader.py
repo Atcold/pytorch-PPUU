@@ -5,7 +5,9 @@ class DataLoader():
     def __init__(self, fname, opt):
         self.opt = opt
         self.data = []
-        for f in glob.glob(fname):
+        k = 0
+        for i in range(opt.nshards):
+            f = f'{opt.data_dir}/traffic_data_lanes=3-episodes=100-seed={i+1}.pkl'
             print(f'loading {f}')
             self.data += pickle.load(open(f, 'rb'))
         self.states = []
@@ -16,6 +18,7 @@ class DataLoader():
             self.actions.append(run.get('actions'))
             self.masks.append(run.get('masks'))
 
+        print(len(self.states))
         self.n_episodes = len(self.states)
         self.n_train = int(math.floor(self.n_episodes * 0.9))
         self.n_valid = int(math.floor(self.n_episodes * 0.05))
@@ -35,7 +38,8 @@ class DataLoader():
         elif split == 'test':
             indx = self.test_indx
 
-        states, masks, actions = [], [], []
+#        states, masks, actions = [], [], []
+        states, actions = [], []
         nb = 0
         while nb < self.opt.batch_size:
             s = random.choice(indx)
@@ -43,15 +47,15 @@ class DataLoader():
             if T > (self.opt.ncond + self.opt.npred):
                 t = random.randint(0, T - (self.opt.ncond+self.opt.npred))
                 states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)+1])
-                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
+#                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
                 actions.append(self.actions[s][t:t+(self.opt.ncond+self.opt.npred)])
                 nb += 1
 
         states = torch.stack(states)
         actions = torch.stack(actions)
-        masks = torch.stack(masks)
         states = states[:, :self.opt.ncond].clone()
-        masks = masks[:, :self.opt.ncond].clone()
+#        masks = torch.stack(masks)
+#        masks = masks[:, :self.opt.ncond].clone()
         actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
-
-        return states.cuda(), masks.cuda(), actions.cuda()
+        states = states.float() / 255.0
+        return states.float().cuda(), actions.float().cuda()
