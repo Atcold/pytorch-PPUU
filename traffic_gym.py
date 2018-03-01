@@ -25,7 +25,6 @@ colours = {
     'y': (255, 255, 000),
 }
 
-
 # Car coordinate system, origin under the centre of the read axis
 #
 #      ^ y                       (x, y, x., y.)
@@ -46,6 +45,9 @@ colours = {
 # SUV     |    2.0    |    5.3
 # Compact |    1.7    |    4.5
 
+MAX_SPEED = 130  # km/h
+
+
 class Car:
     def __init__(self, lanes, free_lanes, dt, car_id):
         """
@@ -62,7 +64,7 @@ class Car:
             -self._length,
             lanes[lane]['mid']
         ), np.float)
-        self._target_speed = (random.randrange(115, 130) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
+        self._target_speed = (MAX_SPEED - random.randrange(0, 15) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
         self._colour = colours['c']
@@ -74,6 +76,7 @@ class Car:
         self._states = list()
         self._states_image = list()
         self._actions = list()
+        self._safe_factor = random.gauss(1, .03)  # 0.9 Germany, 2 safe
 
     def get_state(self):
         state = torch.zeros(4)
@@ -139,16 +142,17 @@ class Car:
 
         return obs, mask
 
-    def draw(self, surface, c=False, mode='human', offset=0):
+    def draw(self, surface, c=False, mode='human', offset=0, scale=1):
         """
         Draw current car on screen with a specific colour
         :param surface: PyGame ``Surface`` where to draw
         :param c: default colour
         :param mode: human or machine
         :param offset: for representation cropping
+        :param scale: draw with rescaled coordinates
         """
-        x, y = self._position + offset
-        rectangle = (int(x), int(y), self._length, self._width)
+        x, y = np.ceil(self._position * scale) + offset
+        rectangle = (int(x), int(y), np.ceil(self._length * scale), np.ceil(self._width * scale))
         if mode == 'human':
             if c:
                 pygame.draw.rect(surface, (0, 255, 0), (int(x - 15), int(y - 15), self._length + 20, self._width + 20),
@@ -196,8 +200,7 @@ class Car:
 
     @property
     def safe_distance(self):
-        factor = random.gauss(1, .03)  # 0.9 Germany, 2 safe
-        return self._speed * factor
+        return self._speed * self._safe_factor
 
     @property
     def front(self):
@@ -278,12 +281,10 @@ class Car:
                 self._colour = colours['r']
                 self.crashed = True
 
-
         if random.random() < 0.05:
             if self._safe_right(observation):
                 self._pass_right()
                 self._target_speed *= 0.95
-
 
         if d_velocity_dt == 0:
             d_velocity_dt = 1 * (self._target_speed - self._speed)
@@ -293,12 +294,12 @@ class Car:
             d_error = error - self._error
             d_clip = 2
             if abs(d_error) > d_clip:
-                d_error *= d_clip/abs(d_error)
+                d_error *= d_clip / abs(d_error)
             self._error = error
             ortho_direction = np.array((self._direction[1], -self._direction[0]))
             ortho_direction /= np.linalg.norm(ortho_direction)
             d_direction_dt = ortho_direction * self._speed * (1e-4 * error + 3.5e-3 * d_error)
-#            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
+        #            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
 
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
@@ -319,20 +320,20 @@ class Car:
         if state[2][1] and state[2][1] - self < self.safe_distance: return False
         return True
 
-    def _get_observation_image(self, m, screen_surface, width_height):
+    def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = abs(self._direction)
         x_y = np.ceil(np.array((d @ width_height, d @ width_height[::-1])))
-        centre = self._position + (self._length // 2, 0)
+        centre = np.ceil((self._position + (self._length // 2, 0)) * scale)
         # pygame.draw.rect(screen_surface, (0, 128, 128), (*(centre + m - x_y / 2), *x_y), 1)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, -theta)
-        width_height = np.array(width_height)
+        # width_height = np.array(width_height)
         sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
-        sub_rot_array = np.array(sub_rot_array)
-        sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.25)
-        return sub_rot_array
+        # sub_rot_array = np.array(sub_rot_array)
+        # sub_rot_array = scipy.misc.imresize(sub_rot_array, 0.25)
+        return torch.from_numpy(sub_rot_array)
 
     def store(self, object_name, object_):
         if object_name == 'action':
@@ -340,7 +341,7 @@ class Car:
         elif object_name == 'state':
             self._states.append(self._get_obs(*object_))
         elif object_name == 'state_image':
-            self._states_image.append(torch.from_numpy(self._get_observation_image(*object_)))
+            self._states_image.append(self._get_observation_image(*object_))
 
 
 class StatefulEnv(core.Env):
@@ -472,7 +473,10 @@ class StatefulEnv(core.Env):
             vid += 1
 
         if self.state_image:
-            self.render(mode='machine', width_height=(10 * LANE_W, 4 * LANE_W))
+            # How much to look far ahead
+            look_ahead = MAX_SPEED * 1000 / 3600 * SCALE
+            look_sideways = 2 * LANE_W
+            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
 
         # default reward if nothing happens
         reward = -0.001
@@ -502,7 +506,7 @@ class StatefulEnv(core.Env):
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
         return behind, ahead
 
-    def render(self, mode='human', width_height=None):
+    def render(self, mode='human', width_height=None, scale=1):
         if mode == 'human' and self.display:
 
             # self._pause()
@@ -541,22 +545,26 @@ class StatefulEnv(core.Env):
             if self.collision: self._pause()
 
         if mode == 'machine':
+            width_height = np.ceil(np.array(width_height) * scale)
             m = max_extension = np.linalg.norm(width_height)
-            screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            screen_size = np.ceil(np.array(self.screen_size) * scale) + 2 * max_extension
+            screen_surface = pygame.Surface(screen_size)
 
             # draw lanes
             for lane in self.lanes:
-                sw = self.screen_size[0] + 2 * max_extension  # screen width
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m))
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m))
+                sw = screen_size[0]  # screen width
+                y = np.ceil(lane['min'] * scale) + m
+                pygame.draw.line(screen_surface, colours['r'], (0, y), (sw, y))
+                y = np.ceil(lane['max'] * scale) + m
+                pygame.draw.line(screen_surface, colours['r'], (0, y), (sw, y))
 
             # draw vehicles
             for v in self.vehicles:
-                v.draw(screen_surface, mode=mode, offset=max_extension)
+                v.draw(screen_surface, mode=mode, offset=max_extension, scale=scale)
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                v.store('state_image', (max_extension, screen_surface, width_height))
+                v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _pause(self):
         pause = True
