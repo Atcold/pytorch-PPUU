@@ -5,14 +5,13 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-
-###########################################
-# Train an imitation learner model
-###########################################
+#################################################
+# Train an action-conditional forward model
+#################################################
 
 parser = argparse.ArgumentParser()
 # data params
-parser.add_argument('-model', type=str, default='policy-cnn')
+parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-nshards', type=int, default=30)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
@@ -38,28 +37,26 @@ print(f'will save model as {opt.model_file}')
 opt.n_inputs = 4
 opt.n_actions = 3
 
-if opt.model == 'policy-mlp':
-    policy = models.PolicyMLP(opt)
-elif opt.model == 'policy-vae':
-    policy = models.PolicyVAE(opt)
-elif opt.model == 'policy-cnn':
-    policy = models.PolicyCNN(opt)
+if opt.model == 'fwd-vae':
+    model = models.FwdVAE(opt)
+elif opt.model == 'fwd-cnn':
+    model = models.FwdCNN(opt)
 
-policy.intype('gpu')
+model.intype('gpu')
 
-optimizer = optim.Adam(policy.parameters(), opt.lrt)
+optimizer = optim.Adam(model.parameters(), opt.lrt)
 
 def train(nbatches):
-    policy.train()
+    model.train()
     total_loss_mse, total_loss_kl = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        images, states, actions = dataloader.get_batch_il('train')
-        images = Variable(images)
-        states = Variable(states)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
+        inputs = Variable(inputs)
         actions = Variable(actions)
-        pred_a, loss_kl = policy(images, states, actions)
-        loss_mse = F.mse_loss(pred_a, actions)
+        targets = Variable(targets)
+        pred, loss_kl = model(inputs, actions, targets)
+        loss_mse = F.mse_loss(pred, targets)
         loss = loss_mse + loss_kl.cuda()
         loss.backward()
         optimizer.step()
@@ -67,16 +64,17 @@ def train(nbatches):
         total_loss_kl += loss_kl.data[0]
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
+
 def test(nbatches):
-    policy.eval()
+    model.eval()
     total_loss_mse, total_loss_kl = 0, 0
     for i in range(nbatches):
-        images, states, actions = dataloader.get_batch_il('valid')
-        images = Variable(images)
-        states = Variable(states)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
+        inputs = Variable(inputs)
         actions = Variable(actions)
-        pred_a, loss_kl = policy(images, states, actions)
-        loss_mse = F.mse_loss(pred_a, actions)
+        targets = Variable(targets)
+        pred, loss_kl = model(inputs, actions, targets)
+        loss_mse = F.mse_loss(pred, targets)
         total_loss_mse += loss_mse.data[0]
         total_loss_kl += loss_kl.data[0]
     return total_loss_mse / nbatches, total_loss_kl / nbatches
@@ -88,6 +86,6 @@ for i in range(100):
     log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
-    policy.intype('cpu')
-    torch.save(policy, opt.model_file + '.model')
-    policy.intype('gpu')
+    model.intype('cpu')
+    torch.save(model, opt.model_file + '.model')
+    model.intype('gpu')

@@ -40,6 +40,70 @@ class BOC(nn.Module):
 
 
 
+class FwdCNN(nn.Module):
+    def __init__(self, opt):
+        super(FwdCNN, self).__init__()
+        self.opt = opt
+
+        self.f_encoder = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature)
+        )
+
+        self.action_embed = nn.Sequential(
+            nn.Linear(opt.n_actions*opt.npred, opt.nfeature), 
+            nn.BatchNorm1d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nfeature, opt.nfeature), 
+            nn.BatchNorm1d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nfeature, opt.nfeature)
+        )
+
+        self.f_decoder = nn.Sequential(
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose2d(opt.nfeature, 3*opt.npred, (2, 2), 2, (0, 1))
+        )
+
+
+    def forward(self, inputs, actions, target):
+        bsize = inputs.size(0)
+        inputs = inputs.view(bsize, self.opt.ncond*3, 97, 20)
+        actions = actions.view(bsize, self.opt.npred*self.opt.n_actions)
+        h = self.f_encoder(inputs)
+        a = self.action_embed(actions)
+        h = h + a.view(bsize, self.opt.nfeature, 1, 1).expand(h.size())
+        out = self.f_decoder(h)[:, :, :-1].clone()
+        out = out.view(bsize, self.opt.npred, 3, 97, 20)
+        inputs = inputs.view(bsize, self.opt.ncond, 3, 97, 20)
+        last_input = inputs[:, -1].clone().view(bsize, 1, 3, 97, 20)
+        pred = out + last_input.expand(out.size())
+        return pred, Variable(torch.zeros(1))
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+        
+
+
+
+
+
+
 
 class PolicyCNN(nn.Module):
     def __init__(self, opt):
@@ -58,20 +122,28 @@ class PolicyCNN(nn.Module):
             nn.ReLU()
         )
 
-        self.hsize = opt.nfeature*6*2
+        self.embed = nn.Sequential(
+            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden), 
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.n_hidden)
+        )
+
+        self.hsize = opt.nfeature*12*2
         self.fc = nn.Sequential(
-            nn.Linear(self.hsize, opt.n_hidden), 
+            nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden), 
             nn.ReLU(), 
             nn.Linear(opt.n_hidden, opt.n_hidden), 
             nn.ReLU(), 
             nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
         )
 
-    def forward(self, states, actions):
-        bsize = states.size(0)
-        states = states.view(bsize, 3*self.opt.ncond, 50, 20)
-        h = self.convnet(states)
-        a = self.fc(h.view(bsize, self.hsize))
+    def forward(self, state_images, states, actions):
+        bsize = state_images.size(0)
+        state_images = state_images.view(bsize, 3*self.opt.ncond, 97, 20)
+        states = states.view(bsize, -1)
+        hi = self.convnet(state_images).view(bsize, self.hsize)
+        hs = self.embed(states)
+        a = self.fc(torch.cat((hi, hs), 1))
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
         return a, Variable(torch.zeros(1))
 

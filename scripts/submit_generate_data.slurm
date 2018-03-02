@@ -14,5 +14,5 @@
 module load python-3.6
 source activate py36
 cd ../
-srun python generate_trajectories.py -n_episodes 100 -seed $1
+srun python generate_trajectories.py -n_episodes 50 -seed $1
 
