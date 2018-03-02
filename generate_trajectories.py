@@ -57,25 +57,26 @@ def prepare_trajectory_state(states, actions):
     return s, m, a
 
 
-def run_episode():
+def run_episode(ep):
     action = np.array([0, 0, 1, 0, 0, 0])
     states_, actions_, rewards_ = [], [], []
     done = False
 
     state, objects = env.reset()
-    for t in range(500):
+    for t in range(300):
         state, reward, done, vehicles = env.step(None)
         env.render()
 
     runs = []
 
-    '''
+    vid = 0
     for v in vehicles:
-        if v._id == 3:
-            im = v._states_image
-    for t in range(len(im)):
-        scipy.misc.imsave('images/im{:05d}.png'.format(t), im[t])
-        '''
+#        if v._id == 3:
+        im = v._states_image
+        os.system('mkdir -p videos/state{:d}'.format(vid))
+        for t in range(len(im)):
+            scipy.misc.imsave('videos/state{:d}/im{:05d}.png'.format(vid, t), im[t])
+        vid += 1
 
     for v in vehicles:
         images = torch.stack(v._states_image).permute(0, 3, 2, 1)
@@ -88,7 +89,7 @@ def run_episode():
 episodes = []
 for i in range(opt.n_episodes):
     print(f'episode {i + 1}/{opt.n_episodes}')
-    runs = run_episode()
+    runs = run_episode(i)
     episodes += runs
 
 pickle.dump(episodes, open(data_file, 'wb'))
