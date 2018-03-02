@@ -12,10 +12,10 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-model', type=str, default='fwd-cnn')
-parser.add_argument('-nshards', type=int, default=30)
+parser.add_argument('-nshards', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
-parser.add_argument('-n_episodes', type=int, default=100)
+parser.add_argument('-n_episodes', type=int, default=50)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-ncond', type=int, default=4)
 parser.add_argument('-npred', type=int, default=10)

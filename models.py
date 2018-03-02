@@ -123,9 +123,12 @@ class PolicyCNN(nn.Module):
         )
 
         self.embed = nn.Sequential(
+            nn.BatchNorm1d(opt.ncond*opt.n_inputs), 
             nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden), 
             nn.ReLU(), 
-            nn.Linear(opt.n_hidden, opt.n_hidden)
+            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden)
         )
 
         self.hsize = opt.nfeature*12*2

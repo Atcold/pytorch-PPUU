@@ -13,10 +13,10 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-model', type=str, default='policy-cnn')
-parser.add_argument('-nshards', type=int, default=30)
+parser.add_argument('-nshards', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
-parser.add_argument('-n_episodes', type=int, default=100)
+parser.add_argument('-n_episodes', type=int, default=50)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-ncond', type=int, default=4)
 parser.add_argument('-npred', type=int, default=10)
@@ -87,7 +87,8 @@ for i in range(100):
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
     log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
     print(log_string)
-    utils.log(opt.model_file + '.log', log_string)
-    policy.intype('cpu')
-    torch.save(policy, opt.model_file + '.model')
-    policy.intype('gpu')
+    if opt.model_dir != '':
+        utils.log(opt.model_file + '.log', log_string)
+        policy.intype('cpu')
+        torch.save(policy, opt.model_file + '.model')
+        policy.intype('gpu')
