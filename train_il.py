@@ -12,7 +12,7 @@ import torch.optim as optim
 
 parser = argparse.ArgumentParser()
 # data params
-parser.add_argument('-model', type=str, default='policy-cnn')
+parser.add_argument('-model', type=str, default='policy-cnn-vae')
 parser.add_argument('-nshards', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
@@ -44,6 +44,8 @@ elif opt.model == 'policy-vae':
     policy = models.PolicyVAE(opt)
 elif opt.model == 'policy-cnn':
     policy = models.PolicyCNN(opt)
+elif opt.model == 'policy-cnn-vae':
+    policy = models.PolicyCNN_VAE(opt)
 
 policy.intype('gpu')
 

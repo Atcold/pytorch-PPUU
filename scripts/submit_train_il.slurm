@@ -7,7 +7,7 @@
 #SBATCH --gres gpu:1
 #SBATCH --qos=batch
 #SBATCH --nodes=1
-#SBATCH --mem=24000
+#SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=mbh305@nyu.edu
 

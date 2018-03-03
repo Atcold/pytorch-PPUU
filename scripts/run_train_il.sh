@@ -3,7 +3,7 @@
 rm *.err
 rm *.out
 
-for model in policy-cnn; do 
+for model in policy-cnn-vae; do 
     for lrt in 0.001 0.0001; do 
         for nhidden in 100 200; do 
             for ncond in 4; do 

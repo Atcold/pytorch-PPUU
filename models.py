@@ -40,7 +40,82 @@ class BOC(nn.Module):
 
 
 
+
+
+
+
+
+
+
+
 class FwdCNN(nn.Module):
+    def __init__(self, opt):
+        super(FwdCNN, self).__init__()
+        self.opt = opt
+
+        self.f_encoder = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature)
+        )
+
+        self.action_embed = nn.Sequential(
+            nn.BatchNorm1d(opt.n_actions), 
+            nn.Linear(opt.n_actions, opt.nfeature), 
+            nn.BatchNorm1d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nfeature, opt.nfeature), 
+            nn.BatchNorm1d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nfeature, opt.nfeature)
+        )
+
+        self.f_decoder = nn.Sequential(
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
+        )
+
+
+    def forward(self, inputs, actions, target):
+        bsize = inputs.size(0)
+        inputs = inputs.view(bsize, self.opt.ncond, 3, 97, 20)
+        actions = actions.view(bsize, -1, self.opt.n_actions)
+        npred = actions.size(1)
+        pred = []
+        for t in range(npred):
+            h = self.f_encoder(inputs.view(bsize, self.opt.ncond*3, 97, 20))
+            a = self.action_embed(actions[:, t].contiguous())
+            h = h + a.view(bsize, self.opt.nfeature, 1, 1).expand(h.size())
+            out = self.f_decoder(h)[:, :, :-1].clone()
+            out = out.view(bsize, 1, 3, 97, 20)
+            out = out + inputs[:, -1].unsqueeze(1).clone()
+            pred.append(out)
+            inputs = torch.cat((inputs[:, 1:], out), 1)
+
+        pred = torch.cat(pred, 1)
+        return pred, Variable(torch.zeros(1))
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
+
+
+
+class FwdCNNJoint(nn.Module):
     def __init__(self, opt):
         super(FwdCNN, self).__init__()
         self.opt = opt
@@ -156,6 +231,128 @@ class PolicyCNN(nn.Module):
             self.cuda()
         elif t == 'cpu':
             self.cpu()
+
+
+
+
+
+
+
+
+
+class PolicyCNN_VAE(nn.Module):
+    def __init__(self, opt):
+        super(PolicyCNN_VAE, self).__init__()
+        self.opt = opt
+
+        self.convnet = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU(), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU(), 
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.BatchNorm2d(opt.nfeature), 
+            nn.ReLU()
+        )
+
+        self.embed = nn.Sequential(
+            nn.BatchNorm1d(opt.ncond*opt.n_inputs), 
+            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden), 
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden)
+        )
+        self.hsize = opt.nfeature*12*2
+
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.hsize + opt.n_hidden + opt.nz, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
+        )
+
+        self.z_network = nn.Sequential(
+            nn.BatchNorm1d(opt.n_actions*opt.npred + self.hsize + opt.n_hidden),
+            nn.Linear(opt.n_actions*opt.npred + self.hsize + opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, 2*opt.nz)
+            )
+
+
+    def reparameterize(self, mu, logvar):
+        if self.training:
+            std = logvar.mul(0.5).exp_()
+            eps = Variable(std.data.new(std.size()).normal_())
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+
+    def encode(self, a):
+        bsize = a.size(0)
+        z_params = self.z_network(a.view(bsize, -1)).view(bsize, self.opt.nz, 2)
+        mu = z_params[:, :, 0]
+        logvar = z_params[:, :, 1]
+        return mu, logvar
+
+
+    def forward(self, state_images, states, actions):
+        bsize = state_images.size(0)
+        state_images = state_images.view(bsize, 3*self.opt.ncond, 97, 20)
+        states = states.view(bsize, -1)
+        actions = actions.view(bsize, -1)
+        hi = self.convnet(state_images).view(bsize, self.hsize)
+        hs = self.embed(states)
+
+        h = torch.cat((hi, hs), 1)
+        mu, logvar = self.encode(torch.cat((h, actions), 1))
+        z = self.reparameterize(mu, logvar)
+
+        a = self.fc(torch.cat((h, z), 1))
+        a = a.view(bsize, self.opt.npred, self.opt.n_actions)
+        return a, Variable(torch.zeros(1))
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

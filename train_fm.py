@@ -25,13 +25,19 @@ parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-lrt', type=float, default=0.0001)
-parser.add_argument('-epoch_size', type=int, default=500)
+parser.add_argument('-epoch_size', type=int, default=2000)
+parser.add_argument('-zeroact', type=int, default=0)
 opt = parser.parse_args()
 
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
+
 dataloader = DataLoader(data_file, opt)
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
+
+if opt.zeroact == 1:
+    opt.model_file += '-zeroact'
+
 print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
@@ -55,6 +61,8 @@ def train(nbatches):
         inputs = Variable(inputs)
         actions = Variable(actions)
         targets = Variable(targets)
+        if opt.zeroact == 1:
+            actions.data.zero_()
         pred, loss_kl = model(inputs, actions, targets)
         loss_mse = F.mse_loss(pred, targets)
         loss = loss_mse + loss_kl.cuda()
@@ -73,6 +81,8 @@ def test(nbatches):
         inputs = Variable(inputs)
         actions = Variable(actions)
         targets = Variable(targets)
+        if opt.zeroact == 1:
+            actions.data.zero_()
         pred, loss_kl = model(inputs, actions, targets)
         loss_mse = F.mse_loss(pred, targets)
         total_loss_mse += loss_mse.data[0]
@@ -85,7 +95,8 @@ for i in range(100):
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
     log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
     print(log_string)
-    utils.log(opt.model_file + '.log', log_string)
-    model.intype('cpu')
-    torch.save(model, opt.model_file + '.model')
-    model.intype('gpu')
+    if opt.model_dir != '':
+        utils.log(opt.model_file + '.log', log_string)
+        model.intype('cpu')
+        torch.save(model, opt.model_file + '.model')
+        model.intype('gpu')
