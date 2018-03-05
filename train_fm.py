@@ -12,7 +12,7 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-model', type=str, default='fwd-cnn')
-parser.add_argument('-nshards', type=int, default=20)
+parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
 parser.add_argument('-n_episodes', type=int, default=50)
@@ -23,17 +23,24 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=64)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
+parser.add_argument('-tie_action', type=int, default=1)
 parser.add_argument('-nz', type=int, default=2)
+parser.add_argument('-sigmout', type=int, default=1)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
 opt = parser.parse_args()
 
+
+opt.model_dir += '_{opt.nshards}-shards/'
+
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
 dataloader = DataLoader(data_file, opt)
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
+
+
+opt.model_file = f'{opt.model_dir}/model={opt.model}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-sigmout={opt.sigmout}-tieact={opt.tie_action}'
 
 if opt.zeroact == 1:
     opt.model_file += '-zeroact'

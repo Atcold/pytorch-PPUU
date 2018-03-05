@@ -64,6 +64,12 @@ class FwdCNN(nn.Module):
             nn.BatchNorm2d(opt.nfeature)
         )
 
+
+        if self.opt.tie_action == 1:
+            self.aemb_size = opt.nfeature
+        else:
+            self.aemb_size = opt.nfeature*12*2
+
         self.action_embed = nn.Sequential(
             nn.BatchNorm1d(opt.n_actions), 
             nn.Linear(opt.n_actions, opt.nfeature), 
@@ -72,7 +78,7 @@ class FwdCNN(nn.Module):
             nn.Linear(opt.nfeature, opt.nfeature), 
             nn.BatchNorm1d(opt.nfeature), 
             nn.LeakyReLU(0.2), 
-            nn.Linear(opt.nfeature, opt.nfeature)
+            nn.Linear(opt.nfeature, self.aemb_size)
         )
 
         self.f_decoder = nn.Sequential(
@@ -95,10 +101,15 @@ class FwdCNN(nn.Module):
         for t in range(npred):
             h = self.f_encoder(inputs.view(bsize, self.opt.ncond*3, 97, 20))
             a = self.action_embed(actions[:, t].contiguous())
-            h = h + a.view(bsize, self.opt.nfeature, 1, 1).expand(h.size())
+            if self.opt.tie_action == 1:
+                h = h + a.view(bsize, self.opt.nfeature, 1, 1).expand(h.size())
+            else:
+                h = h + a.view(bsize, self.opt.nfeature, 12, 2)
             out = self.f_decoder(h)[:, :, :-1].clone()
             out = out.view(bsize, 1, 3, 97, 20)
             out = out + inputs[:, -1].unsqueeze(1).clone()
+            if self.opt.sigmout == 1:
+                out = F.sigmoid(out)
             pred.append(out)
             inputs = torch.cat((inputs[:, 1:], out), 1)
 
@@ -266,7 +277,6 @@ class PolicyCNN_VAE(nn.Module):
             nn.BatchNorm1d(opt.n_hidden)
         )
         self.hsize = opt.nfeature*12*2
-
 
         self.fc = nn.Sequential(
             nn.Linear(self.hsize + opt.n_hidden + opt.nz, opt.n_hidden), 

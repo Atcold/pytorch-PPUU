@@ -62,6 +62,7 @@ class DataLoader():
         masks = masks[:, :self.opt.ncond].clone()
         actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
         images = images.float() / 255.0
+        assert(images.max() <= 1 and images.min() >= 0)
         return images.float().cuda(), states.float().cuda(), actions.float().cuda()
 
 
