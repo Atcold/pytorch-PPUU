@@ -64,7 +64,7 @@ class Car:
             -self._length,
             lanes[lane]['mid']
         ), np.float)
-        self._target_speed = (MAX_SPEED - random.randrange(0, 15) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
+        self._target_speed = (MAX_SPEED - random.randrange(0, 30) - 10 * lane) * 1000 / 3600 * SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
         self._colour = colours['c']
@@ -180,7 +180,7 @@ class Car:
         self._speed = vehicle_state[4]
 
         # Deal with latent variable and visual indicator
-        if self._passing and self._error == 0:
+        if self._passing and abs(self._error) < 1e-3:
             self._passing = False
             self._colour = colours['c']
 
@@ -298,7 +298,7 @@ class Car:
             self._error = error
             ortho_direction = np.array((self._direction[1], -self._direction[0]))
             ortho_direction /= np.linalg.norm(ortho_direction)
-            d_direction_dt = ortho_direction * self._speed * (1e-4 * error + 3.5e-3 * d_error)
+            d_direction_dt = ortho_direction * self._speed * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
         #            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
 
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative

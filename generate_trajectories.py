@@ -63,7 +63,7 @@ def run_episode(ep):
     done = False
 
     state, objects = env.reset()
-    for t in range(300):
+    for t in range(500):
         state, reward, done, vehicles = env.step(None)
         env.render()
 
