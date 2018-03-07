@@ -304,6 +304,21 @@ class Car:
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
 
+
+    def policy_random(self, observation):
+        if math.random() < 0.1 or True:
+            print('resetting')
+            ortho_direction = np.zeros(random.random(), random.random())
+            ortho_direction /= np.linalg.norm(ortho_direction)
+            self.d_direction_dt = ortho_direction * self._speed * (1e-4 * error + 3.5e-3 * d_error)
+            self.d_velocity_dt = random.random()
+        """
+        Policy which is state independent
+        """
+        action = np.array((*self.d_direction_dt, self.d_velocity_dt))  # dx/dt, car state temporal derivative
+        return action
+
+
     def _safe_left(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
@@ -348,7 +363,7 @@ class Car:
 
 class StatefulEnv(core.Env):
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=True):
+    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=True, store=True):
 
         self.offset = int(1.5 * LANE_W)
         self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
@@ -365,6 +380,7 @@ class StatefulEnv(core.Env):
         self.car_id = None  # car counter init
         self.state_image = state_image
         self.mean_fps = None
+        self.store = store
 
         self.display = display
         if self.display:  # if display is required
@@ -430,7 +446,7 @@ class StatefulEnv(core.Env):
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
-        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t:
+        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(self.vehicles) == 0:
             if free_lanes:
                 car = Car(self.lanes, free_lanes, self.delta_t, self.next_car_id)
                 self.next_car_id += 1
@@ -460,6 +476,7 @@ class StatefulEnv(core.Env):
 
             # Compute the action
             if v._id == self.policy_car_id and policy_action is not None:
+                print(policy_action)
                 action = policy_action
             else:
                 action = v.policy(state)
@@ -467,8 +484,9 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            v.store('state', state)
-            v.store('action', action)
+            if self.store:
+                v.store('state', state)
+                v.store('action', action)
 
             # Act accordingly
             v.step(action)
@@ -562,7 +580,8 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                v.store('state_image', (max_extension, screen_surface, width_height, scale))
+                if self.store:
+                    v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _pause(self):
         pause = True

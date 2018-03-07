@@ -73,9 +73,10 @@ def run_episode(ep):
     for v in vehicles:
 #        if v._id == 3:
         im = v._states_image
-        os.system('mkdir -p videos/state{:d}'.format(vid))
+        save_dir = 'videos/states/ex{:d}'.format(vid)
+        os.system('mkdir -p ' + save_dir)
         for t in range(len(im)):
-            scipy.misc.imsave('videos/state{:d}/im{:05d}.png'.format(vid, t), im[t])
+            scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
         vid += 1
 
     for v in vehicles:
