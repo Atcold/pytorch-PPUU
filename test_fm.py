@@ -14,9 +14,11 @@ parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
-parser.add_argument('-n_episodes', type=int, default=10)
+parser.add_argument('-n_episodes', type=int, default=1)
 parser.add_argument('-ncond', type=int, default=4)
-parser.add_argument('-npred', type=int, default=10)
+parser.add_argument('-npred', type=int, default=50)
+parser.add_argument('-tie_action', type=int, default=1)
+parser.add_argument('-sigmout', type=int, default=1)
 opt = parser.parse_args()
 
 random.seed(opt.seed)
@@ -33,8 +35,12 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-#model = torch.load('models/model=fwd-cnn-ncond=4-npred=10-lrt=0.001-nhidden=100-nfeature=32.model')
-model = torch.load('models/model=fwd-cnn-ncond=4-npred=10-lrt=0.0001-nhidden=100-nfeature=64.model')
+#model = torch.load('models/model=fwd-cnn-ncond=4-npred=10-lrt=0.0001-nhidden=100-nfeature=64.model')
+#opt.mfile = 'model=fwd-cnn-bsize=16-ncond=4-npred=200-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
+opt.mfile = 'model=fwd-cnn-bsize=32-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
+model = torch.load('models/' + opt.mfile)
+model.opt.tie_action = 0
+model.opt.npred = 50
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
@@ -59,32 +65,70 @@ def run_episode():
 
     state, objects = env.reset()
     for t in range(2000):
-        if t > 300:
+        if t > 200:
             vid = 0
             for v in vehicles:
+                print('here')
                 images = torch.stack(v._states_image).permute(0, 3, 2, 1).float()
                 images /= 255.0
                 images = Variable(images[-opt.ncond:].clone().float().unsqueeze(0))
+
                 actions = torch.zeros(1, opt.npred, 3)
                 actions[:, :, 2].fill_(0)
-                actions[:, :, 1].fill_(+0.3)
-                actions = Variable(actions)
-                pred, _ = model(images, actions, None)
-                pred = pred.squeeze()
-                pred = pred.permute(0, 2, 3, 1).data.numpy()
-
-                dirname = 'videos/fwd_model/action2/pred{:d}'.format(vid)
+                actions[:, :, 1].fill_(+0.0)
+                pred, _ = model(images, Variable(actions), None)
+                pred = pred.squeeze().permute(0, 2, 3, 1).data.numpy()
+                dirname = 'videos/{}/action0/pred{:d}'.format(opt.mfile, vid)
                 os.system("mkdir -p " + dirname)
-
                 for t in range(opt.npred):
                     scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), pred[t])
 
+                actions = torch.zeros(1, opt.npred, 3)
+                actions[:, :, 2].fill_(+1)
+                actions[:, :, 1].fill_(+0.0)
+                pred, _ = model(images, Variable(actions), None)
+                pred = pred.squeeze().permute(0, 2, 3, 1).data.numpy()
+                dirname = 'videos/{}/action1/pred{:d}'.format(opt.mfile, vid)
+                os.system("mkdir -p " + dirname)
+                for t in range(opt.npred):
+                    scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), pred[t])
+
+                actions = torch.zeros(1, opt.npred, 3)
+                actions[:, :, 2].fill_(-1)
+                actions[:, :, 1].fill_(-0.0)
+                pred, _ = model(images, Variable(actions), None)
+                pred = pred.squeeze().permute(0, 2, 3, 1).data.numpy()
+                dirname = 'videos/{}/action2/pred{:d}'.format(opt.mfile, vid)
+                os.system("mkdir -p " + dirname)
+                for t in range(opt.npred):
+                    scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), pred[t])
+
+                actions = torch.zeros(1, opt.npred, 3)
+                actions[:, :, 2].fill_(0.0)
+                actions[:, :, 1].fill_(+0.2)
+                pred, _ = model(images, Variable(actions), None)
+                pred = pred.squeeze().permute(0, 2, 3, 1).data.numpy()
+                dirname = 'videos/{}/action3/pred{:d}'.format(opt.mfile, vid)
+                os.system("mkdir -p " + dirname)
+                for t in range(opt.npred):
+                    scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), pred[t])
+
+                actions = torch.zeros(1, opt.npred, 3)
+                actions[:, :, 2].fill_(0.0)
+                actions[:, :, 1].fill_(-0.2)
+                pred, _ = model(images, Variable(actions), None)
+                pred = pred.squeeze().permute(0, 2, 3, 1).data.numpy()
+                dirname = 'videos/{}/action4/pred{:d}'.format(opt.mfile, vid)
+                os.system("mkdir -p " + dirname)
+                for t in range(opt.npred):
+                    scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), pred[t])
+
+
+
+
+
                 vid += 1
 
-            pdb.set_trace()
-
-            print(f'dv = {action.data[0][0][2]}, (dx, dy) = ({action.data[0][0][0]}, {action.data[0][0][1]}')
-            action = action.data[0][0].numpy()
         else:
             action = None
         state, reward, done, vehicles = env.step(action)
