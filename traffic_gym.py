@@ -76,7 +76,9 @@ class Car:
         self._states = list()
         self._states_image = list()
         self._actions = list()
-        self._safe_factor = random.gauss(1, .03)  # 0.9 Germany, 2 safe
+        self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
+        self.pid_k1 = 0.01 + np.random.normal(0, 0.005)
+        self.pid_k2 = 0.3 + np.random.normal(0, 0.02)
 
     def get_state(self):
         state = torch.zeros(4)
@@ -172,6 +174,7 @@ class Car:
         # State integration
         d_position_dt = self._speed * self._direction
         vehicle_state[:2] += d_position_dt * self._dt
+#        vehicle_state[2:4] += action * self._dt
         vehicle_state[2:] += action * self._dt
 
         # Split individual components (and normalise direction)
@@ -180,7 +183,7 @@ class Car:
         self._speed = vehicle_state[4]
 
         # Deal with latent variable and visual indicator
-        if self._passing and abs(self._error) < 1e-3:
+        if self._passing and abs(self._error) < 1e-2:
             self._passing = False
             self._colour = colours['c']
 
@@ -298,26 +301,14 @@ class Car:
             self._error = error
             ortho_direction = np.array((self._direction[1], -self._direction[0]))
             ortho_direction /= np.linalg.norm(ortho_direction)
-            d_direction_dt = ortho_direction * self._speed * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
+#            d_direction_dt = ortho_direction * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
+            d_direction_dt = ortho_direction * (self.pid_k1 * error + self.pid_k2 * d_error)
+            '''MH: I don't think the action which reflects the change in direction should depend on the speed, it should represent the steering wheel angle'''
+#            d_direction_dt = ortho_direction * self._speed * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
         #            d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
 
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
-
-
-    def policy_random(self, observation):
-        if math.random() < 0.1 or True:
-            print('resetting')
-            ortho_direction = np.zeros(random.random(), random.random())
-            ortho_direction /= np.linalg.norm(ortho_direction)
-            self.d_direction_dt = ortho_direction * self._speed * (1e-4 * error + 3.5e-3 * d_error)
-            self.d_velocity_dt = random.random()
-        """
-        Policy which is state independent
-        """
-        action = np.array((*self.d_direction_dt, self.d_velocity_dt))  # dx/dt, car state temporal derivative
-        return action
-
 
     def _safe_left(self, state):
         if self.back < self.safe_distance: return False  # Cannot see in the future
@@ -477,7 +468,6 @@ class StatefulEnv(core.Env):
 
             # Compute the action
             if v._id == self.policy_car_id and policy_action is not None:
-                print(policy_action)
                 action = policy_action
             else:
                 action = v.policy(state)
@@ -563,7 +553,7 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
-            if self.collision: self._pause()
+#            if self.collision: self._pause()
 
         if mode == 'machine':
             m = max_extension = np.linalg.norm(width_height)

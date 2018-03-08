@@ -57,12 +57,12 @@ def run_episode():
     state, objects = env.reset()
     action = None
     for t in range(2000):
-        if t > 20 and random.random() < 0.01 or action is None:
-            print('changing action')
-            action = np.array([0, random.random()*3, random.random()*30])
+        if (t > 20) and (random.random() < 0.1): #or action is None:
+            print(f't={t}, changing action')
+            direction = [0, np.random.uniform(-1, 1)*3]
+            direction /= np.linalg.norm(direction)
+            action = np.array([0, np.random.uniform(-1,1)*3, np.random.uniform(-1,1)*30])
             print(action)
-        else:
-            action = None
         state, reward, done, vehicles = env.step(action)
         env.render()
 
