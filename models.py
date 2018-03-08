@@ -330,7 +330,8 @@ class PolicyCNN_VAE(nn.Module):
 
         a = self.fc(torch.cat((h, z), 1))
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
-        return a, Variable(torch.zeros(1))
+        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return a, kld
 
 
     def intype(self, t):

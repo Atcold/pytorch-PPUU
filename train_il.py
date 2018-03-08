@@ -13,26 +13,33 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-model', type=str, default='policy-cnn-vae')
-parser.add_argument('-nshards', type=int, default=20)
+parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models')
 parser.add_argument('-n_episodes', type=int, default=50)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-ncond', type=int, default=4)
 parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-seed', type=int, default=1)
-parser.add_argument('-batch_size', type=int, default=64)
+parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-nz', type=int, default=2)
+parser.add_argument('-beta', type=float, default=0.1)
 parser.add_argument('-lrt', type=float, default=0.0001)
-parser.add_argument('-epoch_size', type=int, default=500)
+parser.add_argument('-epoch_size', type=int, default=2000)
 opt = parser.parse_args()
+
+opt.model_dir += f'_{opt.nshards}-shards/'
 
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 dataloader = DataLoader(data_file, opt)
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
+
+if opt.model == 'policy-cnn-vae':
+    opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
+
 print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
@@ -62,7 +69,7 @@ def train(nbatches):
         actions = Variable(actions)
         pred_a, loss_kl = policy(images, states, actions)
         loss_mse = F.mse_loss(pred_a, actions)
-        loss = loss_mse + loss_kl.cuda()
+        loss = loss_mse + opt.beta*loss_kl.cuda()
         loss.backward()
         optimizer.step()
         total_loss_mse += loss_mse.data[0]

@@ -7,7 +7,7 @@ class DataLoader():
         self.data = []
         k = 0
         for i in range(opt.nshards):
-            f = f'{opt.data_dir}/traffic_data_lanes=3-episodes={opt.n_episodes}-seed={i+1}.pkl'
+            f = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={i+1}.pkl'
             print(f'loading {f}')
             self.data += pickle.load(open(f, 'rb'))
         self.images = []
@@ -82,9 +82,10 @@ class DataLoader():
         nb = 0
         while nb < self.opt.batch_size:
             s = random.choice(indx)
-            T = len(self.states[s]) - 1
-            if T > (self.opt.ncond + self.opt.npred):
-                t = random.randint(0, T - (self.opt.ncond+self.opt.npred))
+#            T = len(self.states[s]) - 1
+            T = self.images[s].size(0)
+            if T > (self.opt.ncond + self.opt.npred + 1):
+                t = random.randint(0, T - (self.opt.ncond+self.opt.npred + 1))
                 images.append(self.images[s][t:t+(self.opt.ncond+self.opt.npred)+1])
                 states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)+1])
                 masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])

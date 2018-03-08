@@ -8,7 +8,7 @@ for model in fwd-cnn; do
         for nfeature in 64; do 
             for nhidden in 100; do 
                 for ncond in 4; do 
-                    for npred in 10 20; do 
+                    for npred in 200; do 
                         sbatch submit_train_fm.slurm $model $lrt $nfeature $nhidden $ncond $npred
                     done
                 done

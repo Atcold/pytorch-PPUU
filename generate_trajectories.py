@@ -91,7 +91,6 @@ def run_episode(ep):
     for v in vehicles:
         images = torch.stack(v._states_image).permute(0, 3, 2, 1)
         states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-        assert(states.size(0) == images.size(0))
         # remove the first part, so cars don't appear from outside the frame
         if images.size(0) > 100:
             images = images[100:]
