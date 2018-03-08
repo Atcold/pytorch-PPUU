@@ -89,15 +89,16 @@ def run_episode(ep):
     '''
 
     for v in vehicles:
-        images = torch.stack(v._states_image).permute(0, 3, 2, 1)
-        states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-        # remove the first part, so cars don't appear from outside the frame
-        if images.size(0) > 100:
-            images = images[100:]
-            states = states[100:]
-            masks = masks[100:]
-            actions = actions[100:]
-            runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
+        if len(v._states_image) > 1:
+            images = torch.stack(v._states_image).permute(0, 3, 2, 1)
+            states, masks, actions = prepare_trajectory_state(v._states, v._actions)
+            # remove the first part, so cars don't appear from outside the frame
+            if images.size(0) > 100:
+                images = images[100:]
+                states = states[100:]
+                masks = masks[100:]
+                actions = actions[100:]
+                runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
 
     return runs
 
