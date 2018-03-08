@@ -63,31 +63,42 @@ def run_episode(ep):
     done = False
 
     state, objects = env.reset()
-    for t in range(400):
+    for t in range(500):
         try:
             state, reward, done, vehicles = env.step(None)
             env.render()
         except:
+            print('exception, breaking')
             break
+
         if env.collision:
+            print('collision, breaking')
             break
 
     runs = []
 
+    '''
     vid = 0
     for v in vehicles:
-#        if v._id == 3:
-        im = v._states_image
+        im = v._states_image[100:]
         save_dir = 'videos/states/ex{:d}'.format(vid)
         os.system('mkdir -p ' + save_dir)
         for t in range(len(im)):
             scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
         vid += 1
+    '''
 
     for v in vehicles:
         images = torch.stack(v._states_image).permute(0, 3, 2, 1)
         states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-        runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
+        assert(states.size(0) == images.size(0))
+        # remove the first part, so cars don't appear from outside the frame
+        if images.size(0) > 100:
+            images = images[100:]
+            states = states[100:]
+            masks = masks[100:]
+            actions = actions[100:]
+            runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
 
     return runs
 

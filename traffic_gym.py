@@ -451,7 +451,6 @@ class StatefulEnv(core.Env):
             self.policy_car_id = 0
 
         # Generate state representation for each vehicle
-        vid = 0
         for v in self.vehicles:
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
@@ -479,18 +478,17 @@ class StatefulEnv(core.Env):
                 v.store('state', state)
                 v.store('action', action)
 
-            # Act accordingly
-            v.step(action)
-            vid += 1
-
+        # store images before updating, so that images and states are aligned in time
         if self.state_image:
             # How much to look far ahead
             look_ahead = MAX_SPEED * 1000 / 3600 * SCALE
             look_sideways = 2 * LANE_W
             self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
 
-        # default reward if nothing happens
-        reward = -0.001
+        # update the cars
+        for v in self.vehicles:
+            v.step(v._actions[-1].numpy())
+
         done = False
 
         if self.frame >= 10000:
@@ -502,8 +500,9 @@ class StatefulEnv(core.Env):
         self.frame += 1
 
         obs = []
-        # TODO: obs should be the observation of the controlled car
-        return obs, reward, done, self.vehicles
+        # TODO: cost function
+        cost = 0
+        return obs, cost, done, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         target_lane = self.lane_occupancy[current_lane_idx + d_lane]
