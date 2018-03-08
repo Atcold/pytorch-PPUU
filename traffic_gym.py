@@ -336,17 +336,18 @@ class Car:
         return True
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
-        d = abs(self._direction)
-        x_y = np.ceil(np.array((d @ width_height, d @ width_height[::-1])))
+        d = self._direction
+        x_y = np.array((abs(d) @ width_height, abs(d) @ width_height[::-1]))
         centre = self._position + (self._length // 2, 0)
         # pygame.draw.rect(screen_surface, (0, 128, 128), (*(centre + m - x_y / 2), *x_y), 1)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
-        rot_surface = pygame.transform.rotate(sub_surface, -theta)
-        width_height = np.array(width_height)
-        sub_rot_surface = rot_surface.subsurface(*(d[1] * width_height[::-1]), *width_height)
+        rot_surface = pygame.transform.rotate(sub_surface, theta)
+        width_height = np.floor(np.array(width_height))
+        x = (rot_surface.get_width() - width_height[0]) // 2
+        y = (rot_surface.get_height() - width_height[1]) // 2
+        sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
-#        sub_rot_array = np.array(sub_rot_array)
         sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
         sub_rot_array[:, :, 0] *= 4
         assert(sub_rot_array.max() <= 255.0)
