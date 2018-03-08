@@ -5,6 +5,7 @@
 #SBATCH --error=datagen.err
 #SBATCH --time=24:00:00
 #SBATCH --gres gpu:0
+#SBATCH --exclude="rose5,rose6,vine5,vine11, vine3"
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=48000
@@ -14,5 +15,5 @@
 module load python-3.6
 source activate py36
 cd ../
-srun python generate_trajectories.py -n_episodes 50 -seed $1
+srun python generate_trajectories.py -n_episodes 20 -seed $1 -lanes 8 
 
