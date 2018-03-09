@@ -184,7 +184,7 @@ class Car:
         self._speed = vehicle_state[4]
 
         # Deal with latent variable and visual indicator
-        if self._passing and abs(self._error) < 1e-2:
+        if self._passing and abs(self._error) < 0.5:
             self._passing = False
             self._colour = colours['c']
 
@@ -296,7 +296,7 @@ class Car:
             d_velocity_dt = 1 * (self._target_speed - self._speed)
 
         if self._passing or True:
-            if random.random() < 0.01:
+            if random.random() < 0.1:
                 self._target_lane_ = self._target_lane + np.random.normal(0, LANE_W * 0.1)
 
             error = -(self._target_lane_ - self._position[1])
