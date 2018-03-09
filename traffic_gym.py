@@ -477,6 +477,7 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
+            v._last_action = action
             if self.store:
                 v.store('state', state)
                 v.store('action', action)
@@ -490,7 +491,10 @@ class StatefulEnv(core.Env):
 
         # update the cars
         for v in self.vehicles:
-            v.step(v._actions[-1].numpy())
+            v.step(v._last_action)
+
+
+#            v.step(v._actions[-1].numpy())
 
         done = False
 

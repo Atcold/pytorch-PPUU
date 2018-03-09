@@ -16,10 +16,12 @@ parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-save_images', type=int, default=0)
+parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
+opt.store = (opt.store == 1)
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
@@ -36,6 +38,7 @@ register(
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
             'nb_lanes': opt.lanes,
+            'store': opt.store,
             'traffic_rate': opt.traffic_rate,
             'state_image': opt.state_image},
 )
