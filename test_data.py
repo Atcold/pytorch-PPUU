@@ -18,5 +18,5 @@ print(data_file)
 
 dataloader = DataLoader(data_file, opt)
 images, states, actions = dataloader.get_batch_il('train')
-inputs, actions, targets, _, _  = dataloader.get_batch_fm('train')
+#inputs, actions, targets, _, _  = dataloader.get_batch_fm('train')
 

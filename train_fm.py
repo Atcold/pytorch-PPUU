@@ -20,7 +20,7 @@ parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=4)
 parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-seed', type=int, default=1)
-parser.add_argument('-batch_size', type=int, default=16)
+parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-tie_action', type=int, default=0)
@@ -97,13 +97,17 @@ def test(nbatches):
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
 print('[training]')
+best_valid_loss_mse = 1e6
 for i in range(100):
     train_loss_mse, train_loss_kl = train(opt.epoch_size)
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
-    print(log_string)
-    if opt.model_dir != '':
-        utils.log(opt.model_file + '.log', log_string)
+    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test loss: [{valid_loss_mse}, KL: {valid_loss_kl}], best loss: {best_valid_loss_mse}'
+    if opt.model_dir != '' and valid_loss_mse < best_valid_loss_mse:
+        best_valid_loss_mse = valid_loss_mse
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')
+
+    print(log_string)
+    utils.log(opt.model_file + '.log', log_string)
+
