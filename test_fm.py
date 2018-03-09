@@ -37,8 +37,9 @@ register(
 env = gym.make('Traffic-v0')
 #model = torch.load('models/model=fwd-cnn-ncond=4-npred=10-lrt=0.0001-nhidden=100-nfeature=64.model')
 #opt.mfile = 'model=fwd-cnn-bsize=16-ncond=4-npred=200-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
+#opt.mfile = 'model=fwd-cnn-bsize=64-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
 opt.mfile = 'model=fwd-cnn-bsize=32-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
-model = torch.load('models/' + opt.mfile)
+model = torch.load('models_20-shards/' + opt.mfile)
 model.opt.tie_action = 0
 model.opt.npred = 50
 

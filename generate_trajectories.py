@@ -15,6 +15,7 @@ parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
+parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 opt = parser.parse_args()
 
@@ -73,16 +74,15 @@ def run_episode(ep):
 
     runs = []
 
-    '''
-    vid = 0
-    for v in vehicles:
-        im = v._states_image[100:]
-        save_dir = 'videos/states/ex{:d}'.format(vid)
-        os.system('mkdir -p ' + save_dir)
-        for t in range(len(im)):
-            scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
-        vid += 1
-    '''
+    if opt.save_images == 1:
+        vid = 0
+        for v in vehicles:
+            im = v._states_image[100:]
+            save_dir = 'videos/states/ex{:d}'.format(vid)
+            os.system('mkdir -p ' + save_dir)
+            for t in range(len(im)):
+                scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
+            vid += 1
 
     for v in vehicles:
         if len(v._states_image) > 1:
