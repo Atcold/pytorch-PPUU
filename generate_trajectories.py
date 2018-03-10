@@ -68,8 +68,12 @@ def run_episode(ep):
 
     state, objects = env.reset()
     for t in range(500):
-        state, reward, done, vehicles = env.step(None)
-        env.render()
+        try:
+            state, reward, done, vehicles = env.step(None)
+            env.render()
+        except:
+            print('exception, breaking')
+            break
 
         if env.collision:
             print('collision, breaking')

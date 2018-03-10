@@ -1,4 +1,4 @@
-import torch, numpy, argparse, pdb
+import torch, numpy, argparse, pdb, os
 import models, utils
 from dataloader import DataLoader
 from torch.autograd import Variable
@@ -23,7 +23,7 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
-parser.add_argument('-tie_action', type=int, default=0)
+parser.add_argument('-tie_action', type=int, default=1)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-sigmout', type=int, default=1)
 parser.add_argument('-lrt', type=float, default=0.0001)
@@ -33,6 +33,7 @@ opt = parser.parse_args()
 
 
 opt.model_dir += f'_{opt.nshards}-shards/'
+os.system('mkdir -p ' + opt.model_dir)
 
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
@@ -49,9 +50,11 @@ print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
 opt.n_actions = 3
+opt.height = 97
+opt.width = 20
 
-if opt.model == 'fwd-vae':
-    model = models.FwdVAE(opt)
+if opt.model == 'fwd-cnn-vae':
+    model = models.FwdCNN_VAE(opt)
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt)
 
@@ -101,13 +104,16 @@ best_valid_loss_mse = 1e6
 for i in range(100):
     train_loss_mse, train_loss_kl = train(opt.epoch_size)
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test loss: [{valid_loss_mse}, KL: {valid_loss_kl}], best loss: {best_valid_loss_mse}'
-    if opt.model_dir != '' and valid_loss_mse < best_valid_loss_mse:
+
+    if valid_loss_mse < best_valid_loss_mse:
         best_valid_loss_mse = valid_loss_mse
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')
 
+    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test loss: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best loss: {best_valid_loss_mse:.5f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
+
+
 
