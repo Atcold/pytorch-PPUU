@@ -92,17 +92,18 @@ class DataLoader():
                 actions.append(self.actions[s][t:t+(self.opt.ncond+self.opt.npred)])
                 nb += 1
 
-        images = torch.stack(images)
-        states = torch.stack(states)
+        images = torch.stack(images).float() / 255.0
         actions = torch.stack(actions)
-        masks = torch.stack(masks)
-        images = images.float() / 255.0
 
-        input_images = images[:, :self.opt.ncond].clone()
-        input_states = states[:, :self.opt.ncond, 0].clone()
         actions = actions[:, (self.opt.ncond-1):(self.opt.ncond+self.opt.npred-1)].clone()
+        input_images = images[:, :self.opt.ncond].clone()
         target_images = images[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()        
-        target_states = states[:, self.opt.ncond:(self.opt.ncond+self.opt.npred), 0].clone()
-        masks = masks[:, :self.opt.ncond].clone()
-        return input_images.float().cuda(), actions.float().cuda(), target_images.float().cuda(), input_states.float().cuda(), target_states.float().cuda()
+
+        input_states, target_states, masks = None, None, None
+#        states = torch.stack(states)
+#        masks = torch.stack(masks)
+#        input_states = states[:, :self.opt.ncond, 0].clone()
+#        target_states = states[:, self.opt.ncond:(self.opt.ncond+self.opt.npred), 0].clone()
+#        masks = masks[:, :self.opt.ncond].clone()
+        return input_images.float().cuda(), actions.float().cuda(), target_images.float().cuda(), None, None #input_states.float().cuda(), target_states.float().cuda()
 
