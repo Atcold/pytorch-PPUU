@@ -19,13 +19,13 @@ class encoder(nn.Module):
         self.a_size = a_size
         # frame encoder
         self.f_encoder = nn.Sequential(
-            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
             nn.BatchNorm2d(opt.nfeature)
         )
 
@@ -36,13 +36,13 @@ class encoder(nn.Module):
 
         # action encoder
         self.a_encoder = nn.Sequential(
-            nn.BatchNorm1d(a_size), 
-            nn.Linear(a_size, opt.nfeature), 
-            nn.BatchNorm1d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Linear(opt.nfeature, opt.nfeature), 
-            nn.BatchNorm1d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
+            nn.BatchNorm1d(a_size),
+            nn.Linear(a_size, opt.nfeature),
+            nn.BatchNorm1d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.BatchNorm1d(opt.nfeature),
+            nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, self.aemb_size)
         )
 
@@ -56,19 +56,19 @@ class encoder(nn.Module):
             h = h + a.view(bsize, self.opt.nfeature, 12, 2)
         return h
 
-        
+
 # decodes a hidden state into a predicted frame
 class decoder(nn.Module):
     def __init__(self, opt):
         super(decoder, self).__init__()
         self.opt = opt
         self.f_decoder = nn.Sequential(
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
             nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
         )
 
@@ -90,18 +90,18 @@ class decoder_deconv(nn.Module):
 #        nfeatures = [opt.nfeature, opt.nfeature, opt.nfeature]
 
         self.f_decoder = nn.Sequential(
-            nn.ConvTranspose3d(opt.nfeature, nfeatures[0], (4, 4, 5), stride=2, padding=(0, 1, 1)), 
-            nn.BatchNorm2d(nfeatures[0]), 
-            nn.LeakyReLU(0.2), 
-            nn.ConvTranspose3d(nfeatures[0], nfeatures[1], (4, 5, 5), stride=2, padding=(0, 1, 1)), 
-            nn.BatchNorm2d(nfeatures[1]), 
-            nn.LeakyReLU(0.2), 
-            nn.ConvTranspose3d(nfeatures[1], nfeatures[2], (4, 2, 2), stride=2, padding=(0, 0, 1), output_padding=(1, 0, 0)), 
-            nn.BatchNorm2d(nfeatures[2]), 
-            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose3d(opt.nfeature, nfeatures[0], (4, 4, 5), stride=2, padding=(0, 1, 1)),
+            nn.BatchNorm2d(nfeatures[0]),
+            nn.LeakyReLU(0.2),
+            nn.ConvTranspose3d(nfeatures[0], nfeatures[1], (4, 5, 5), stride=2, padding=(0, 1, 1)),
+            nn.BatchNorm2d(nfeatures[1]),
+            nn.LeakyReLU(0.2),
+            nn.ConvTranspose3d(nfeatures[1], nfeatures[2], (4, 2, 2), stride=2, padding=(0, 0, 1), output_padding=(1, 0, 0)),
+            nn.BatchNorm2d(nfeatures[2]),
+            nn.LeakyReLU(0.2),
             nn.ConvTranspose3d(nfeatures[2], 3, (6, 1, 1), stride=(2, 1, 1))
         )
-        
+
 
     def forward(self, h):
         bsize = h.size(0)
@@ -120,26 +120,26 @@ class z_network(nn.Module):
         self.n_inputs = n_inputs
 
         self.conv = nn.Sequential(
-            nn.Conv2d(3*n_inputs, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
+            nn.Conv2d(3*n_inputs, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
             nn.BatchNorm2d(opt.nfeature)
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(opt.nfeature*12*2, opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Linear(opt.nfeature, opt.nfeature), 
-            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, 2*opt.nz)
         )
-        
-    def reparameterize(self, mu, logvar):
-        if self.training:
+
+    def reparameterize(self, mu, logvar, sample):
+        if self.training or sample:
             std = logvar.mul(0.5).exp_()
             eps = Variable(std.data.new(std.size()).normal_())
             return eps.mul(std).add_(mu)
@@ -154,9 +154,9 @@ class z_network(nn.Module):
         logvar = z_params[:, :, 1]
         return mu, logvar
 
-    def forward(self, inputs):
+    def forward(self, inputs, sample=False):
         mu, logvar = self.encode(inputs)
-        z = self.reparameterize(mu, logvar)
+        z = self.reparameterize(mu, logvar, sample)
         return z, mu, logvar
 
 
@@ -167,10 +167,10 @@ class z_expander(nn.Module):
         self.opt = opt
         self.n_steps = n_steps
         self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.Linear(opt.nfeature, opt.nfeature), 
-            nn.LeakyReLU(0.2), 
+            nn.Linear(opt.nz, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, n_steps * opt.nfeature * 12 * 2)
         )
 
@@ -272,6 +272,7 @@ class FwdCNN_VAE_LP(nn.Module):
         self.z_network = z_network(opt, opt.ncond+1)
         self.q_network = z_network(opt, opt.ncond)
         self.z_expander = z_expander(opt, 1)
+        self.kld = Variable(torch.zeros(1))
 
     def forward(self, inputs, actions, targets):
         bsize = inputs.size(0)
@@ -279,7 +280,7 @@ class FwdCNN_VAE_LP(nn.Module):
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
 
-        kld = Variable(torch.zeros(1).cuda())
+        self.kld.data.zero_()
         pred = []
         for t in range(npred):
             h = self.encoder(inputs, actions[:, t])
@@ -287,15 +288,15 @@ class FwdCNN_VAE_LP(nn.Module):
                 # we are training
                 z1, mu1, logvar1 = self.z_network(torch.cat((inputs, targets[:, t].unsqueeze(1)), 1))
                 z2, mu2, logvar2 = self.q_network(inputs)
-                sigma1 = logvar1.mul(0.5).exp() 
-                sigma2 = logvar2.mul(0.5).exp() 
+                sigma1 = logvar1.mul(0.5).exp()
+                sigma2 = logvar2.mul(0.5).exp()
                 kld_t = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
                 kld_t = torch.sum(kld_t) / bsize
-                kld += kld_t
+                self.kld += kld_t
                 z_exp = self.z_expander(z1)
             else:
                 # we are generating samples
-                z = self.q_network(inputs)
+                z, _, _ = self.q_network(inputs, sample=True)
                 z_exp = self.z_expander(z)
 
             h = h + z_exp.squeeze()
@@ -303,9 +304,9 @@ class FwdCNN_VAE_LP(nn.Module):
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
-        kld /= npred
+        self.kld /= npred
         pred = torch.cat(pred, 1)
-        return pred, kld
+        return pred, self.kld
 
     def intype(self, t):
         if t == 'gpu':
@@ -357,14 +358,14 @@ class FwdCNN_EEN_LP(nn.Module):
         pred1 = torch.cat(pred, 1)
         errors = targets - pred1
         errors = Variable(errors.data)
-        
+
         for b in range(errors.size(0)):
             os.system(f'mkdir -p errors/b{b}')
             for t in range(errors.size(1)):
                 torchvision.utils.save_image(errors.data[b][t], f'errors/b{b}/err{t:05d}.png')
                 torchvision.utils.save_image(pred1.data[b][t], f'errors/b{b}/pred{t:05d}.png')
                 torchvision.utils.save_image(targets.data[b][t], f'errors/b{b}/true{t:05d}.png')
-                
+
         pdb.set_trace()
 
         z, mu1, logvar1 = self.z_network(torch.cat((inputs, errors), 1))
@@ -382,8 +383,8 @@ class FwdCNN_EEN_LP(nn.Module):
 
         pred2 = torch.cat(pred, 1)
 
-        sigma1 = logvar1.mul(0.5).exp() 
-        sigma2 = logvar2.mul(0.5).exp() 
+        sigma1 = logvar1.mul(0.5).exp()
+        sigma2 = logvar2.mul(0.5).exp()
         kld = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
         kld = torch.sum(kld) / bsize
         return pred2, kld
@@ -422,7 +423,7 @@ class FwdCNN2(nn.Module):
         h = self.encoder(inputs, actions)
         pred = self.decoder(h)
         pred = F.sigmoid(pred + inputs[:, -1].unsqueeze(1).expand(pred.size()))
-        
+
         return pred, Variable(torch.zeros(1))
 
 
@@ -440,32 +441,32 @@ class PolicyCNN(nn.Module):
         self.opt = opt
 
         self.convnet = nn.Sequential(
-            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.ReLU(), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.ReLU(), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
             nn.ReLU()
         )
 
         self.embed = nn.Sequential(
-            nn.BatchNorm1d(opt.ncond*opt.n_inputs), 
-            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden), 
-            nn.BatchNorm1d(opt.n_hidden), 
-            nn.ReLU(), 
-            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.BatchNorm1d(opt.ncond*opt.n_inputs),
+            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.BatchNorm1d(opt.n_hidden)
         )
 
         self.hsize = opt.nfeature*12*2
         self.fc = nn.Sequential(
-            nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden), 
-            nn.ReLU(), 
-            nn.Linear(opt.n_hidden, opt.n_hidden), 
-            nn.ReLU(), 
+            nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
             nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
         )
 
@@ -501,34 +502,34 @@ class PolicyCNN_VAE(nn.Module):
         self.opt = opt
 
         self.convnet = nn.Sequential(
-            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.ReLU(), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.ReLU(), 
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1), 
-            nn.BatchNorm2d(opt.nfeature), 
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
             nn.ReLU()
         )
 
         self.embed = nn.Sequential(
-            nn.BatchNorm1d(opt.ncond*opt.n_inputs), 
-            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden), 
-            nn.BatchNorm1d(opt.n_hidden), 
-            nn.ReLU(), 
-            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.BatchNorm1d(opt.ncond*opt.n_inputs),
+            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.BatchNorm1d(opt.n_hidden)
         )
         self.hsize = opt.nfeature*12*2
 
         self.fc = nn.Sequential(
-            nn.Linear(self.hsize + opt.n_hidden + opt.nz, opt.n_hidden), 
+            nn.Linear(self.hsize + opt.n_hidden + opt.nz, opt.n_hidden),
             nn.BatchNorm1d(opt.n_hidden),
-            nn.ReLU(), 
-            nn.Linear(opt.n_hidden, opt.n_hidden), 
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.BatchNorm1d(opt.n_hidden),
-            nn.ReLU(), 
+            nn.ReLU(),
             nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
         )
 
