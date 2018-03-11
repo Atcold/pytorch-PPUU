@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.legacy.nn as lnn
 import torch.nn.functional as F
 import torch.optim as optim
+import torchvision
 from torch.autograd import Variable
-import random, pdb
+import random, pdb, copy, os
 
 ####################
 # Basic modules
@@ -82,28 +83,30 @@ class decoder_deconv(nn.Module):
     def __init__(self, opt):
         super(decoder_deconv, self).__init__()
         self.opt = opt
-        assert(opt.npred == 50, 'hardcoded for npred=50')
+        # TODO: harcoded for npred=50
 
-        self.f_decoder1 = nn.Sequential(
-            nn.ConvTranspose3d(opt.nfeature, opt.nfeature, (4, 4, 5), stride=2, padding=(0, 1, 1)), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.ConvTranspose3d(opt.nfeature, opt.nfeature, (4, 5, 5), stride=2, padding=(0, 1, 1)), 
-            nn.BatchNorm2d(opt.nfeature), 
-            nn.LeakyReLU(0.2), 
-            nn.ConvTranspose3d(opt.nfeature, opt.nfeature, (4, 2, 2), stride=2, padding=(0, 0, 1), output_padding=(1, 0, 0)), 
-            nn.LeakyReLU(0.2)
-        )
 
-        self.f_decoder2 = nn.Sequential(
-            nn.ConvTranspose3d(opt.nfeature, 3, (6, 1, 1), stride=(2, 1, 1))
+        nfeatures = [opt.nfeature, int(opt.nfeature/2), int(opt.nfeature/4)]
+#        nfeatures = [opt.nfeature, opt.nfeature, opt.nfeature]
+
+        self.f_decoder = nn.Sequential(
+            nn.ConvTranspose3d(opt.nfeature, nfeatures[0], (4, 4, 5), stride=2, padding=(0, 1, 1)), 
+            nn.BatchNorm2d(nfeatures[0]), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose3d(nfeatures[0], nfeatures[1], (4, 5, 5), stride=2, padding=(0, 1, 1)), 
+            nn.BatchNorm2d(nfeatures[1]), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose3d(nfeatures[1], nfeatures[2], (4, 2, 2), stride=2, padding=(0, 0, 1), output_padding=(1, 0, 0)), 
+            nn.BatchNorm2d(nfeatures[2]), 
+            nn.LeakyReLU(0.2), 
+            nn.ConvTranspose3d(nfeatures[2], 3, (6, 1, 1), stride=(2, 1, 1))
         )
         
 
     def forward(self, h):
         bsize = h.size(0)
         h = h.unsqueeze(2)
-        out = self.f_decoder2(self.f_decoder1(h))[:, :, :, :-1].clone()
+        out = self.f_decoder(h)[:, :, :, :-1].clone()
         out = out.permute(0, 2, 1, 3, 4)
         return out
 
@@ -159,20 +162,21 @@ class z_network(nn.Module):
 
 # expands a latent variable into a sequence of variables, one for each frame
 class z_expander(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, n_steps):
         super(z_expander, self).__init__()
         self.opt = opt
+        self.n_steps = n_steps
         self.z_expander = nn.Sequential(
             nn.Linear(opt.nz, opt.nfeature), 
             nn.LeakyReLU(0.2), 
             nn.Linear(opt.nfeature, opt.nfeature), 
             nn.LeakyReLU(0.2), 
-            nn.Linear(opt.nfeature, opt.npred * opt.nfeature * 12 * 2)
+            nn.Linear(opt.nfeature, n_steps * opt.nfeature * 12 * 2)
         )
 
     def forward(self, z):
         bsize = z.size(0)
-        z_exp = self.z_expander(z).view(bsize, self.opt.npred, self.opt.nfeature, 12, 2)
+        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, 12, 2)
         return z_exp
 
 
@@ -253,14 +257,21 @@ class FwdCNN_VAE_FP(nn.Module):
 
 # forward model with a learned prior
 class FwdCNN_VAE_LP(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, mfile=''):
         super(FwdCNN_VAE_LP, self).__init__()
         self.opt = opt
-        self.encoder = encoder(opt, opt.n_actions)
-        self.decoder = decoder(opt)
-        self.z_network = z_network(opt, opt.ncond+opt.npred)
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+
+        self.z_network = z_network(opt, opt.ncond+1)
         self.q_network = z_network(opt, opt.ncond)
-        self.z_expander = z_expander(opt)
+        self.z_expander = z_expander(opt, 1)
 
     def forward(self, inputs, actions, targets):
         bsize = inputs.size(0)
@@ -268,24 +279,32 @@ class FwdCNN_VAE_LP(nn.Module):
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
 
-        z, mu1, logvar1 = self.z_network(torch.cat((inputs, targets), 1))
-        _, mu2, logvar2 = self.q_network(inputs)
-        z_exp = self.z_expander(z)
-
+        kld = Variable(torch.zeros(1).cuda())
         pred = []
         for t in range(npred):
             h = self.encoder(inputs, actions[:, t])
-            h = h + z_exp[:, t]
+            if targets is not None:
+                # we are training
+                z1, mu1, logvar1 = self.z_network(torch.cat((inputs, targets[:, t].unsqueeze(1)), 1))
+                z2, mu2, logvar2 = self.q_network(inputs)
+                sigma1 = logvar1.mul(0.5).exp() 
+                sigma2 = logvar2.mul(0.5).exp() 
+                kld_t = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+                kld_t = torch.sum(kld_t) / bsize
+                kld += kld_t
+                z_exp = self.z_expander(z1)
+            else:
+                # we are generating samples
+                z = self.q_network(inputs)
+                z_exp = self.z_expander(z)
+
+            h = h + z_exp.squeeze()
             pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
+        kld /= npred
         pred = torch.cat(pred, 1)
-
-        sigma1 = logvar1.mul(0.5).exp() 
-        sigma2 = logvar2.mul(0.5).exp() 
-        kld = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
-        kld = torch.sum(kld) / bsize
         return pred, kld
 
     def intype(self, t):
@@ -302,11 +321,21 @@ class FwdCNN_VAE_LP(nn.Module):
 
 # forward model with a learned prior
 class FwdCNN_EEN_LP(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, mfile=''):
         super(FwdCNN_EEN_LP, self).__init__()
         self.opt = opt
-        self.encoder = encoder(opt, opt.n_actions)
-        self.decoder = decoder(opt)
+
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            pretrained_model = torch.load(mfile)
+            self.encoder1 = pretrained_model.encoder
+            self.decoder1 = pretrained_model.decoder
+            self.encoder2 = copy.deepcopy(self.encoder1)
+            self.decoder2 = copy.deepcopy(self.decoder1)
+
         self.z_network = z_network(opt, opt.ncond+opt.npred)
         self.q_network = z_network(opt, opt.ncond)
         self.z_expander = z_expander(opt)
@@ -320,14 +349,23 @@ class FwdCNN_EEN_LP(nn.Module):
         # deterministic pass
         pred = []
         for t in range(npred):
-            h = self.encoder(inputs, actions[:, t])
-            h = h
-            pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
+            h = self.encoder1(inputs, actions[:, t])
+            pred_ = F.sigmoid(self.decoder1(h) + inputs[:, -1].unsqueeze(1).clone())
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
         pred1 = torch.cat(pred, 1)
         errors = targets - pred1
+        errors = Variable(errors.data)
+        
+        for b in range(errors.size(0)):
+            os.system(f'mkdir -p errors/b{b}')
+            for t in range(errors.size(1)):
+                torchvision.utils.save_image(errors.data[b][t], f'errors/b{b}/err{t:05d}.png')
+                torchvision.utils.save_image(pred1.data[b][t], f'errors/b{b}/pred{t:05d}.png')
+                torchvision.utils.save_image(targets.data[b][t], f'errors/b{b}/true{t:05d}.png')
+                
+        pdb.set_trace()
 
         z, mu1, logvar1 = self.z_network(torch.cat((inputs, errors), 1))
         _, mu2, logvar2 = self.q_network(inputs)
@@ -336,9 +374,9 @@ class FwdCNN_EEN_LP(nn.Module):
         # latent pass
         pred = []
         for t in range(npred):
-            h = self.encoder(inputs, actions[:, t])
+            h = self.encoder2(inputs, actions[:, t])
             h = h + z_exp[:, t]
-            pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
+            pred_ = F.sigmoid(self.decoder2(h) + inputs[:, -1].unsqueeze(1).clone())
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
@@ -348,7 +386,7 @@ class FwdCNN_EEN_LP(nn.Module):
         sigma2 = logvar2.mul(0.5).exp() 
         kld = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
         kld = torch.sum(kld) / bsize
-        return pred1, pred2, kld
+        return pred2, kld
 
     def intype(self, t):
         if t == 'gpu':
@@ -437,7 +475,8 @@ class PolicyCNN(nn.Module):
         states = states.view(bsize, -1)
         hi = self.convnet(state_images).view(bsize, self.hsize)
         hs = self.embed(states)
-        a = self.fc(torch.cat((hi, hs), 1))
+        h = torch.cat((hi, hs), 1)
+        a = self.fc(h)
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
         return a, Variable(torch.zeros(1))
 
@@ -528,14 +567,15 @@ class PolicyCNN_VAE(nn.Module):
         actions = actions.view(bsize, -1)
         hi = self.convnet(state_images).view(bsize, self.hsize)
         hs = self.embed(states)
-
         h = torch.cat((hi, hs), 1)
+
         mu, logvar = self.encode(torch.cat((h, actions), 1))
         z = self.reparameterize(mu, logvar)
 
         a = self.fc(torch.cat((h, z), 1))
         a = a.view(bsize, self.opt.npred, self.opt.n_actions)
         kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        kld /= bsize
         return a, kld
 
 

@@ -16,8 +16,8 @@ parser.add_argument('-model', type=str, default='policy-cnn-vae')
 parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models')
-parser.add_argument('-n_episodes', type=int, default=50)
-parser.add_argument('-lanes', type=int, default=3)
+parser.add_argument('-n_episodes', type=int, default=20)
+parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=4)
 parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-seed', type=int, default=1)
@@ -91,13 +91,16 @@ def test(nbatches):
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
 print('[training]')
+best_valid_loss_mse = 1e6
 for i in range(100):
     train_loss_mse, train_loss_kl = train(opt.epoch_size)
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse}, KL: {train_loss_kl}], test: [{valid_loss_mse}, KL: {valid_loss_kl}]'
-    print(log_string)
-    if opt.model_dir != '':
-        utils.log(opt.model_file + '.log', log_string)
+    if valid_loss_mse < best_valid_loss_mse:
+        best_valid_loss_mse = valid_loss_mse
         policy.intype('cpu')
         torch.save(policy, opt.model_file + '.model')
         policy.intype('gpu')
+
+    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best MSE loss: {best_valid_loss_mse:.5f}'
+    print(log_string)
+    utils.log(opt.model_file + '.log', log_string)

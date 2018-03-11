@@ -58,10 +58,15 @@ opt.n_actions = 3
 opt.height = 97
 opt.width = 20
 
+
+prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/model=fwd-cnn-bsize=32-ncond=4-npred=20-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0.model'
+
 if opt.model == 'fwd-cnn-vae-fp':
-    model = models.FwdCNN_VAE_FP(opt)
+    model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-vae-lp':
-    model = models.FwdCNN_VAE_LP(opt)
+    model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-een-lp':
+    model = models.FwdCNN_EEN_LP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt)
 elif opt.model == 'fwd-cnn2':
@@ -71,13 +76,13 @@ model.intype('gpu')
 
 optimizer = optim.Adam(model.parameters(), opt.lrt)
 
-def train(nbatches):
+def train(nbatches, npred):
     model.train()
     total_loss_mse, total_loss_kl = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
         t0 = time.time()
-        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
         t = time.time()-t0
 #        print(f'get_batch: {t}')
         t0 = time.time()
@@ -118,8 +123,8 @@ print('[training]')
 best_valid_loss_mse = 1e6
 for i in range(100):
     t0 = time.time()
-    train_loss_mse, train_loss_kl = train(opt.epoch_size)
-    valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
+    train_loss_mse, train_loss_kl = train(opt.epoch_size, opt.npred)
+    valid_loss_mse, valid_loss_kl = test(int(opt.epoch_size / 2))
     t = time.time() - t0
     if valid_loss_mse < best_valid_loss_mse:
         best_valid_loss_mse = valid_loss_mse
@@ -128,7 +133,7 @@ for i in range(100):
         model.intype('gpu')
 
     
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test loss: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best loss: {best_valid_loss_mse:.5f}, time={t}'
+    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test loss: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best loss: {best_valid_loss_mse:.5f}, time={t:.4f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
