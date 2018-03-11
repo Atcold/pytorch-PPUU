@@ -272,7 +272,6 @@ class FwdCNN_VAE_LP(nn.Module):
         self.z_network = z_network(opt, opt.ncond+1)
         self.q_network = z_network(opt, opt.ncond)
         self.z_expander = z_expander(opt, 1)
-        self.kld = Variable(torch.zeros(1))
 
     def forward(self, inputs, actions, targets):
         bsize = inputs.size(0)
@@ -280,7 +279,9 @@ class FwdCNN_VAE_LP(nn.Module):
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
 
-        self.kld.data.zero_()
+        kld = Variable(torch.zeros(1))
+        if self.use_cuda:
+            kld = kld.cuda()
         pred = []
         for t in range(npred):
             h = self.encoder(inputs, actions[:, t])
@@ -292,7 +293,7 @@ class FwdCNN_VAE_LP(nn.Module):
                 sigma2 = logvar2.mul(0.5).exp()
                 kld_t = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
                 kld_t = torch.sum(kld_t) / bsize
-                self.kld += kld_t
+                kld += kld_t
                 z_exp = self.z_expander(z1)
             else:
                 # we are generating samples
@@ -304,15 +305,17 @@ class FwdCNN_VAE_LP(nn.Module):
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
-        self.kld /= npred
+        kld /= npred
         pred = torch.cat(pred, 1)
-        return pred, self.kld
+        return pred, kld
 
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
+            self.use_cuda = True
         elif t == 'cpu':
             self.cpu()
+            self.use_cuda = False
 
 
 
