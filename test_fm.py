@@ -12,7 +12,7 @@ import scipy.misc
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-seed', type=int, default=9999)
-parser.add_argument('-lanes', type=int, default=3)
+parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1)
 parser.add_argument('-ncond', type=int, default=4)
@@ -38,7 +38,8 @@ env = gym.make('Traffic-v0')
 #model = torch.load('models/model=fwd-cnn-ncond=4-npred=10-lrt=0.0001-nhidden=100-nfeature=64.model')
 #opt.mfile = 'model=fwd-cnn-bsize=16-ncond=4-npred=200-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
 #opt.mfile = 'model=fwd-cnn-bsize=64-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
-opt.mfile = 'model=fwd-cnn-bsize=32-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
+#opt.mfile = 'model=fwd-cnn-bsize=32-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64-sigmout=1-tieact=0.model'
+opt.mfile = 'model=fwd-cnn2-bsize=32-ncond=4-npred=50-lrt=0.001-nhidden=100-nfeature=96-sigmout=1-tieact=0.model'
 model = torch.load('models_20-shards/' + opt.mfile)
 model.opt.tie_action = 0
 model.opt.npred = 50

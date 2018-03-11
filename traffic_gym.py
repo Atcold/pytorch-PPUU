@@ -89,61 +89,83 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
+    def _compute_cost(self, s1, s2):
+        diff = -torch.abs(s1[0:2]-s2[0:2])
+        diff *= torch.Tensor([2/(4*LANE_W), 2/(1.1*LANE_W)])
+        c = torch.prod(torch.exp(diff))
+        return c
+
+
     def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
         obs = torch.zeros(n_cars, 2, 2)
         mask = torch.zeros(n_cars)
         obs = obs.view(n_cars, 4)
+        cost = 0
 
-        obs[0].copy_(self.get_state())
+        vstate = self.get_state()
+        obs[0].copy_(vstate)
 
         if left_vehicles:
             if left_vehicles[0] is not None:
-                obs[1].copy_(left_vehicles[0].get_state())
+                s = left_vehicles[0].get_state()
+                obs[1].copy_(s)
                 mask[1] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
-                obs[1].copy_(self.get_state())
+                obs[1].copy_(vstate)
 
             if left_vehicles[1] is not None:
-                obs[2].copy_(left_vehicles[1].get_state())
+                s = left_vehicles[1].get_state()
+                obs[2].copy_(s)
                 mask[2] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[2].copy_(self.get_state())
+                obs[2].copy_(vstate)
         else:
-            obs[1].copy_(self.get_state())
-            obs[2].copy_(self.get_state())
+            obs[1].copy_(vstate)
+            obs[2].copy_(vstate)
 
         if mid_vehicles[0] is not None:
-            obs[3].copy_(mid_vehicles[0].get_state())
+            s = mid_vehicles[0].get_state()
+            obs[3].copy_(s)
             mask[3] = 1
+            cost = max(cost, self._compute_cost(s, vstate))
         else:
-            obs[3].copy_(self.get_state())
+            obs[3].copy_(vstate)
 
         if mid_vehicles[1] is not None:
-            obs[4].copy_(mid_vehicles[1].get_state())
+            s = mid_vehicles[1].get_state()
+            obs[4].copy_(s)
             mask[4] = 1
+            cost = max(cost, self._compute_cost(s, vstate))
         else:
-            obs[4].copy_(self.get_state())
+            obs[4].copy_(vstate)
 
         if right_vehicles:
             if right_vehicles[0] is not None:
-                obs[5].copy_(right_vehicles[0].get_state())
+                s = right_vehicles[0].get_state()
+                obs[5].copy_(s)
                 mask[5] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[5].copy_(self.get_state())
+                obs[5].copy_(vstate)
 
             if right_vehicles[1] is not None:
-                obs[6].copy_(right_vehicles[1].get_state())
+                s = right_vehicles[1].get_state()
+                obs[6].copy_(s)
                 mask[6] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[6].copy_(self.get_state())
+                obs[6].copy_(vstate)
         else:
-            obs[5].copy_(self.get_state())
-            obs[6].copy_(self.get_state())
+            obs[5].copy_(vstate)
+            obs[6].copy_(vstate)
 
-        return obs, mask
+
+        return obs, mask, cost
 
     def draw(self, surface, c=False, mode='human', offset=0):
         """
@@ -494,7 +516,19 @@ class StatefulEnv(core.Env):
             v.step(v._last_action)
 
 
-#            v.step(v._actions[-1].numpy())
+        '''
+        for v in self.vehicles:
+            cost = v._states[-1][2]
+            if cost > 0.2:
+                img = v._states_image[-1]
+                hsh = random.random()
+                scipy.misc.imsave(f'cost_images/high/im{hsh:.5f}_cost{cost}.png', img.numpy())
+            elif cost < 0.01 and random.random() < 0.01:
+                img = v._states_image[-1]
+                hsh = random.random()
+                scipy.misc.imsave(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
+        '''
+
 
         done = False
 
@@ -521,6 +555,12 @@ class StatefulEnv(core.Env):
         behind = target_lane[my_idx - 1] if my_idx > 0 else None
         if d_lane == 0: my_idx += 1
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
+
+        # TODO: temporary hack, fix this
+        if behind is not None:
+            if torch.norm(v.get_state() - behind.get_state()) == 0:
+                behind = None
+
         return behind, ahead
 
     def render(self, mode='human', width_height=None, scale=1):
