@@ -51,6 +51,9 @@ if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
 
+if 'een' in opt.model:
+    opt.model_file += f'-nz={opt.nz}'
+
 print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
@@ -67,6 +70,8 @@ elif opt.model == 'fwd-cnn-vae-lp':
     model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-een-lp':
     model = models.FwdCNN_EEN_LP(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-een-fp':
+    model = models.FwdCNN_EEN_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt)
 elif opt.model == 'fwd-cnn2':
@@ -119,6 +124,18 @@ def test(nbatches):
         total_loss_kl += loss_kl.data[0]
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
+
+def een_compute_pz(nbatches):
+    model.p_z = []
+    for j in range(nbatches):
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred)
+        inputs = Variable(inputs)
+        actions = Variable(actions)
+        targets = Variable(targets)
+        pred, loss_kl = model(inputs, actions, targets, save_z = True)
+    pdb.set_trace()
+        
+
 print('[training]')
 best_valid_loss_mse = 1e6
 for i in range(100):
@@ -127,7 +144,9 @@ for i in range(100):
     valid_loss_mse, valid_loss_kl = test(int(opt.epoch_size / 2))
     t = time.time() - t0
     if valid_loss_mse < best_valid_loss_mse:
-        best_valid_loss_mse = valid_loss_mse
+        best_valid_loss_mse = valid_loss_mse                
+        if 'een' in opt.model:
+            een_compute_pz(500)
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')

@@ -112,7 +112,7 @@ class decoder_deconv(nn.Module):
 
 
 
-# encodes a sequence of frames or errors and produces a latent variable
+# encodes a sequence of frames or errors and produces a distribution over latent variables
 class z_network(nn.Module):
     def __init__(self, opt, n_inputs):
         super(z_network, self).__init__()
@@ -160,6 +160,41 @@ class z_network(nn.Module):
         return z, mu, logvar
 
 
+# encodes a sequence of frames or errors and produces a latent variable
+class z_network_det(nn.Module):
+    def __init__(self, opt, n_inputs):
+        super(z_network_det, self).__init__()
+        self.opt = opt
+        self.n_inputs = n_inputs
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(3*n_inputs, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature)
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nz), 
+            nn.Tanh()
+        )
+
+    def forward(self, inputs, sample=False):
+        bsize = inputs.size(0)
+        inputs = inputs.view(bsize, self.n_inputs*3, self.opt.height, self.opt.width)
+        z = self.fc(self.conv(inputs).view(bsize, -1))
+        return z
+
+
+
 # expands a latent variable into a sequence of variables, one for each frame
 class z_expander(nn.Module):
     def __init__(self, opt, n_steps):
@@ -178,6 +213,40 @@ class z_expander(nn.Module):
         bsize = z.size(0)
         z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, 12, 2)
         return z_exp
+
+# expands a latent variable into a sequence of variables, one for each frame
+class z_expander_context(nn.Module):
+    def __init__(self, opt, n_steps):
+        super(z_expander, self).__init__()
+        self.opt = opt
+        self.n_steps = n_steps
+        self.z_expander = nn.Sequential(
+            nn.Linear(opt.nz, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, n_steps * opt.nfeature * 12 * 2)
+        )
+
+        # frame encoder
+        self.f_encoder = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.BatchNorm2d(opt.nfeature)
+        )
+
+
+    def forward(self, z, inputs):
+        bsize = z.size(0)
+        h = self.f_encoder(inputs)
+        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, 12, 2)
+        return z_exp
+
 
 
 ###############
@@ -323,6 +392,119 @@ class FwdCNN_VAE_LP(nn.Module):
 
 
 
+# forward EEN model with a fixed prior
+class FwdCNN_EEN_FP(nn.Module):
+    def __init__(self, opt, mfile=''):
+        super(FwdCNN_EEN_FP, self).__init__()
+        self.opt = opt
+
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            pretrained_model = torch.load(mfile)
+            self.encoder1 = pretrained_model.encoder
+            self.decoder1 = pretrained_model.decoder
+            self.encoder2 = copy.deepcopy(self.encoder1)
+            self.decoder2 = copy.deepcopy(self.decoder1)
+
+        self.z_network_det = z_network_det(opt, 1)
+        self.q_network = z_network(opt, opt.ncond)
+        self.z_expander = z_expander(opt, 1)
+        self.p_z = []
+
+    def save_z(self, z):
+        if len(self.p_z) == 0:
+            self.p_z = z.data.cpu()
+        else:
+            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
+
+    def sample_z(self, bsize):
+        z = []
+        for b in range(bsize):
+            z.append(random.choice(self.p_z))
+        z = torch.stack(z)
+        if self.use_cuda: z = z.cuda()
+        return Variable(z)
+
+    def forward(self, inputs, actions, targets, save_z = False):
+        bsize = inputs.size(0)
+        inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
+        actions = actions.view(bsize, -1, self.opt.n_actions)
+        npred = actions.size(1)
+
+        kld = Variable(torch.zeros(1))
+        if self.use_cuda:
+            kld = kld.cuda()
+
+        pred = []
+        for t in range(npred):
+            h1 = self.encoder1(inputs, actions[:, t])
+            pred1 = F.sigmoid(self.decoder1(h1) + inputs[:, -1].unsqueeze(1).clone())
+            error = targets[:, t] - pred1.squeeze()
+            error = Variable(error.data)
+            if targets is not None:
+                # we are training or estimating z distribution
+                z = self.z_network_det(error)
+                if save_z:
+                    self.save_z(z)
+            else:
+                # we are doing inference
+                z = self.sample_z(bsize)
+
+            z_exp = self.z_expander(z)
+            h2 = self.encoder2(inputs, actions[:, t])
+            h2 = h2 + z_exp.squeeze()
+            pred2 = F.sigmoid(self.decoder2(h2) + inputs[:, -1].unsqueeze(1).clone())
+            pred.append(pred2)
+            inputs = torch.cat((inputs[:, 1:], pred2), 1)
+
+        pred = torch.cat(pred, 1)
+        return pred, kld
+
+
+        '''
+        for b in range(errors.size(0)):
+            os.system(f'mkdir -p errors/b{b}')
+            for t in range(errors.size(1)):
+                torchvision.utils.save_image(errors.data[b][t], f'errors/b{b}/err{t:05d}.png')
+                torchvision.utils.save_image(pred1.data[b][t], f'errors/b{b}/pred{t:05d}.png')
+                torchvision.utils.save_image(targets.data[b][t], f'errors/b{b}/true{t:05d}.png')
+
+        pdb.set_trace()
+        '''
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+            self.use_cuda = True
+        elif t == 'cpu':
+            self.cpu()
+            self.use_cuda = False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # forward model with a learned prior
 class FwdCNN_EEN_LP(nn.Module):
     def __init__(self, opt, mfile=''):
@@ -369,7 +551,6 @@ class FwdCNN_EEN_LP(nn.Module):
                 torchvision.utils.save_image(pred1.data[b][t], f'errors/b{b}/pred{t:05d}.png')
                 torchvision.utils.save_image(targets.data[b][t], f'errors/b{b}/true{t:05d}.png')
 
-        pdb.set_trace()
 
         z, mu1, logvar1 = self.z_network(torch.cat((inputs, errors), 1))
         _, mu2, logvar2 = self.q_network(inputs)
