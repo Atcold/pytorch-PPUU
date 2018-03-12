@@ -133,7 +133,6 @@ def een_compute_pz(nbatches):
         actions = Variable(actions)
         targets = Variable(targets)
         pred, loss_kl = model(inputs, actions, targets, save_z = True)
-    pdb.set_trace()
         
 
 print('[training]')
