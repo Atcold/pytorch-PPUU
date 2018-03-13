@@ -12,7 +12,7 @@ from gym import core
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
 LANE_W = 20  # pixels / 3.7 m, lane width
-SCALE = LANE_W / 3.7
+SCALE = LANE_W / 3.7  # pixels per metre
 
 colours = {
     'w': (255, 255, 255),
@@ -63,7 +63,7 @@ class Car:
         self._length = round(4.8 * self.SCALE)
         self._width = round(1.8 * self.SCALE)
         self._direction = np.array((1, 0), np.float)
-        self._id = car_id
+        self.id = car_id
         lane = random.choice(tuple(free_lanes))
         self._position = np.array((
             -self._length,
@@ -163,10 +163,10 @@ class Car:
         rectangle = (int(x), int(y), self._length, self._width)
         if mode == 'human':
             if c:
-                pygame.draw.rect(surface, (0, 255, 0), (int(x - 15), int(y - 15), self._length + 20, self._width + 20),
-                                 2)
+                pygame.draw.rect(surface, (0, 255, 0),
+                                 (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
             draw_rect(surface, self._colour, rectangle, self._direction, 3)
-            draw_text(surface, str(self._id), (x, y - self._width // 2), 20, colours['b'])
+            draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
             if self._braked: self._colour = colours['g']
         if mode == 'machine':
             draw_rect(surface, colours['g'], rectangle, self._direction)
@@ -373,12 +373,12 @@ class StatefulEnv(core.Env):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=True, store=True):
+    def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=True, store=True):
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
         self.fps = fps  # updates per second
-        self.delta_t = 1 / fps  # simulation timing interval
+        self.delta_t = delta_t or 1 / fps  # simulation timing interval
         self.nb_lanes = nb_lanes  # total number of lanes
         self.frame = 0  # frame index
         self.lanes = self.build_lanes(nb_lanes)  # create lanes object, list of dicts
@@ -449,8 +449,8 @@ class StatefulEnv(core.Env):
             # Remove from the environment cars outside the screen
             if v.back > self.screen_size[0]:
                 # if this is the controlled car, pick new car
-                if v._id == self.policy_car_id:
-                    self.policy_car_id = self.vehicles[-1]._id
+                if v.id == self.policy_car_id:
+                    self.policy_car_id = self.vehicles[-1].id
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
                 self.vehicles.remove(v)
 
@@ -472,6 +472,12 @@ class StatefulEnv(core.Env):
         if self.policy_car_id == -1:
             self.policy_car_id = 0
 
+        if self.state_image:
+            # How much to look far ahead
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            look_sideways = 2 * self.LANE_W
+            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
+
         # Generate state representation for each vehicle
         for v in self.vehicles:
             lane_set = v.get_lane_set(self.lanes)
@@ -488,7 +494,7 @@ class StatefulEnv(core.Env):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Compute the action
-            if v._id == self.policy_car_id and policy_action is not None:
+            if v.id == self.policy_car_id and policy_action is not None:
                 action = policy_action
             else:
                 action = v.policy(state)
@@ -500,16 +506,8 @@ class StatefulEnv(core.Env):
                 v.store('state', state)
                 v.store('action', action)
 
-        # store images before updating, so that images and states are aligned in time
-        if self.state_image:
-            # How much to look far ahead
-            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
-            look_sideways = 2 * self.LANE_W
-            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
-
-        # update the cars
-        for v in self.vehicles:
-            v.step(v._actions[-1].numpy())
+            # update the cars
+            v.step(action)
 
         done = False
 
@@ -566,7 +564,7 @@ class StatefulEnv(core.Env):
             self._draw_lanes()
 
             for v in self.vehicles:
-                c = (v._id == self.policy_car_id)
+                c = (v.id == self.policy_car_id)
                 v.draw(self.screen, c)
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))

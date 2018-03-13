@@ -76,7 +76,7 @@ def run_episode(ep):
     done = False
 
     state, objects = env.reset()
-    for t in range(opt.steps):
+    while not done:
         state, reward, done, vehicles = env.step(None)
         env.render()
 
