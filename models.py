@@ -673,7 +673,7 @@ class PolicyCNN(nn.Module):
 
 
 class PolicyEEN(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, mfile):
         super(PolicyEEN, self).__init__()
         self.opt = opt
 
@@ -696,18 +696,62 @@ class PolicyEEN(nn.Module):
             self.encoder2 = copy.deepcopy(pretrained_model.encoder)
             self.fc2 = copy.deepcopy(pretrained_model.fc)
 
-
         self.hsize = opt.nfeature*12*2
 
-    def forward(self, state_images, states, actions):
-        bsize = state_images.size(0)
-        h1 = self.encoder1(state_images, states)
-        a1 = self.fc1(h1)
-        a1 = a1.view(bsize, self.opt.npred, self.opt.n_actions)
-        error = actions - a1
-        z = self.z_network(error)
+        self.z_network = nn.Sequential(
+            nn.BatchNorm1d(opt.n_actions*opt.npred),
+            nn.Linear(opt.n_actions*opt.npred, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, opt.nz)
+            )
 
-        return a, Variable(torch.zeros(1))
+        self.z_expander = nn.Sequential(
+            nn.Linear(opt.nz, opt.n_hidden), 
+            nn.ReLU(), 
+            nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
+        )
+
+
+    def save_z(self, z):
+        if len(self.p_z) == 0:
+            self.p_z = z.data.cpu()
+        else:
+            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
+
+    def sample_z(self, bsize):
+        z = []
+        for b in range(bsize):
+            z.append(random.choice(self.p_z))
+        z = torch.stack(z)
+        if self.use_cuda: z = z.cuda()
+        return Variable(z)
+
+
+    def forward(self, state_images, states, actions, save_z=False):
+        bsize = state_images.size(0)
+        if actions is not None:
+            h1 = self.encoder1(state_images, states)
+            a1 = self.fc1(h1)
+            a1 = a1.view(bsize, self.opt.npred, self.opt.n_actions)
+            error = actions - a1
+            error = Variable(error.data)
+            z = self.z_network(error.view(bsize, -1))
+            z_exp = self.z_expander(z)
+            if save_z:
+                self.save_z(z)
+        else:
+            z = self.sample_z(bsize)
+            z_exp = self.z_expander(z)
+            
+        h2 = self.encoder2(state_images, states)
+        h2 = h2 + z_exp
+        a2 = self.fc2(h2)
+        a2 = a2.view(bsize, self.opt.npred, self.opt.n_actions)
+        return a2, Variable(torch.zeros(1))
 
 
     def intype(self, t):
@@ -805,78 +849,4 @@ class PolicyCNN_VAE(nn.Module):
             self.cpu()
 
 
-
-class PolicyCNN_EEN(nn.Module):
-    def __init__(self, opt, mfile):
-        super(PolicyCNN_VAE, self).__init__()
-        self.opt = opt
-
-        if mfile == '':
-            self.hsize = opt.nfeature*12*2
-            self.encoder = policy_encoder(opt)
-
-
-
-        self.fc = nn.Sequential(
-            nn.Linear(self.hsize + opt.n_hidden + opt.nz, opt.n_hidden),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.ReLU(),
-            nn.Linear(opt.n_hidden, opt.n_hidden),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.ReLU(),
-            nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
-        )
-
-        self.z_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_actions*opt.npred + self.hsize + opt.n_hidden),
-            nn.Linear(opt.n_actions*opt.npred + self.hsize + opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, 2*opt.nz)
-            )
-
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = Variable(std.data.new(std.size()).normal_())
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def encode(self, a):
-        bsize = a.size(0)
-        z_params = self.z_network(a.view(bsize, -1)).view(bsize, self.opt.nz, 2)
-        mu = z_params[:, :, 0]
-        logvar = z_params[:, :, 1]
-        return mu, logvar
-
-
-    def forward(self, state_images, states, actions):
-        bsize = state_images.size(0)
-        state_images = state_images.view(bsize, 3*self.opt.ncond, 97, 20)
-        states = states.view(bsize, -1)
-        actions = actions.view(bsize, -1)
-        hi = self.convnet(state_images).view(bsize, self.hsize)
-        hs = self.embed(states)
-        h = torch.cat((hi, hs), 1)
-
-        mu, logvar = self.encode(torch.cat((h, actions), 1))
-        z = self.reparameterize(mu, logvar)
-
-        a = self.fc(torch.cat((h, z), 1))
-        a = a.view(bsize, self.opt.npred, self.opt.n_actions)
-        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        kld /= bsize
-        return a, kld
-
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-        elif t == 'cpu':
-            self.cpu()
 

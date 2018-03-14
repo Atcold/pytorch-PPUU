@@ -37,8 +37,10 @@ dataloader = DataLoader(data_file, opt)
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
 
-if opt.model == 'policy-cnn-vae':
+if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
+if 'een' in opt.model:
+    opt.model_file += f'-nz={opt.nz}'
 
 print(f'will save model as {opt.model_file}')
 
@@ -57,6 +59,9 @@ elif opt.model == 'policy-cnn':
     policy = models.PolicyCNN(opt)
 elif opt.model == 'policy-cnn-vae':
     policy = models.PolicyCNN_VAE(opt, prev_model)
+elif opt.model == 'policy-cnn-een':
+    policy = models.PolicyEEN(opt, prev_model)
+    
 
 policy.intype('gpu')
 
@@ -94,6 +99,18 @@ def test(nbatches):
         total_loss_kl += loss_kl.data[0]
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
+
+def een_compute_pz(nbatches):
+    print('sampling z vectors')
+    policy.p_z = []
+    for j in range(nbatches):
+        images, states, actions = dataloader.get_batch_il('train')
+        images = Variable(images)
+        states = Variable(states)
+        actions = Variable(actions)
+        pred_a, loss_kl = policy(images, states, actions, save_z=True)
+
+
 print('[training]')
 best_valid_loss_mse = 1e6
 for i in range(100):
@@ -101,6 +118,8 @@ for i in range(100):
     valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
     if valid_loss_mse < best_valid_loss_mse:
         best_valid_loss_mse = valid_loss_mse
+        if 'een' in opt.model:
+            een_compute_pz(500)
         policy.intype('cpu')
         torch.save(policy, opt.model_file + '.model')
         policy.intype('gpu')
