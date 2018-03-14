@@ -58,6 +58,4 @@ def draw_rect(screen, colour, rect, direction=(1, 0), thickness=0):
     c, s = direction
     rot = np.array(((c, -s), (s, c)))
     xy = (rot @ (xy - (x, y)).T).T + (x, y)
-    pygame.draw.polygon(screen, colour, xy, thickness)
     pygame.draw.polygon(screen, colour, xy)
-    # pygame.draw.circle(screen, colour, (x, y), 2 * thickness)
