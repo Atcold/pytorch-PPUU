@@ -9,7 +9,7 @@ import numpy as np
 LANE_W = 24  # pixels / 3.7 m, lane width
 SCALE = LANE_W / 3.7  # pixels per metre
 FOOT = 0.3048  # metres per foot
-X_OFFSET = 370  # horizontal offset (camera 2 leftmost view)
+X_OFFSET = 470  # horizontal offset (camera 2 leftmost view)
 
 
 class RealCar(Car):
@@ -18,13 +18,16 @@ class RealCar(Car):
     LANE_W = LANE_W
 
     def __init__(self, df, y_offset):
-        self._df = df
-        self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
+        self._k = 15  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
-        self._offset = np.array((X_OFFSET + self._length, -y_offset))  # pixels, by hand
+        self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
         # X and Y are swapped in the I-80 data set...
-        self._position = df.loc[df.index[0], ['Local Y', 'Local X']].values * FOOT * SCALE - self._offset
+        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE - X_OFFSET - self._length
+        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE + y_offset
+        self._trajectory = pd.concat((x, y), axis=1, keys=('x', 'y'))
+        self._position = self._trajectory.loc[self._trajectory.index[0], ['x', 'y']].values
+        self._df = df
         self._frame = 0
         self._direction = np.array((1., 0.))
         self._colour = colours['c']
@@ -34,12 +37,12 @@ class RealCar(Car):
     def step(self, action):
         self._frame += 1
         position = self._position
-        df = self._df
-        self._position = df.loc[df.index[self._frame], ['Local Y', 'Local X']].values * FOOT * SCALE - self._offset
+        df = self._trajectory
+        self._position = df.loc[df.index[self._frame], ['x', 'y']].values
         new_direction = self._position - position
         self._direction = new_direction if np.linalg.norm(new_direction) > 1 else self._direction
         self._direction /= np.linalg.norm(self._direction)
-        self.off_screen = self._frame == len(df) - 1
+        self.off_screen = self._frame >= len(df) - self._k
 
     def policy(self, observation):
         return None
@@ -73,6 +76,7 @@ class RealTraffic(StatefulEnv):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self.df = self._get_data_frame()
+        self.vehicles_history = set()
 
     @staticmethod
     def _get_data_frame():
@@ -103,12 +107,15 @@ class RealTraffic(StatefulEnv):
 
         df = self.df
         valid_x = (df['Local Y'] * FOOT * SCALE - X_OFFSET).between(0, self.screen_size[0])
-        vehicles = set(df[(df['Frame ID'] == self.frame) & valid_x]['Vehicle ID'])
-        current_vehicles = set(v.id for v in self.vehicles)
+        now = df['Frame ID'] == self.frame
+        vehicles = set(df[now & valid_x]['Vehicle ID'])
         for vehicle_id in vehicles:
-            if vehicle_id not in current_vehicles:
-                car = self.EnvCar(df[(df['Vehicle ID'] == vehicle_id) & valid_x], self.offset)
+            if vehicle_id not in self.vehicles_history:
+                now_and_on = df['Frame ID'] >= self.frame
+                this_vehicle = df['Vehicle ID'] == vehicle_id
+                car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset)
                 self.vehicles.append(car)
+        self.vehicles_history |= vehicles
         for v in self.vehicles[:]:
             if v.off_screen:
                 self.vehicles.remove(v)
