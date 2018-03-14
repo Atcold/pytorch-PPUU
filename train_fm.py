@@ -17,7 +17,7 @@ parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
-parser.add_argument('-ncond', type=int, default=4)
+parser.add_argument('-ncond', type=int, default=8)
 parser.add_argument('-npred', type=int, default=50)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
@@ -62,7 +62,7 @@ opt.height = 97
 opt.width = 20
 
 
-prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/model=fwd-cnn-bsize=32-ncond=4-npred=20-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0.model'
+prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred=20-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-sigmout=1-tieact=0.model'
 
 if opt.model == 'fwd-cnn-vae-fp':
     model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)

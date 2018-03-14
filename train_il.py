@@ -27,7 +27,7 @@ parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-beta', type=float, default=0.1)
 parser.add_argument('-lrt', type=float, default=0.0001)
-parser.add_argument('-epoch_size', type=int, default=2000)
+parser.add_argument('-epoch_size', type=int, default=1000)
 opt = parser.parse_args()
 
 opt.model_dir += f'_{opt.nshards}-shards/'
@@ -45,6 +45,10 @@ print(f'will save model as {opt.model_file}')
 opt.n_inputs = 4
 opt.n_actions = 3
 
+
+prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/model=policy-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}.model'
+
+
 if opt.model == 'policy-mlp':
     policy = models.PolicyMLP(opt)
 elif opt.model == 'policy-vae':
@@ -52,7 +56,7 @@ elif opt.model == 'policy-vae':
 elif opt.model == 'policy-cnn':
     policy = models.PolicyCNN(opt)
 elif opt.model == 'policy-cnn-vae':
-    policy = models.PolicyCNN_VAE(opt)
+    policy = models.PolicyCNN_VAE(opt, prev_model)
 
 policy.intype('gpu')
 
