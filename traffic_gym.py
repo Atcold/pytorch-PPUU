@@ -546,20 +546,14 @@ class StatefulEnv(core.Env):
         return obs, cost, done, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
-        target_lane = self.lane_occupancy[current_lane_idx + d_lane]
+        # Shallow copy the target lane
+        target_lane = self.lane_occupancy[current_lane_idx + d_lane][:]
+        # If I find myself in the target list, remove me
+        if v in target_lane: target_lane.remove(v)
         # Find me in the lane
-        if d_lane == 0:
-            my_idx = target_lane.index(v)
-        else:
-            my_idx = bisect.bisect(target_lane, v)
+        my_idx = bisect.bisect(target_lane, v)
         behind = target_lane[my_idx - 1] if my_idx > 0 else None
-        if d_lane == 0: my_idx += 1
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
-
-        # TODO: temporary hack, fix this
-        if behind is not None:
-            if torch.norm(v.get_state() - behind.get_state()) == 0:
-                behind = None
 
         return behind, ahead
 
