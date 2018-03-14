@@ -8,6 +8,8 @@ import scipy.misc
 import sys
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
+import os
+from scipy.misc import imsave
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -363,6 +365,14 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
+    def dump_state_image(self, save_dir='scratch/'):
+        save_dir = save_dir + str(self.id)
+        os.system('mkdir -p ' + save_dir)
+        # im = self._states_image[100:]
+        im = self._states_image
+        for t in range(len(im)):
+            imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+
 
 class StatefulEnv(core.Env):
 
@@ -555,13 +565,13 @@ class StatefulEnv(core.Env):
             # clear the screen
             self.screen.fill(colours['k'])
 
-            # backgroud pictures
+            # background pictures
             if self.photos:
                 for i in range(len(self.photos)):
                     self.screen.blit(self.photos[i], self.photos_rect[i])
 
             # draw lanes
-            self._draw_lanes()
+            self._draw_lanes(self.screen)
 
             for v in self.vehicles:
                 c = (v.id == self.policy_car_id)
@@ -580,10 +590,7 @@ class StatefulEnv(core.Env):
             screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
-            for lane in self.lanes:
-                sw = self.screen_size[0] + 2 * max_extension  # screen width
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
+            self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
 
             # draw vehicles
             for v in self.vehicles:
@@ -594,15 +601,21 @@ class StatefulEnv(core.Env):
                 if self.store:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
-    def _draw_lanes(self, mode='human'):
+    def _draw_lanes(self, surface, mode='human', offset=0):
         if mode == 'human':
             lanes = self.lanes
             for lane in lanes:
                 sw = self.screen_size[0]  # screen width
-                draw_dashed_line(self.screen, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
-                draw_dashed_line(self.screen, colours['r'], (0, lane['mid']), (sw, lane['mid']))
-            pygame.draw.line(self.screen, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
-            pygame.draw.line(self.screen, colours['w'], (0, lanes[-1]['max']), (sw, lanes[-1]['max']), 3)
+                draw_dashed_line(surface, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
+                draw_dashed_line(surface, colours['r'], (0, lane['mid']), (sw, lane['mid']))
+            pygame.draw.line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
+            pygame.draw.line(surface, colours['w'], (0, lanes[-1]['max']), (sw, lanes[-1]['max']), 3)
+        if mode == 'machine':
+            for lane in self.lanes:
+                sw = self.screen_size[0] + 2 * offset  # screen width
+                m = offset
+                pygame.draw.line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
+                pygame.draw.line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
 
     def _pause(self):
         pause = True

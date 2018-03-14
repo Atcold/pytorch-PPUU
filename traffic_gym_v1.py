@@ -10,6 +10,7 @@ LANE_W = 24  # pixels / 3.7 m, lane width
 SCALE = LANE_W / 3.7  # pixels per metre
 FOOT = 0.3048  # metres per foot
 X_OFFSET = 470  # horizontal offset (camera 2 leftmost view)
+MAX_SPEED = 130
 
 
 class RealCar(Car):
@@ -33,6 +34,7 @@ class RealCar(Car):
         self._colour = colours['c']
         self._braked = False
         self.off_screen = False
+        self._states_image = list()
 
     def step(self, action):
         self._frame += 1
@@ -120,6 +122,12 @@ class RealTraffic(StatefulEnv):
             if v.off_screen:
                 self.vehicles.remove(v)
 
+        if self.state_image:
+            # How much to look far ahead
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            look_sideways = 2 * self.LANE_W
+            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
+
         for v in self.vehicles:
             v.step(None)
 
@@ -127,10 +135,10 @@ class RealTraffic(StatefulEnv):
 
         return None, None, None, None
 
-    def _draw_lanes(self, mode='human'):
+    def _draw_lanes(self, surface, mode='human', offset=0):
         if mode == 'human':
             lanes = self.lanes  # lanes
-            s = self.screen  # screen
+            s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['w']  # colour white
             sw = self.screen_size[0]  # screen width
@@ -148,3 +156,23 @@ class RealTraffic(StatefulEnv):
             draw_dashed_line(s, colours['r'], (0, bottom + 42), (sw, bottom + 42 - 0.035 * sw))
             draw_line(s, w, (0, bottom + 53), (sw, bottom + 53 - 0.035 * sw), 3)
             draw_line(s, w, (sw, bottom + 3), (self.screen_size[0], bottom + 2), 3)
+
+        if mode == 'machine':
+            lanes = self.lanes  # lanes
+            s = surface  # screen
+            draw_line = pygame.draw.line  # shortcut
+            w = colours['r']  # colour white
+            sw = self.screen_size[0]  # screen width
+            m = offset
+
+            for lane in self.lanes:
+                draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
+
+            draw_line(s, w, (0, lanes[0]['min'] + m), (sw, lanes[0]['min'] + m), 1)
+            bottom = lanes[-1]['max'] + m
+            draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
+            draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - 0.035 * 18 * LANE_W), 1)
+            draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
+            sw *= .9
+            draw_line(s, w, (m, bottom + 53), (m + sw, bottom + 53 - 0.035 * sw), 1)
+            draw_line(s, w, (m + sw, bottom + 3), (2 * m + self.screen_size[0], bottom), 1)
