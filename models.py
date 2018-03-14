@@ -183,7 +183,7 @@ class z_network_det(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nz), 
+            nn.Linear(opt.nfeature, opt.nz),
             nn.Tanh()
         )
 
@@ -710,8 +710,8 @@ class PolicyEEN(nn.Module):
             )
 
         self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.n_hidden), 
-            nn.ReLU(), 
+            nn.Linear(opt.nz, opt.n_hidden),
+            nn.ReLU(),
             nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
         )
 
@@ -746,7 +746,7 @@ class PolicyEEN(nn.Module):
         else:
             z = self.sample_z(bsize)
             z_exp = self.z_expander(z)
-            
+
         h2 = self.encoder2(state_images, states)
         h2 = h2 + z_exp
         a2 = self.fc2(h2)
@@ -757,8 +757,10 @@ class PolicyEEN(nn.Module):
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
+            self.use_cuda = True
         elif t == 'cpu':
             self.cpu()
+            self.use_cuda = False
 
 
 
@@ -801,8 +803,8 @@ class PolicyCNN_VAE(nn.Module):
             )
 
         self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.n_hidden), 
-            nn.ReLU(), 
+            nn.Linear(opt.nz, opt.n_hidden),
+            nn.ReLU(),
             nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
         )
 

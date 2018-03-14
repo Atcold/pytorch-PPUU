@@ -14,7 +14,9 @@ parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=10)
-parser.add_argument('-ncond', type=int, default=4)
+parser.add_argument('-ncond', type=int, default=10)
+parser.add_argument('-npred', type=int, default=10)
+parser.add_argument('-n_samples', type=int, default=5)
 opt = parser.parse_args()
 
 random.seed(opt.seed)
@@ -32,7 +34,9 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
+#policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
+policy = torch.load(f'models_20-shards/model=policy-cnn-een-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64-nz=1.model')
+policy.intype('cpu')
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
@@ -56,6 +60,8 @@ def run_episode():
     done = False
 
     state, objects = env.reset()
+    action = None
+    cntr = 0
     for t in range(2000):
         if t > 20:
             v = None
@@ -69,12 +75,16 @@ def run_episode():
             states, masks, actions = prepare_trajectory(v._states, v._actions)
             states = Variable(states[-opt.ncond:, 0].clone().unsqueeze(0))
             masks = Variable(masks[-opt.ncond:].unsqueeze(0))
-            action, _ = policy(images, states, actions)
+            if action is None or cntr == opt.npred:
+                print('sampling new action sequence')
+                action, _ = policy(images, states, None)
+                cntr = 0
             print(f'dv = {action.data[0][0][2]:0.4f}, (dx, dy) = ({action.data[0][0][0]:0.4f}, {action.data[0][0][1]:0.4f})')
-            action = action.data[0][0].numpy()
+            action_ = action.data[0][cntr].numpy()
+            cntr += 1
         else:
-            action = None
-        state, reward, done, vehicles = env.step(action)
+            action_ = None
+        state, reward, done, vehicles = env.step(action_)
         env.render()
 
 
