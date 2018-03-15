@@ -17,16 +17,15 @@ parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
-parser.add_argument('-ncond', type=int, default=8)
-parser.add_argument('-npred', type=int, default=50)
+parser.add_argument('-ncond', type=int, default=10)
+parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
-parser.add_argument('-tie_action', type=int, default=0)
+parser.add_argument('-tie_action', type=int, default=1)
 parser.add_argument('-beta', type=float, default=1.0)
 parser.add_argument('-nz', type=int, default=2)
-parser.add_argument('-sigmout', type=int, default=1)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
@@ -42,7 +41,7 @@ dataloader = DataLoader(data_file, opt)
 
 
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-sigmout={opt.sigmout}-tieact={opt.tie_action}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-tieact={opt.tie_action}'
 
 if opt.zeroact == 1:
     opt.model_file += '-zeroact'
@@ -57,7 +56,7 @@ if 'een' in opt.model:
 print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
-opt.n_actions = 3
+opt.n_actions = 2
 opt.height = 97
 opt.width = 20
 

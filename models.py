@@ -512,6 +512,88 @@ class FwdCNN_EEN_FP(nn.Module):
 
 
 
+# forward EEN model with a fixed prior
+class FwdCNN_AE_FP(nn.Module):
+    def __init__(self, opt, mfile=''):
+        super(FwdCNN_AE_FP, self).__init__()
+        self.opt = opt
+
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+
+        self.z_network_det = z_network_det(opt, 1)
+        self.q_network = z_network(opt, opt.ncond)
+        self.z_expander = z_expander(opt, 1)
+        self.p_z = []
+
+    def save_z(self, z):
+        if len(self.p_z) == 0:
+            self.p_z = z.data.cpu()
+        else:
+            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
+
+    def sample_z(self, bsize):
+        z = []
+        for b in range(bsize):
+            z.append(random.choice(self.p_z))
+        z = torch.stack(z)
+        if self.use_cuda: z = z.cuda()
+        return Variable(z)
+
+    def forward(self, inputs, actions, targets, save_z = False):
+        bsize = inputs.size(0)
+        inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
+        actions = actions.view(bsize, -1, self.opt.n_actions)
+        npred = actions.size(1)
+
+        kld = Variable(torch.zeros(1))
+        if self.use_cuda:
+            kld = kld.cuda()
+
+        pred = []
+        for t in range(npred):
+            h1 = self.encoder1(inputs, actions[:, t])
+            pred1 = F.sigmoid(self.decoder1(h1) + inputs[:, -1].unsqueeze(1).clone())
+            error = targets[:, t] - pred1.squeeze()
+            error = Variable(error.data)
+            if targets is not None:
+                # we are training or estimating z distribution
+                z = self.z_network_det(error)
+                if save_z:
+                    self.save_z(z)
+            else:
+                # we are doing inference
+                z = self.sample_z(bsize)
+
+            z_exp = self.z_expander(z)
+            h2 = self.encoder2(inputs, actions[:, t])
+            h2 = h2 + z_exp.squeeze()
+            pred2 = F.sigmoid(self.decoder2(h2) + inputs[:, -1].unsqueeze(1).clone())
+            pred.append(pred2)
+            inputs = torch.cat((inputs[:, 1:], pred2), 1)
+
+        pred = torch.cat(pred, 1)
+        return pred, kld
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+            self.use_cuda = True
+        elif t == 'cpu':
+            self.cpu()
+            self.use_cuda = False
+
+
+
+
+
+
 
 
 
