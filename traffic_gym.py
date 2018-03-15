@@ -90,11 +90,10 @@ class Car:
         return state
 
     def _compute_cost(self, s1, s2):
-        diff = -torch.abs(s1[0:2]-s2[0:2])
-        diff *= torch.Tensor([2/(4*LANE_W), 2/(1.1*LANE_W)])
+        diff = -torch.abs(s1[0:2] - s2[0:2])
+        diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
         c = torch.prod(torch.exp(diff))
         return c
-
 
     def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
@@ -164,7 +163,6 @@ class Car:
             obs[5].copy_(vstate)
             obs[6].copy_(vstate)
 
-
         return obs, mask, cost
 
     def draw(self, surface, c=False, mode='human', offset=0):
@@ -192,18 +190,17 @@ class Car:
         """
         Update current position, given current velocity and acceleration
         """
-        # Vehicle state definition
-        vehicle_state = np.array((*self._position, *self._direction, self._speed))
-        # State integration
-        d_position_dt = self._speed * self._direction
-        vehicle_state[:2] += d_position_dt * self._dt
-#        vehicle_state[2:4] += action * self._dt
-        vehicle_state[2:] += action * self._dt
+        # Actions: acceleration (a), steering (b)
+        a, b = action
 
-        # Split individual components (and normalise direction)
-        self._position = vehicle_state[0:2]
-        self._direction = vehicle_state[2:4] / np.linalg.norm(vehicle_state[2:4])
-        self._speed = vehicle_state[4]
+        # State integration
+        self._position += self._speed * self._direction * self._dt
+
+        ortho_direction = np.array((self._direction[1], -self._direction[0]))
+        direction_vector = self._direction + ortho_direction * b * self._dt
+        self._direction = direction_vector / np.linalg.norm(direction_vector)
+
+        self._speed += a * self._dt
 
         # Deal with latent variable and visual indicator
         if self._passing and abs(self._error) < 0.5:
@@ -278,14 +275,13 @@ class Car:
         """
         return self.back - other.front
 
-
     def policy(self, observation):
         """
         Bring together _pass, brake
         :return: acceleration, d_theta
         """
-        d_direction_dt = np.zeros(2)
-        d_velocity_dt = 0
+        b = np.zeros(2)
+        a = 0
 
         car_ahead = observation[1][1]
         if car_ahead:
@@ -297,14 +293,14 @@ class Car:
                     elif self._safe_right(observation):
                         self._pass_right()
                     else:
-                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+                        a = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
                 else:
                     if self._safe_right(observation):
                         self._pass_right()
                     elif self._safe_left(observation):
                         self._pass_left()
                     else:
-                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+                        a = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
 
             elif distance <= 0:
                 self._colour = colours['r']
@@ -315,8 +311,8 @@ class Car:
                 self._pass_right()
                 self._target_speed *= 0.95
 
-        if d_velocity_dt == 0:
-            d_velocity_dt = 1 * (self._target_speed - self._speed)
+        if a == 0:
+            a = 1 * (self._target_speed - self._speed)
 
         if random.random() < 0.1:
             self._target_lane_ = self._target_lane + np.random.normal(0, LANE_W * 0.1)
@@ -330,10 +326,8 @@ class Car:
         if abs(d_error) > d_clip:
             d_error *= d_clip / abs(d_error)
         self._error = error
-        ortho_direction = np.array((self._direction[1], -self._direction[0]))
-        ortho_direction /= np.linalg.norm(ortho_direction)
-        d_direction_dt = ortho_direction * (self.pid_k1 * error + self.pid_k2 * d_error)
-        action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
+        b = self.pid_k1 * error + self.pid_k2 * d_error
+        action = np.array((a, b))  # dx/dt, car state temporal derivative
         return action
 
     def _safe_left(self, state):
@@ -367,7 +361,7 @@ class Car:
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
         sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
         sub_rot_array[:, :, 0] *= 4
-        assert(sub_rot_array.max() <= 255.0)
+        assert (sub_rot_array.max() <= 255.0)
         return torch.from_numpy(sub_rot_array)
 
     def store(self, object_name, object_):
@@ -464,7 +458,8 @@ class StatefulEnv(core.Env):
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
-        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(self.vehicles) == 0:
+        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(
+                self.vehicles) == 0:
             if free_lanes:
                 car = Car(self.lanes, free_lanes, self.delta_t, self.next_car_id)
                 self.next_car_id += 1
@@ -509,14 +504,12 @@ class StatefulEnv(core.Env):
                         if car is not None:
                             s1 = car.get_state()
                             s2 = v.get_state()
-                            if abs(s1[0]-s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
+                            if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
                                 v.crashed = True
-#                                print('crash')
+            #                                print('crash')
 
-#            if car_ahead:
-#                distance = car_ahead - self
-
-
+            #            if car_ahead:
+            #                distance = car_ahead - self
 
             # Check for accident
             if v.crashed: self.collision = v
@@ -536,7 +529,6 @@ class StatefulEnv(core.Env):
         # update the cars
         for v in self.vehicles:
             v.step(v._last_action)
-
 
         '''
         for v in self.vehicles:
@@ -606,7 +598,7 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
-#            if self.collision: self._pause()
+        #            if self.collision: self._pause()
 
         if mode == 'machine':
             m = max_extension = np.linalg.norm(width_height)
