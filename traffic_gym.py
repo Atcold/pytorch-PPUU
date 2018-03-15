@@ -511,7 +511,7 @@ class StatefulEnv(core.Env):
                             s2 = v.get_state()
                             if abs(s1[0]-s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
                                 v.crashed = True
-                                print('crash')
+#                                print('crash')
 
 #            if car_ahead:
 #                distance = car_ahead - self
@@ -551,21 +551,12 @@ class StatefulEnv(core.Env):
                 scipy.misc.imsave(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
         '''
 
-
-        done = False
-
-        if self.frame >= 10000:
-            done = True
-
-        if done:
-            print(f'Episode ended, reward: {reward}, t={self.frame}')
-
         self.frame += 1
 
         obs = []
         # TODO: cost function
         cost = 0
-        return obs, cost, done, self.vehicles
+        return obs, cost, False, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         # Shallow copy the target lane

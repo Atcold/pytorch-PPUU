@@ -20,6 +20,8 @@ parser.add_argument('-n_episodes', type=int, default=10)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-n_samples', type=int, default=1)
+parser.add_argument('-log_dir', type=str, default='logs/')
+parser.add_argument('-models_dir', type=str, default='./models_20-shards/')
 opt = parser.parse_args()
 
 random.seed(opt.seed)
@@ -41,10 +43,10 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-mfile = f'model=policy-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64.model'
-#mfile = f'model=policy-cnn-een-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64-nz=2.model'
+#mfile = f'model=policy-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64.model'
+mfile = f'model=policy-cnn-een-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64-nz=2.model'
 #policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
-policy = torch.load(f'models_20-shards/' + mfile)
+policy = torch.load(f'{opt.models_dir}/' + mfile)
 policy.intype('cpu')
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
@@ -72,7 +74,8 @@ def run_episode():
     action = None
     cntr = 0
     time_until_crashed = -1
-    for t in range(2000):
+    t = 0
+    while True:
         if t > 20:
             v = None
             for v_ in vehicles:
@@ -111,19 +114,20 @@ def run_episode():
                     plt.show()
                     '''
 
-                    print('sampling new action sequence')
+#                    print('sampling new action sequence')
                     action, _ = policy(images, states, None)
                     action *= Variable(a_std.view(1, 1, 3))
                     action += Variable(a_mean.view(1, 1, 3))
                     cntr = 0
                 action_ = action.data[0][cntr].numpy()
-                print(f'dv = {action_[2]:0.4f}, (dx, dy) = ({action_[0]:0.4f}, {action_[1]:0.4f})')
+#                print(f'dv = {action_[2]:0.4f}, (dx, dy) = ({action_[0]:0.4f}, {action_[1]:0.4f})')
                 cntr += 1
         else:
             action_ = None
 
         state, reward, done, vehicles = env.step(action_)
         env.render()
+        t += 1
 
 
         '''
@@ -138,8 +142,11 @@ def run_episode():
 
 
 crash_times = []
+os.system(f'mkdir -p {opt.log_dir}')
 for i in range(opt.n_episodes):
     print(f'episode {i + 1}/{opt.n_episodes}')
     time_until_crashed = run_episode()
+    print('time until crashed: ' + str(time_until_crashed))
     if time_until_crashed != -1:
         crash_times.append(time_until_crashed)
+    torch.save(torch.Tensor(time_until_crashed), f'{opt.log_dir}/test_il_mfile={mfile}_seed={opt.seed}.pth')
