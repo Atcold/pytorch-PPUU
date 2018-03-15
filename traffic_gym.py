@@ -182,7 +182,6 @@ class Car:
         # State integration
         d_position_dt = self._speed * self._direction
         vehicle_state[:2] += d_position_dt * self._dt
-#        vehicle_state[2:4] += action * self._dt
         vehicle_state[2:] += action * self._dt
 
         # Split individual components (and normalise direction)
@@ -268,7 +267,6 @@ class Car:
         Bring together _pass, brake
         :return: acceleration, d_theta
         """
-        d_direction_dt = np.zeros(2)
         d_velocity_dt = 0
 
         car_ahead = observation[1][1]
@@ -302,24 +300,17 @@ class Car:
         if d_velocity_dt == 0:
             d_velocity_dt = 1 * (self._target_speed - self._speed)
 
-        if self._passing or True:
-            if random.random() < 0.1:
-                self._target_lane_ = self._target_lane + np.random.normal(0, self.LANE_W * 0.1)
+        if random.random() < 0.1:
+            self._target_lane_ = self._target_lane + np.random.normal(0, self.LANE_W * 0.1)
 
-            error = -(self._target_lane_ - self._position[1])
-            # error = -(self._target_lane - self._position[1])
-            d_error = error - self._error
-            d_clip = 2
-            if abs(d_error) > d_clip:
-                d_error *= d_clip / abs(d_error)
-            self._error = error
-            ortho_direction = np.array((self._direction[1], -self._direction[0]))
-            ortho_direction /= np.linalg.norm(ortho_direction)
-            # d_direction_dt = ortho_direction * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
-            d_direction_dt = ortho_direction * (self.pid_k1 * error + self.pid_k2 * d_error)
-            '''MH: I don't think the action which reflects the change in direction should depend on the speed, it should represent the steering wheel angle'''
-            # d_direction_dt = ortho_direction * self._speed * ((1e-4 + random.random()*5e-4) * error + (3.5e-3 + random.random()*8e-3) * d_error)
-            # d_direction_dt = ortho_direction * self._speed * (3e-6 * error + 2e-3 * d_error)
+        error = -(self._target_lane_ - self._position[1])
+        d_error = error - self._error
+        d_clip = 2
+        if abs(d_error) > d_clip:
+            d_error *= d_clip / abs(d_error)
+        self._error = error
+        ortho_direction = np.array((self._direction[1], -self._direction[0]))
+        d_direction_dt = ortho_direction * (self.pid_k1 * error + self.pid_k2 * d_error)
 
         action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
         return action
