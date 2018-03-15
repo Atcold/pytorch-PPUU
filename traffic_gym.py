@@ -278,6 +278,7 @@ class Car:
         """
         return self.back - other.front
 
+
     def policy(self, observation):
         """
         Bring together _pass, brake
@@ -480,6 +481,12 @@ class StatefulEnv(core.Env):
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
             # Provide a list of (up to) 6 neighbouring vehicles
+            if len(lane_set) == 0:
+                lanes_occupied = v.get_lane_set(self.lanes)
+                for l in lanes_occupied: self.lane_occupancy[l].remove(v)
+                self.vehicles.remove(v)
+                continue
+
             current_lane_idx = lane_set.pop()
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
@@ -496,11 +503,26 @@ class StatefulEnv(core.Env):
             else:
                 action = v.policy(state)
 
+            for place in state:
+                if place is not None:
+                    for car in place:
+                        if car is not None:
+                            s1 = car.get_state()
+                            s2 = v.get_state()
+                            if abs(s1[0]-s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
+                                v.crashed = True
+                                print('crash')
+
+#            if car_ahead:
+#                distance = car_ahead - self
+
+
+
             # Check for accident
             if v.crashed: self.collision = v
 
             v._last_action = action
-            if self.store:
+            if self.store or v._id == self.policy_car_id:
                 v.store('state', state)
                 v.store('action', action)
 
@@ -611,7 +633,7 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                if self.store:
+                if self.store or v._id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _pause(self):
