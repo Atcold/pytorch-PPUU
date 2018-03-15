@@ -15,13 +15,15 @@ parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
+parser.add_argument('-save_images', type=int, default=0)
+parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-data_dir_i80', type=str, default='./data_i80/')
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
+opt.store = (opt.store == 1)
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
@@ -33,11 +35,13 @@ data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_epis
 print(f'Will save as {data_file}')
 
 tags = {'wrapper_config.TimeLimit.max_episodesteps': 100}
-kwargs = {'display': opt.display,
-          'nb_lanes': opt.lanes,
-          'traffic_rate': opt.traffic_rate,
-          'data_dir_i80': opt.data_dir_i80,
-          'state_image': opt.state_image}
+kwargs = {
+    'display': opt.display,
+    'nb_lanes': opt.lanes,
+    'traffic_rate': opt.traffic_rate,
+    'state_image': opt.state_image,
+    'store': opt.store,
+}
 
 register(
     id='Traffic-v0',
@@ -78,26 +82,33 @@ def run_episode(ep):
     done = False
 
     state, objects = env.reset()
-    while not done:
-        state, reward, done, vehicles = env.step(None)
-        env.render()
+    for t in range(opt.steps):
+        if True:
+            state, reward, vehicles = env.step(None)
+            env.render()
+        else:
+            try:
+                state, reward, vehicles = env.step(None)
+                env.render()
+            except:
+                print('exception, breaking')
+                break
 
-        # if env.collision:
-        #     print('collision, breaking')
-        #     break
+        if env.collision:
+            print('collision, breaking')
+            break
 
     runs = []
 
-    '''
-    vid = 0
-    for v in vehicles:
-        im = v._states_image[100:]
-        save_dir = 'videos/states/ex{:d}'.format(vid)
-        os.system('mkdir -p ' + save_dir)
-        for t in range(len(im)):
-            scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
-        vid += 1
-    '''
+    if opt.save_images == 1:
+        vid = 0
+        for v in vehicles:
+            im = v._states_image[100:]
+            save_dir = 'videos/states/ex{:d}'.format(vid)
+            os.system('mkdir -p ' + save_dir)
+            for t in range(len(im)):
+                scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
+            vid += 1
 
     for v in vehicles:
         if len(v._states_image) > 1:

@@ -2,6 +2,6 @@
 
 rm datagen*
 
-for seed in 11 13 25 40; do 
+for seed in {1..20}; do 
     sbatch submit_generate_data.slurm $seed
 done

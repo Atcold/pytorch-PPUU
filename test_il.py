@@ -3,10 +3,13 @@ import gym
 import numpy as np
 import os
 import pickle
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import random
 import torch
 from torch.autograd import Variable
 from gym.envs.registration import register
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', type=int, default=1)
@@ -14,12 +17,20 @@ parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=10)
-parser.add_argument('-ncond', type=int, default=4)
+parser.add_argument('-ncond', type=int, default=10)
+parser.add_argument('-npred', type=int, default=10)
+parser.add_argument('-n_samples', type=int, default=1)
+parser.add_argument('-log_dir', type=str, default='logs/')
+parser.add_argument('-models_dir', type=str, default='./models_20-shards/')
 opt = parser.parse_args()
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
+
+a_mean = torch.Tensor([0.0003, 0.0018, -0.8936])
+a_std = torch.Tensor([0.0076, 0.1673, 6.2295])
+
 
 register(
     id='Traffic-v0',
@@ -27,12 +38,16 @@ register(
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
             'nb_lanes': opt.lanes,
-            'store': True,
+            'store': False,
             'traffic_rate': opt.traffic_rate},
 )
 
 env = gym.make('Traffic-v0')
-policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
+#mfile = f'model=policy-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64.model'
+mfile = f'model=policy-cnn-een-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64-nz=2.model'
+#policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
+policy = torch.load(f'{opt.models_dir}/' + mfile)
+policy.intype('cpu')
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
@@ -56,12 +71,20 @@ def run_episode():
     done = False
 
     state, objects = env.reset()
-    for t in range(2000):
+    action = None
+    cntr = 0
+    time_until_crashed = -1
+    t = 0
+    while True:
         if t > 20:
             v = None
             for v_ in vehicles:
                 if v_._id == env.policy_car_id:
                     v = v_
+
+            if v.crashed:
+                time_until_crashed = t
+                break
 
             images = torch.stack(v._states_image).permute(0, 3, 2, 1).float()
             images /= 255.0
@@ -69,15 +92,61 @@ def run_episode():
             states, masks, actions = prepare_trajectory(v._states, v._actions)
             states = Variable(states[-opt.ncond:, 0].clone().unsqueeze(0))
             masks = Variable(masks[-opt.ncond:].unsqueeze(0))
-            action, _ = policy(images, states, actions)
-            print(f'dv = {action.data[0][0][2]:0.4f}, (dx, dy) = ({action.data[0][0][0]:0.4f}, {action.data[0][0][1]:0.4f})')
-            action = action.data[0][0].numpy()
+            if images.size(1) < opt.ncond:
+                action_ = None
+            else:
+                if action is None or cntr == opt.npred:
+                    '''
+                    sampled_actions = []
+                    for s in range(opt.n_samples):
+                    action, _ = policy(images, states, None)
+                    sampled_actions.append(action)
+                    sampled_actions = torch.stack(sampled_actions).squeeze().data
+
+                    fig = plt.figure()
+                    ax = Axes3D(fig)
+                    for s in range(opt.n_samples):
+                    ax.scatter(range(0, opt.npred), sampled_actions[s, :, 1], sampled_actions[s, :, 2])
+                    pdb.set_trace()
+                    ax.set_xlabel('time')
+                    ax.set_ylabel('angle')
+                    ax.set_zlabel('speed')
+                    plt.show()
+                    '''
+
+#                    print('sampling new action sequence')
+                    action, _ = policy(images, states, None)
+                    action *= Variable(a_std.view(1, 1, 3))
+                    action += Variable(a_mean.view(1, 1, 3))
+                    cntr = 0
+                action_ = action.data[0][cntr].numpy()
+#                print(f'dv = {action_[2]:0.4f}, (dx, dy) = ({action_[0]:0.4f}, {action_[1]:0.4f})')
+                cntr += 1
         else:
-            action = None
-        state, reward, done, vehicles = env.step(action)
+            action_ = None
+
+        state, reward, done, vehicles = env.step(action_)
         env.render()
+        t += 1
 
 
+        '''
+        try:
+            state, reward, done, vehicles = env.step(action_)
+            env.render()
+        except:
+            break
+            '''
+
+    return time_until_crashed
+
+
+crash_times = []
+os.system(f'mkdir -p {opt.log_dir}')
 for i in range(opt.n_episodes):
     print(f'episode {i + 1}/{opt.n_episodes}')
-    runs = run_episode()
+    time_until_crashed = run_episode()
+    print('time until crashed: ' + str(time_until_crashed))
+    if time_until_crashed != -1:
+        crash_times.append(time_until_crashed)
+    torch.save(torch.Tensor(time_until_crashed), f'{opt.log_dir}/test_il_mfile={mfile}_seed={opt.seed}.pth')

@@ -59,7 +59,7 @@ class RealTraffic(StatefulEnv):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, data_dir_i80='', **kwargs):
+    def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6
         kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
@@ -78,7 +78,7 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        file_name = data_dir_i80 + '/trajectories-0500-0515.txt'
+        file_name = './data_i80/trajectories-0500-0515.txt'
         self.df = self._get_data_frame(file_name)
         self.vehicles_history = set()
 
@@ -133,7 +133,7 @@ class RealTraffic(StatefulEnv):
 
         self.frame += 1
 
-        return None, None, None, None
+        return None, None, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
         if mode == 'human':

@@ -1,4 +1,5 @@
 #!/bin/bash
 
-mkdir -p models/
-scp mbhenaff@access.cims.nyu.edu:/misc/vlgscratch4/LecunGroup/nvidia-collab/models_40-shards/* models/
+mdir=models_20-shards
+mkdir -p $mdir/
+scp mbhenaff@access.cims.nyu.edu:/misc/vlgscratch4/LecunGroup/nvidia-collab/$mdir/* $mdir/

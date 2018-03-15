@@ -85,8 +85,8 @@ class Car:
         self._states_image = list()
         self._actions = list()
         self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
-        self.pid_k1 = 0.01 + np.random.normal(0, 0.005)
-        self.pid_k2 = 0.3 + np.random.normal(0, 0.02)
+        self.pid_k1 = np.random.normal(1e-4, 1e-5)
+        self.pid_k2 = np.random.normal(3e-3, 1e-4)
 
     def get_state(self):
         state = torch.zeros(4)
@@ -96,61 +96,81 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
+    def _compute_cost(self, s1, s2):
+        diff = -torch.abs(s1[0:2] - s2[0:2])
+        diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
+        c = torch.prod(torch.exp(diff))
+        return c
+
     def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
         obs = torch.zeros(n_cars, 2, 2)
         mask = torch.zeros(n_cars)
         obs = obs.view(n_cars, 4)
+        cost = 0
 
-        obs[0].copy_(self.get_state())
+        vstate = self.get_state()
+        obs[0].copy_(vstate)
 
         if left_vehicles:
             if left_vehicles[0] is not None:
-                obs[1].copy_(left_vehicles[0].get_state())
+                s = left_vehicles[0].get_state()
+                obs[1].copy_(s)
                 mask[1] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
-                obs[1].copy_(self.get_state())
+                obs[1].copy_(vstate)
 
             if left_vehicles[1] is not None:
-                obs[2].copy_(left_vehicles[1].get_state())
+                s = left_vehicles[1].get_state()
+                obs[2].copy_(s)
                 mask[2] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[2].copy_(self.get_state())
+                obs[2].copy_(vstate)
         else:
-            obs[1].copy_(self.get_state())
-            obs[2].copy_(self.get_state())
+            obs[1].copy_(vstate)
+            obs[2].copy_(vstate)
 
         if mid_vehicles[0] is not None:
-            obs[3].copy_(mid_vehicles[0].get_state())
+            s = mid_vehicles[0].get_state()
+            obs[3].copy_(s)
             mask[3] = 1
+            cost = max(cost, self._compute_cost(s, vstate))
         else:
-            obs[3].copy_(self.get_state())
+            obs[3].copy_(vstate)
 
         if mid_vehicles[1] is not None:
-            obs[4].copy_(mid_vehicles[1].get_state())
+            s = mid_vehicles[1].get_state()
+            obs[4].copy_(s)
             mask[4] = 1
+            cost = max(cost, self._compute_cost(s, vstate))
         else:
-            obs[4].copy_(self.get_state())
+            obs[4].copy_(vstate)
 
         if right_vehicles:
             if right_vehicles[0] is not None:
-                obs[5].copy_(right_vehicles[0].get_state())
+                s = right_vehicles[0].get_state()
+                obs[5].copy_(s)
                 mask[5] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[5].copy_(self.get_state())
+                obs[5].copy_(vstate)
 
             if right_vehicles[1] is not None:
-                obs[6].copy_(right_vehicles[1].get_state())
+                s = right_vehicles[1].get_state()
+                obs[6].copy_(s)
                 mask[6] = 1
+                cost = max(cost, self._compute_cost(s, vstate))
             else:
-                obs[6].copy_(self.get_state())
+                obs[6].copy_(vstate)
         else:
-            obs[5].copy_(self.get_state())
-            obs[6].copy_(self.get_state())
+            obs[5].copy_(vstate)
+            obs[6].copy_(vstate)
 
-        return obs, mask
+        return obs, mask, cost
 
     def draw(self, surface, c=False, mode='human', offset=0):
         """
@@ -177,17 +197,17 @@ class Car:
         """
         Update current position, given current velocity and acceleration
         """
-        # Vehicle state definition
-        vehicle_state = np.array((*self._position, *self._direction, self._speed))
-        # State integration
-        d_position_dt = self._speed * self._direction
-        vehicle_state[:2] += d_position_dt * self._dt
-        vehicle_state[2:] += action * self._dt
+        # Actions: acceleration (a), steering (b)
+        a, b = action
 
-        # Split individual components (and normalise direction)
-        self._position = vehicle_state[0:2]
-        self._direction = vehicle_state[2:4] / np.linalg.norm(vehicle_state[2:4])
-        self._speed = vehicle_state[4]
+        # State integration
+        self._position += self._speed * self._direction * self._dt
+
+        ortho_direction = np.array((self._direction[1], -self._direction[0]))
+        direction_vector = self._direction + ortho_direction * b * self._speed * self._dt
+        self._direction = direction_vector / np.linalg.norm(direction_vector)
+
+        self._speed += a * self._dt
 
         # Deal with latent variable and visual indicator
         if self._passing and abs(self._error) < 0.5:
@@ -267,7 +287,8 @@ class Car:
         Bring together _pass, brake
         :return: acceleration, d_theta
         """
-        d_velocity_dt = 0
+        b = np.zeros(2)
+        a = 0
 
         car_ahead = observation[1][1]
         if car_ahead:
@@ -279,14 +300,14 @@ class Car:
                     elif self._safe_right(observation):
                         self._pass_right()
                     else:
-                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+                        a = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
                 else:
                     if self._safe_right(observation):
                         self._pass_right()
                     elif self._safe_left(observation):
                         self._pass_left()
                     else:
-                        d_velocity_dt = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
+                        a = self._brake(min((self.safe_distance / distance) ** 0.2 - 1, 1))
 
             elif distance <= 0:
                 self._colour = colours['r']
@@ -297,11 +318,14 @@ class Car:
                 self._pass_right()
                 self._target_speed *= 0.95
 
-        if d_velocity_dt == 0:
-            d_velocity_dt = 1 * (self._target_speed - self._speed)
+        if a == 0:
+            a = 1 * (self._target_speed - self._speed)
 
         if random.random() < 0.1:
-            self._target_lane_ = self._target_lane + np.random.normal(0, self.LANE_W * 0.1)
+            self._target_lane_ = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+
+        if random.random() < 0.05 and not self._passing:
+            self._target_speed *= (1 + np.random.normal(0, 0.05))
 
         error = -(self._target_lane_ - self._position[1])
         d_error = error - self._error
@@ -309,10 +333,8 @@ class Car:
         if abs(d_error) > d_clip:
             d_error *= d_clip / abs(d_error)
         self._error = error
-        ortho_direction = np.array((self._direction[1], -self._direction[0]))
-        d_direction_dt = ortho_direction * (self.pid_k1 * error + self.pid_k2 * d_error)
-
-        action = np.array((*d_direction_dt, d_velocity_dt))  # dx/dt, car state temporal derivative
+        b = self.pid_k1 * error + self.pid_k2 * d_error
+        action = np.array((a, b))  # dx/dt, car state temporal derivative
         return action
 
     def _safe_left(self, state):
@@ -345,7 +367,7 @@ class Car:
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
         sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
         sub_rot_array[:, :, 0] *= 4
-        assert(sub_rot_array.max() <= 255.0)
+        assert (sub_rot_array.max() <= 255.0)
         return torch.from_numpy(sub_rot_array)
 
     def store(self, object_name, object_):
@@ -460,8 +482,8 @@ class StatefulEnv(core.Env):
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
-        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t \
-                or len(self.vehicles) == 0:
+        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(
+                self.vehicles) == 0:
             if free_lanes:
                 car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id)
                 self.next_car_id += 1
@@ -484,6 +506,12 @@ class StatefulEnv(core.Env):
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
             # Provide a list of (up to) 6 neighbouring vehicles
+            if len(lane_set) == 0:
+                lanes_occupied = v.get_lane_set(self.lanes)
+                for l in lanes_occupied: self.lane_occupancy[l].remove(v)
+                self.vehicles.remove(v)
+                continue
+
             current_lane_idx = lane_set.pop()
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
@@ -500,41 +528,60 @@ class StatefulEnv(core.Env):
             else:
                 action = v.policy(state)
 
+            for place in state:
+                if place is not None:
+                    for car in place:
+                        if car is not None:
+                            s1 = car.get_state()
+                            s2 = v.get_state()
+                            if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
+                                v.crashed = True
+            #                                print('crash')
+
+            #            if car_ahead:
+            #                distance = car_ahead - self
+
             # Check for accident
             if v.crashed: self.collision = v
 
-            if self.store:
+            v._last_action = action
+            if self.store or v._id == self.policy_car_id:
                 v.store('state', state)
                 v.store('action', action)
 
             # update the cars
             v.step(action)
 
-        done = False
-
-        if self.frame >= 10000:
-            done = True
-
-        if done:
-            print(f'Episode ended, reward: {reward}, t={self.frame}')
+        '''
+        for v in self.vehicles:
+            cost = v._states[-1][2]
+            if cost > 0.2:
+                img = v._states_image[-1]
+                hsh = random.random()
+                scipy.misc.imsave(f'cost_images/high/im{hsh:.5f}_cost{cost}.png', img.numpy())
+            elif cost < 0.01 and random.random() < 0.01:
+                img = v._states_image[-1]
+                hsh = random.random()
+                scipy.misc.imsave(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
+        '''
 
         self.frame += 1
 
         obs = []
         # TODO: cost function
         cost = 0
-        return obs, cost, done, self.vehicles
+        return obs, cost, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
-        target_lane = self.lane_occupancy[current_lane_idx + d_lane]
+        # Shallow copy the target lane
+        target_lane = self.lane_occupancy[current_lane_idx + d_lane][:]
+        # If I find myself in the target list, remove me
+        if v in target_lane: target_lane.remove(v)
         # Find me in the lane
-        if d_lane == 0:
-            my_idx = target_lane.index(v)
-        else:
-            my_idx = bisect.bisect(target_lane, v)
+        my_idx = bisect.bisect(target_lane, v)
         behind = target_lane[my_idx - 1] if my_idx > 0 else None
-        if d_lane == 0: my_idx += 1
         ahead = target_lane[my_idx] if my_idx < len(target_lane) else None
+
         return behind, ahead
 
     def render(self, mode='human', width_height=None, scale=1.):
@@ -590,7 +637,7 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                if self.store:
+                if self.store or v._id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):
