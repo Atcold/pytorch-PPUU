@@ -3,6 +3,7 @@ from traffic_gym import StatefulEnv, Car, colours
 import pygame
 import pandas as pd
 import numpy as np
+import pdb
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -58,7 +59,7 @@ class RealTraffic(StatefulEnv):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, **kwargs):
+    def __init__(self, data_dir_i80='', **kwargs):
         kwargs['nb_lanes'] = 6
         kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
@@ -77,13 +78,12 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        self.df = self._get_data_frame()
+        file_name = data_dir_i80 + '/trajectories-0500-0515.txt'
+        self.df = self._get_data_frame(file_name)
         self.vehicles_history = set()
 
     @staticmethod
-    def _get_data_frame():
-        file_name = '/Users/atcold/Scratch/I-80/'
-        file_name += '/vehicle-trajectory-data/0500pm-0515pm/trajectories-0500-0515.txt'
+    def _get_data_frame(file_name):
         return pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',

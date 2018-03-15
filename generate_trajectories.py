@@ -16,6 +16,7 @@ parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
+parser.add_argument('-data_dir_i80', type=str, default='./data_i80/')
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
 opt = parser.parse_args()
@@ -35,6 +36,7 @@ tags = {'wrapper_config.TimeLimit.max_episodesteps': 100}
 kwargs = {'display': opt.display,
           'nb_lanes': opt.lanes,
           'traffic_rate': opt.traffic_rate,
+          'data_dir_i80': opt.data_dir_i80,
           'state_image': opt.state_image}
 
 register(

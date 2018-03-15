@@ -557,6 +557,7 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
+                    pdb.set_trace()
 
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
