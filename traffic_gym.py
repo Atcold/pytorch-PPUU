@@ -78,8 +78,8 @@ class Car:
         self._states_image = list()
         self._actions = list()
         self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
-        self.pid_k1 = 0.01 + np.random.normal(0, 0.005)
-        self.pid_k2 = 0.3 + np.random.normal(0, 0.02)
+        self.pid_k1 = np.random.normal(1e-4, 1e-5)
+        self.pid_k2 = np.random.normal(3e-3, 1e-4)
 
     def get_state(self):
         state = torch.zeros(4)
@@ -197,7 +197,7 @@ class Car:
         self._position += self._speed * self._direction * self._dt
 
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
-        direction_vector = self._direction + ortho_direction * b * self._dt
+        direction_vector = self._direction + ortho_direction * b * self._speed * self._dt
         self._direction = direction_vector / np.linalg.norm(direction_vector)
 
         self._speed += a * self._dt
