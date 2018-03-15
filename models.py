@@ -765,6 +765,114 @@ class PolicyEEN(nn.Module):
 
 
 
+
+
+
+
+
+
+
+class PolicyEEN_LP(nn.Module):
+    def __init__(self, opt, mfile):
+        super(PolicyEEN, self).__init__()
+        self.opt = opt
+
+        if mfile == '':
+            self.encoder = policy_encoder(opt)
+            self.fc = nn.Sequential(
+                nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
+                nn.BatchNorm1d(opt.n_hidden),
+                nn.ReLU(),
+                nn.Linear(opt.n_hidden, opt.n_hidden),
+                nn.BatchNorm1d(opt.n_hidden),
+                nn.ReLU(),
+                nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
+            )
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            pretrained_model = torch.load(mfile)
+            self.encoder1 = pretrained_model.encoder
+            self.fc1 = pretrained_model.fc
+            self.encoder2 = copy.deepcopy(pretrained_model.encoder)
+            self.fc2 = copy.deepcopy(pretrained_model.fc)
+
+        self.hsize = opt.nfeature*12*2
+
+        self.z_network = nn.Sequential(
+            nn.BatchNorm1d(opt.n_actions*opt.npred),
+            nn.Linear(opt.n_actions*opt.npred, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.BatchNorm1d(opt.n_hidden),
+            nn.Linear(opt.n_hidden, opt.nz)
+            )
+
+        self.z_expander = nn.Sequential(
+            nn.Linear(opt.nz, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
+        )
+
+
+    def save_z(self, z):
+        if len(self.p_z) == 0:
+            self.p_z = z.data.cpu()
+        else:
+            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
+
+    def sample_z(self, bsize):
+        z = []
+        for b in range(bsize):
+            z.append(random.choice(self.p_z))
+        z = torch.stack(z)
+        if self.use_cuda: z = z.cuda()
+        return Variable(z)
+
+
+    def forward(self, state_images, states, actions, save_z=False):
+        bsize = state_images.size(0)
+        if actions is not None:
+            h1 = self.encoder1(state_images, states)
+            a1 = self.fc1(h1)
+            a1 = a1.view(bsize, self.opt.npred, self.opt.n_actions)
+            error = actions - a1
+            error = Variable(error.data)
+            z = self.z_network(error.view(bsize, -1))
+            z_exp = self.z_expander(z)
+            if save_z:
+                self.save_z(z)
+        else:
+            z = self.sample_z(bsize)
+            z_exp = self.z_expander(z)
+
+        h2 = self.encoder2(state_images, states)
+        h2 = h2 + z_exp
+        a2 = self.fc2(h2)
+        a2 = a2.view(bsize, self.opt.npred, self.opt.n_actions)
+        return a2, Variable(torch.zeros(1))
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+            self.use_cuda = True
+        elif t == 'cpu':
+            self.cpu()
+            self.use_cuda = False
+
+
+
+
+
+
+
+
+
+
+
+
 class PolicyCNN_VAE(nn.Module):
     def __init__(self, opt, mfile=''):
         super(PolicyCNN_VAE, self).__init__()
