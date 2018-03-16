@@ -18,6 +18,8 @@ parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
+parser.add_argument('-steps', type=int, default=500)
+parser.add_argument('-v', type=str, default='0')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -32,18 +34,31 @@ os.system("mkdir -p " + opt.data_dir)
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
 print(f'Will save as {data_file}')
 
+tags = {'wrapper_config.TimeLimit.max_episodesteps': 100}
+kwargs = {
+    'display': opt.display,
+    'nb_lanes': opt.lanes,
+    'traffic_rate': opt.traffic_rate,
+    'state_image': opt.state_image,
+    'store': opt.store,
+}
+
 register(
     id='Traffic-v0',
     entry_point='traffic_gym:StatefulEnv',
-    tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
-    kwargs={'display': opt.display,
-            'nb_lanes': opt.lanes,
-            'store': opt.store,
-            'traffic_rate': opt.traffic_rate,
-            'state_image': opt.state_image},
+    tags=tags,
+    kwargs=kwargs
 )
 
-env = gym.make('Traffic-v0')
+register(
+    id='Traffic-v1',
+    entry_point='traffic_gym_v1:RealTraffic',
+    tags=tags,
+    kwargs=kwargs
+)
+
+env = gym.make('Traffic-v' + opt.v)
+
 
 # parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
 # not used for images.
@@ -67,13 +82,13 @@ def run_episode(ep):
     done = False
 
     state, objects = env.reset()
-    for t in range(500):
+    for t in range(opt.steps):
         if True:
-            state, reward, done, vehicles = env.step(None)
+            state, reward, vehicles = env.step(None)
             env.render()
         else:
             try:
-                state, reward, done, vehicles = env.step(None)
+                state, reward, vehicles = env.step(None)
                 env.render()
             except:
                 print('exception, breaking')

@@ -8,11 +8,13 @@ import scipy.misc
 import sys
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
+import os
+from scipy.misc import imsave
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
 LANE_W = 20  # pixels / 3.7 m, lane width
-SCALE = LANE_W / 3.7
+SCALE = LANE_W / 3.7  # pixels per metre
 
 colours = {
     'w': (255, 255, 255),
@@ -49,22 +51,27 @@ MAX_SPEED = 130  # km/h
 
 
 class Car:
+
+    # Global constants
+    SCALE = SCALE
+    LANE_W = LANE_W
+
     def __init__(self, lanes, free_lanes, dt, car_id):
         """
         Initialise a sedan on a random lane
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
         :param dt: temporal updating interval
         """
-        self._length = round(4.8 * SCALE)
-        self._width = round(1.8 * SCALE)
+        self._length = round(4.8 * self.SCALE)
+        self._width = round(1.8 * self.SCALE)
         self._direction = np.array((1, 0), np.float)
-        self._id = car_id
+        self.id = car_id
         lane = random.choice(tuple(free_lanes))
         self._position = np.array((
             -self._length,
             lanes[lane]['mid']
         ), np.float)
-        self._target_speed = max(30, (MAX_SPEED - random.randrange(0, 30) - 10 * lane)) * 1000 / 3600 * SCALE  # m / s
+        self._target_speed = max(30, (MAX_SPEED - random.randrange(0, 30) - 10 * lane)) * 1000 / 3600 * self.SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
         self._colour = colours['c']
@@ -89,7 +96,8 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
-    def _compute_cost(self, s1, s2):
+    @staticmethod
+    def _compute_cost(s1, s2):
         diff = -torch.abs(s1[0:2] - s2[0:2])
         diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
         c = torch.prod(torch.exp(diff))
@@ -178,10 +186,10 @@ class Car:
         rectangle = (int(x), int(y), self._length, self._width)
         if mode == 'human':
             if c:
-                pygame.draw.rect(surface, (0, 255, 0), (int(x - 15), int(y - 15), self._length + 20, self._width + 20),
-                                 2)
+                pygame.draw.rect(surface, (0, 255, 0),
+                                 (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
             draw_rect(surface, self._colour, rectangle, self._direction, 3)
-            draw_text(surface, str(self._id), (x, y - self._width // 2), 20, colours['b'])
+            draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
             if self._braked: self._colour = colours['g']
         if mode == 'machine':
             draw_rect(surface, colours['g'], rectangle, self._direction)
@@ -238,20 +246,20 @@ class Car:
         # Maximum braking acceleration, eq. (1) from
         # http://www.tandfonline.com/doi/pdf/10.1080/16484142.2007.9638118
         g, mu = 9.81, 0.9  # gravity and friction coefficient
-        acceleration = -fraction * g * mu * SCALE
+        acceleration = -fraction * g * mu * self.SCALE
         self._colour = colours['y']
         self._braked = True
         return acceleration
 
     def _pass_left(self):
-        self._target_lane = self._position[1] - LANE_W
+        self._target_lane = self._position[1] - self.LANE_W
         self._target_lane_ = self._target_lane_
         self._passing = True
         self._colour = colours['m']
         self._braked = False
 
     def _pass_right(self):
-        self._target_lane = self._position[1] + LANE_W
+        self._target_lane = self._position[1] + self.LANE_W
         self._target_lane_ = self._target_lane_
         self._passing = True
         self._colour = colours['m']
@@ -350,7 +358,6 @@ class Car:
         d = self._direction
         x_y = np.array((abs(d) @ width_height, abs(d) @ width_height[::-1]))
         centre = self._position + (self._length // 2, 0)
-        # pygame.draw.rect(screen_surface, (0, 128, 128), (*(centre + m - x_y / 2), *x_y), 1)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, theta)
@@ -372,15 +379,30 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
+    def dump_state_image(self, save_dir='scratch/'):
+        save_dir = save_dir + str(self.id)
+        os.system('mkdir -p ' + save_dir)
+        # im = self._states_image[100:]
+        im = self._states_image
+        for t in range(len(im)):
+            imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+
 
 class StatefulEnv(core.Env):
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, traffic_rate=15, state_image=True, store=True):
+    # Environment's car class
+    EnvCar = Car
 
-        self.offset = int(1.5 * LANE_W)
-        self.screen_size = (80 * LANE_W, nb_lanes * LANE_W + self.offset + LANE_W // 2)
+    # Global constants
+    SCALE = SCALE
+    LANE_W = LANE_W
+
+    def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=True, store=True):
+
+        self.offset = int(1.5 * self.LANE_W)
+        self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
         self.fps = fps  # updates per second
-        self.delta_t = 1 / fps  # simulation timing interval
+        self.delta_t = delta_t or 1 / fps  # simulation timing interval
         self.nb_lanes = nb_lanes  # total number of lanes
         self.frame = 0  # frame index
         self.lanes = self.build_lanes(nb_lanes)  # create lanes object, list of dicts
@@ -393,6 +415,9 @@ class StatefulEnv(core.Env):
         self.state_image = state_image
         self.mean_fps = None
         self.store = store
+        self.policy_car_id = None
+        self.next_car_id = None
+        self.photos = None
 
         self.display = display
         if self.display:  # if display is required
@@ -402,9 +427,9 @@ class StatefulEnv(core.Env):
 
     def build_lanes(self, nb_lanes):
         return tuple(
-            {'min': self.offset + n * LANE_W,
-             'mid': self.offset + LANE_W / 2 + n * LANE_W,
-             'max': self.offset + (n + 1) * LANE_W}
+            {'min': self.offset + n * self.LANE_W,
+             'mid': self.offset + self.LANE_W / 2 + n * self.LANE_W,
+             'max': self.offset + (n + 1) * self.LANE_W}
             for n in range(nb_lanes)
         )
 
@@ -448,8 +473,8 @@ class StatefulEnv(core.Env):
             # Remove from the environment cars outside the screen
             if v.back > self.screen_size[0]:
                 # if this is the controlled car, pick new car
-                if v._id == self.policy_car_id:
-                    self.policy_car_id = self.vehicles[-1]._id
+                if v.id == self.policy_car_id:
+                    self.policy_car_id = self.vehicles[-1].id
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
                 self.vehicles.remove(v)
 
@@ -461,7 +486,7 @@ class StatefulEnv(core.Env):
         if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(
                 self.vehicles) == 0:
             if free_lanes:
-                car = Car(self.lanes, free_lanes, self.delta_t, self.next_car_id)
+                car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id)
                 self.next_car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
@@ -470,6 +495,12 @@ class StatefulEnv(core.Env):
 
         if self.policy_car_id == -1:
             self.policy_car_id = 0
+
+        if self.state_image:
+            # How much to look far ahead
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            look_sideways = 2 * self.LANE_W
+            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
 
         # Generate state representation for each vehicle
         for v in self.vehicles:
@@ -493,7 +524,7 @@ class StatefulEnv(core.Env):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Compute the action
-            if v._id == self.policy_car_id and policy_action is not None:
+            if v.id == self.policy_car_id and policy_action is not None:
                 action = policy_action
             else:
                 action = v.policy(state)
@@ -519,16 +550,8 @@ class StatefulEnv(core.Env):
                 v.store('state', state)
                 v.store('action', action)
 
-        # store images before updating, so that images and states are aligned in time
-        if self.state_image:
-            # How much to look far ahead
-            look_ahead = MAX_SPEED * 1000 / 3600 * SCALE
-            look_sideways = 2 * LANE_W
-            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
-
-        # update the cars
-        for v in self.vehicles:
-            v.step(v._last_action)
+            # update the cars
+            v.step(action)
 
         '''
         for v in self.vehicles:
@@ -548,7 +571,7 @@ class StatefulEnv(core.Env):
         obs = []
         # TODO: cost function
         cost = 0
-        return obs, cost, False, self.vehicles
+        return obs, cost, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         # Shallow copy the target lane
@@ -562,7 +585,7 @@ class StatefulEnv(core.Env):
 
         return behind, ahead
 
-    def render(self, mode='human', width_height=None, scale=1):
+    def render(self, mode='human', width_height=None, scale=1.):
         if mode == 'human' and self.display:
 
             # self._pause()
@@ -573,6 +596,7 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
+                    # pdb.set_trace()
 
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
@@ -581,15 +605,16 @@ class StatefulEnv(core.Env):
             # clear the screen
             self.screen.fill(colours['k'])
 
+            # background pictures
+            if self.photos:
+                for i in range(len(self.photos)):
+                    self.screen.blit(self.photos[i], self.photos_rect[i])
+
             # draw lanes
-            for lane in self.lanes:
-                sw = self.screen_size[0]  # screen width
-                draw_dashed_line(self.screen, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
-                draw_dashed_line(self.screen, colours['w'], (0, lane['max']), (sw, lane['max']), 3)
-                draw_dashed_line(self.screen, colours['r'], (0, lane['mid']), (sw, lane['mid']))
+            self._draw_lanes(self.screen)
 
             for v in self.vehicles:
-                c = (v._id == self.policy_car_id)
+                c = (v.id == self.policy_car_id)
                 v.draw(self.screen, c)
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
@@ -598,17 +623,14 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
-        #            if self.collision: self._pause()
+            # if self.collision: self._pause()
 
         if mode == 'machine':
             m = max_extension = np.linalg.norm(width_height)
             screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
-            for lane in self.lanes:
-                sw = self.screen_size[0] + 2 * max_extension  # screen width
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
-                pygame.draw.line(screen_surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
+            self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
 
             # draw vehicles
             for v in self.vehicles:
@@ -618,6 +640,22 @@ class StatefulEnv(core.Env):
             for i, v in enumerate(self.vehicles):
                 if self.store or v._id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
+
+    def _draw_lanes(self, surface, mode='human', offset=0):
+        if mode == 'human':
+            lanes = self.lanes
+            for lane in lanes:
+                sw = self.screen_size[0]  # screen width
+                draw_dashed_line(surface, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
+                draw_dashed_line(surface, colours['r'], (0, lane['mid']), (sw, lane['mid']))
+            pygame.draw.line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
+            pygame.draw.line(surface, colours['w'], (0, lanes[-1]['max']), (sw, lanes[-1]['max']), 3)
+        if mode == 'machine':
+            for lane in self.lanes:
+                sw = self.screen_size[0] + 2 * offset  # screen width
+                m = offset
+                pygame.draw.line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
+                pygame.draw.line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
 
     def _pause(self):
         pause = True
