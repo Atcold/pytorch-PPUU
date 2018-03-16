@@ -435,7 +435,7 @@ class FwdCNN_VAE_LP(nn.Module):
                 z_exp = self.z_expander(z1)
             else:
                 # we are generating samples
-                z, _, _ = self.q_network(inputs, sample=True)
+                z, _, _ = self.q_network(h_x, sample=True)
                 z_exp = self.z_expander(z)
 
             h = h_x + z_exp.squeeze()
