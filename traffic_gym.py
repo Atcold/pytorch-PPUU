@@ -5,7 +5,7 @@ import math
 import random
 import numpy as np
 import scipy.misc
-import sys
+import sys, pickle
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
 import os
@@ -380,10 +380,14 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
 
     def dump_state_image(self, save_dir='scratch/'):
-        save_dir = save_dir + str(self.id)
         os.system('mkdir -p ' + save_dir)
         # im = self._states_image[100:]
         im = self._states_image
+        # save in torch format
+        im_pth = torch.stack(im).permute(0, 3, 2, 1)
+        pickle.dump({'images': im_pth, 'actions': torch.stack(self._actions)}, open(save_dir + f'/car{self.id}.pkl', 'wb'))
+        save_dir = save_dir + '/' + str(self.id)
+        os.system('mkdir -p ' + save_dir)
         for t in range(len(im)):
             imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
