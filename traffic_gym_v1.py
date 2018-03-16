@@ -31,24 +31,48 @@ class RealCar(Car):
         self._position = self._trajectory.loc[self._trajectory.index[0], ['x', 'y']].values
         self._df = df
         self._frame = 0
-        self._direction = np.array((1., 0.))
+        self._dt = 1 / 10
+        self._direction = self._get('direction', 0)
+        self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
         self.off_screen = False
         self._states_image = list()
+        self._passing = False
 
-    def step(self, action):
-        self._frame += 1
-        position = self._position
-        df = self._trajectory
-        self._position = df.loc[df.index[self._frame], ['x', 'y']].values
-        new_direction = self._position - position
-        self._direction = new_direction if np.linalg.norm(new_direction) > 1 else self._direction
-        self._direction /= np.linalg.norm(self._direction)
-        self.off_screen = self._frame >= len(df) - self._k
+    def _get(self, what, k):
+        trajectory = self._trajectory
+        next_ = trajectory.index[k + 1]
+        now = trajectory.index[k]
+        direction_vector = trajectory.loc[next_].values - trajectory.loc[now].values
+        if what == 'direction':
+            return direction_vector / (np.linalg.norm(direction_vector) + 1e-6)
+        if what == 'speed':
+            return np.linalg.norm(direction_vector) / self._dt
+
+    # This was trajectories reply (to be used as ground truth, without any policy and action generation)
+    # def step(self, action):
+    #     self._frame += 1
+    #     position = self._position
+    #     df = self._trajectory
+    #     self._position = df.loc[df.index[self._frame], ['x', 'y']].values
+    #     new_direction = self._position - position
+    #     self._direction = new_direction if np.linalg.norm(new_direction) > 1 else self._direction
+    #     self._direction /= np.linalg.norm(self._direction)
+    #     self.off_screen = self._frame >= len(df) - self._k
 
     def policy(self, observation):
-        return None
+        self._frame += 1
+        self.off_screen = self._frame >= len(self._df) - self._k - 1
+
+        new_speed = self._get('speed', self._frame)
+        a = (new_speed - self._speed) / self._dt
+
+        ortho_direction = np.array((self._direction[1], -self._direction[0]))
+        new_direction = self._get('direction', self._frame)
+        b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
+
+        return np.array((a, b))
 
 
 class RealTraffic(StatefulEnv):
@@ -129,7 +153,8 @@ class RealTraffic(StatefulEnv):
             self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
 
         for v in self.vehicles:
-            v.step(None)
+            action = v.policy(None)
+            v.step(action)
 
         self.frame += 1
 

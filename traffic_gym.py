@@ -96,7 +96,8 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
-    def _compute_cost(self, s1, s2):
+    @staticmethod
+    def _compute_cost(s1, s2):
         diff = -torch.abs(s1[0:2] - s2[0:2])
         diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
         c = torch.prod(torch.exp(diff))
@@ -595,7 +596,7 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
-                    pdb.set_trace()
+                    # pdb.set_trace()
 
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
