@@ -356,7 +356,7 @@ class Car:
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
-        x_y = np.array((abs(d) @ width_height, abs(d) @ width_height[::-1]))
+        x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
