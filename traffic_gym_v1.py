@@ -4,6 +4,7 @@ import pygame
 import pandas as pd
 import numpy as np
 import pdb
+import bisect
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -37,7 +38,9 @@ class RealCar(Car):
         self._colour = colours['c']
         self._braked = False
         self.off_screen = False
+        self._states = list()
         self._states_image = list()
+        self._actions = list()
         self._passing = False
 
     def _get(self, what, k):
@@ -74,6 +77,11 @@ class RealCar(Car):
 
         return np.array((a, b))
 
+    @property
+    def current_lane(self):
+        # 1: left-most, 6: right-most, 7: ramp
+        return self._df.at[self._df.index[self._frame], 'Lane Identification'] - 1
+
 
 class RealTraffic(StatefulEnv):
     # Environment's car class
@@ -105,6 +113,7 @@ class RealTraffic(StatefulEnv):
         file_name = './data_i80/trajectories-0500-0515.txt'
         self.df = self._get_data_frame(file_name)
         self.vehicles_history = set()
+        self.lane_occupancy = None
 
     @staticmethod
     def _get_data_frame(file_name):
@@ -141,10 +150,16 @@ class RealTraffic(StatefulEnv):
                 this_vehicle = df['Vehicle ID'] == vehicle_id
                 car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset)
                 self.vehicles.append(car)
-        self.vehicles_history |= vehicles
+        self.vehicles_history |= vehicles  # union set operation
+
+        self.lane_occupancy = [[] for _ in range(7)]
         for v in self.vehicles[:]:
             if v.off_screen:
                 self.vehicles.remove(v)
+            else:
+                # Insort it in my vehicle list
+                lane_idx = v.current_lane
+                bisect.insort(self.lane_occupancy[lane_idx], v)
 
         if self.state_image:
             # How much to look far ahead
@@ -153,8 +168,25 @@ class RealTraffic(StatefulEnv):
             self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
 
         for v in self.vehicles:
-            action = v.policy(None)
+
+            # Generate symbolic state
+            lane_idx = v.current_lane
+            left_vehicles = self._get_neighbours(lane_idx, -1, v) \
+                if 0 < lane_idx < 6 or lane_idx == 6 and v.front > 18 * LANE_W else None
+            mid_vehicles = self._get_neighbours(lane_idx, 0, v)
+            right_vehicles = self._get_neighbours(lane_idx, + 1, v) \
+                if lane_idx < 5 or lane_idx == 5 and v.front > 18 * LANE_W else None
+            state = left_vehicles, mid_vehicles, right_vehicles
+
+            # Sample an action based on the current state
+            action = v.policy(state)
+
+            # Perform such action
             v.step(action)
+
+            # Store state and action pair
+            v.store('state', state)
+            v.store('action', action)
 
         self.frame += 1
 

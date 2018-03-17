@@ -288,7 +288,6 @@ class Car:
         Bring together _pass, brake
         :return: acceleration, d_theta
         """
-        b = np.zeros(2)
         a = 0
 
         car_ahead = observation[1][1]
@@ -545,7 +544,6 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            v._last_action = action
             if self.store or v._id == self.policy_car_id:
                 v.store('state', state)
                 v.store('action', action)
