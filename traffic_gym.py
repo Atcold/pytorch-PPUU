@@ -184,15 +184,21 @@ class Car:
         """
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
+
+        # Hack... clip direction between -20 and +20
+        d = self._direction
+        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        d = np.array((np.cos(alpha), np.sin(alpha)))
+
         if mode == 'human':
             if c:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
-            draw_rect(surface, self._colour, rectangle, self._direction, 3)
+            draw_rect(surface, self._colour, rectangle, d, 3)
             draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
             if self._braked: self._colour = colours['g']
         if mode == 'machine':
-            draw_rect(surface, colours['g'], rectangle, self._direction)
+            draw_rect(surface, colours['g'], rectangle, d)
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
         """
@@ -288,7 +294,6 @@ class Car:
         Bring together _pass, brake
         :return: acceleration, d_theta
         """
-        b = np.zeros(2)
         a = 0
 
         car_ahead = observation[1][1]
@@ -356,7 +361,12 @@ class Car:
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
-        x_y = np.array((abs(d) @ width_height, abs(d) @ width_height[::-1]))
+
+        # Hack... clip direction between -20 and +20
+        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        # d = np.array((np.cos(alpha), np.sin(alpha)))
+
+        x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
@@ -549,7 +559,6 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            v._last_action = action
             if self.store or v._id == self.policy_car_id:
                 v.store('state', state)
                 v.store('action', action)
