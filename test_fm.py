@@ -15,9 +15,9 @@ parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1)
-parser.add_argument('-ncond', type=int, default=4)
+parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=100)
-parser.add_argument('-tie_action', type=int, default=1)
+parser.add_argument('-tie_action', type=int, default=0)
 parser.add_argument('-sigmout', type=int, default=1)
 parser.add_argument('-n_samples', type=int, default=5)
 opt = parser.parse_args()
@@ -36,13 +36,8 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-#opt.mfile = 'model=fwd-cnn2-bsize=32-ncond=4-npred=50-lrt=0.001-nhidden=100-nfeature=96-sigmout=1-tieact=0.model'
-#opt.mfile = 'model=fwd-cnn-vae-lp-bsize=32-ncond=4-npred=20-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0-nz=16-beta=0.001.model'
-#opt.mfile = 'model=fwd-cnn-vae-lp-bsize=32-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0-nz=8-beta=0.001.model'
-#opt.mfile = 'model=fwd-cnn-bsize=32-ncond=4-npred=20-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0.model'
-#opt.mfile = 'model=fwd-cnn-een-fp-bsize=32-ncond=4-npred=20-lrt=0.0001-nhidden=100-nfeature=96-sigmout=1-tieact=0-nz=8.model'
-#opt.mfile = 'model=fwd-cnn-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-sigmout=1-tieact=0.model'
-opt.mfile = 'model=fwd-cnn-een-fp-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-sigmout=1-tieact=0-nz=8.model'
+#opt.mfile = 'model=fwd-cnn-een-fp-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-sigmout=1-tieact=0-nz=8.model'
+opt.mfile = 'model=fwd-cnn-vae-lp-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-zeroact-nz=32-beta=0.01-warmstart=1.model'
 model = torch.load('models_20-shards/' + opt.mfile)
 model.opt.tie_action = 0
 model.opt.npred = opt.npred
@@ -54,7 +49,7 @@ def run_episode():
 
     state, objects = env.reset()
     for t in range(2000):
-        if t > 200:
+        if t > 300:
             vid = 0
             for v in vehicles:
                 print('here')
@@ -143,7 +138,7 @@ def run_episode():
 
         else:
             action = None
-        state, reward, done, vehicles = env.step(action)
+        state, reward, vehicles = env.step(action)
         env.render()
 
 

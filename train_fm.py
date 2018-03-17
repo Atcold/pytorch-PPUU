@@ -23,12 +23,13 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
-parser.add_argument('-tie_action', type=int, default=1)
+parser.add_argument('-tie_action', type=int, default=0)
 parser.add_argument('-beta', type=float, default=1.0)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
-parser.add_argument('-zeroact', type=int, default=0)
+parser.add_argument('-zeroact', type=int, default=1)
+parser.add_argument('-warmstart', type=int, default=1)
 opt = parser.parse_args()
 
 
@@ -40,7 +41,6 @@ data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pk
 dataloader = DataLoader(data_file, opt)
 
 
-
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-tieact={opt.tie_action}'
 
 if opt.zeroact == 1:
@@ -49,9 +49,11 @@ if opt.zeroact == 1:
 if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
+    opt.model_file += f'-warmstart={opt.warmstart}'
 
 if 'een' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
+    opt.model_file += f'-warmstart={opt.warmstart}'
 
 print(f'will save model as {opt.model_file}')
 
@@ -61,7 +63,11 @@ opt.height = 97
 opt.width = 20
 
 
-prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred=20-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-sigmout=1-tieact=0.model'
+if opt.warmstart == 1:
+    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/'
+    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
+else:
+    prev_model = ''
 
 if opt.model == 'fwd-cnn-vae-fp':
     model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
@@ -71,6 +77,8 @@ elif opt.model == 'fwd-cnn-een-lp':
     model = models.FwdCNN_EEN_LP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-een-fp':
     model = models.FwdCNN_EEN_FP(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-ae-fp':
+    model = models.FwdCNN_AE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt)
 elif opt.model == 'fwd-cnn2':

@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import pdb
 import bisect
+import pdb, pickle, os
+
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -42,6 +44,9 @@ class RealCar(Car):
         self._states_image = list()
         self._actions = list()
         self._passing = False
+        self._actions = list()
+        self._states = list()
+        self.states_image = list()
 
     def _get(self, what, k):
         trajectory = self._trajectory
@@ -110,8 +115,8 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        file_name = './data_i80/trajectories-0500-0515.txt'
-        self.df = self._get_data_frame(file_name)
+        self.file_name = './data_i80/trajectories-0500-0515.txt'
+        self.df = self._get_data_frame(self.file_name)
         self.vehicles_history = set()
         self.lane_occupancy = None
 
@@ -155,6 +160,7 @@ class RealTraffic(StatefulEnv):
         self.lane_occupancy = [[] for _ in range(7)]
         for v in self.vehicles[:]:
             if v.off_screen:
+                v.dump_state_image('scratch/' + os.path.basename(self.file_name))
                 self.vehicles.remove(v)
             else:
                 # Insort it in my vehicle list
@@ -183,6 +189,8 @@ class RealTraffic(StatefulEnv):
 
             # Perform such action
             v.step(action)
+            v.store('action', action)
+
 
             # Store state and action pair
             v.store('state', state)
