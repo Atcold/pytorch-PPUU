@@ -34,7 +34,7 @@ class encoder(nn.Module):
             if self.opt.tie_action == 1:
                 self.aemb_size = opt.nfeature
             else:
-                self.aemb_size = opt.nfeature*12*2
+                self.aemb_size = opt.nfeature*self.opt.h_height*self.opt.h_width
 
             # action encoder
             self.a_encoder = nn.Sequential(
@@ -56,7 +56,7 @@ class encoder(nn.Module):
             if self.opt.tie_action == 1:
                 h = h + a.view(bsize, self.opt.nfeature, 1, 1).expand(h.size())
             else:
-                h = h + a.view(bsize, self.opt.nfeature, 12, 2)
+                h = h + a.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         return h
 
 
@@ -65,15 +65,28 @@ class decoder(nn.Module):
     def __init__(self, opt):
         super(decoder, self).__init__()
         self.opt = opt
-        self.f_decoder = nn.Sequential(
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1),
-            nn.BatchNorm2d(opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)),
-            nn.BatchNorm2d(opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
-        )
+        # minor adjustments to make output size same as input
+        if self.opt.dataset == 'simulated':
+            self.f_decoder = nn.Sequential(
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1),
+                nn.BatchNorm2d(opt.nfeature),
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)),
+                nn.BatchNorm2d(opt.nfeature),
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
+            )
+        elif self.opt.dataset == 'i80':
+            self.f_decoder = nn.Sequential(
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+                nn.BatchNorm2d(opt.nfeature),
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+                nn.BatchNorm2d(opt.nfeature),
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
+            )
+
 
     def forward(self, h):
         bsize = h.size(0)
@@ -122,7 +135,7 @@ class z_network(nn.Module):
         self.opt = opt
 
         self.network = nn.Sequential(
-            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.Linear(opt.nfeature*self.opt.h_height*self.opt.h_width, opt.nfeature),
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
@@ -139,7 +152,7 @@ class z_network(nn.Module):
 
     def encode(self, inputs):
         bsize = inputs.size(0)
-        inputs = inputs.view(bsize, self.opt.nfeature*12*2)
+        inputs = inputs.view(bsize, self.opt.nfeature*self.opt.h_height*self.opt.h_width)
         z_params = self.network(inputs).view(-1, self.opt.nz, 2)
         mu = z_params[:, :, 0]
         logvar = z_params[:, :, 1]
@@ -171,7 +184,7 @@ class z_network(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.Linear(opt.nfeature*self.opt.h_height*self.opt.h_width, opt.nfeature),
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
@@ -220,7 +233,7 @@ class z_network_det(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.Linear(opt.nfeature*self.opt.h_height*self.opt.h_width, opt.nfeature),
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
@@ -247,12 +260,12 @@ class z_expander(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, n_steps * opt.nfeature * 12 * 2)
+            nn.Linear(opt.nfeature, n_steps * opt.nfeature * self.opt.h_height * self.opt.h_width)
         )
 
     def forward(self, z):
         bsize = z.size(0)
-        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, 12, 2)
+        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         return z_exp
 
 
@@ -285,7 +298,7 @@ class policy_encoder(nn.Module):
             nn.BatchNorm1d(opt.n_hidden)
         )
 
-        self.hsize = opt.nfeature*12*2
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
 
     def forward(self, state_images, states):
         bsize = state_images.size(0)
@@ -429,7 +442,8 @@ class FwdCNN_VAE_LP(nn.Module):
                 z2, mu2, logvar2 = self.q_network(h_x)
                 sigma1 = logvar1.mul(0.5).exp()
                 sigma2 = logvar2.mul(0.5).exp()
-                kld_t = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+                kld_t = torch.log(sigma2/sigma1 + 1e-8) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+                kld_t = torch.clamp(kld_t, max=50)
                 kld_t = torch.sum(kld_t) / bsize
                 kld += kld_t
                 z_exp = self.z_expander(z1)
@@ -468,7 +482,7 @@ class FwdCNN_EEN_FP(nn.Module):
         self.opt = opt
 
         if mfile == '':
-            self.encoder = encoder(opt, opt.n_actions)
+            self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
             print(f'[initializing encoder and decoder with: {mfile}]')
@@ -479,7 +493,6 @@ class FwdCNN_EEN_FP(nn.Module):
             self.decoder2 = copy.deepcopy(self.decoder1)
 
         self.z_network_det = z_network_det(opt, 1)
-        self.q_network = z_network(opt, opt.ncond)
         self.z_expander = z_expander(opt, 1)
         self.p_z = []
 
@@ -571,11 +584,12 @@ class FwdCNN_AE_FP(nn.Module):
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
+            self.encoder.n_inputs = opt.ncond
 
         self.y_encoder = encoder(opt, 0, 1)
 
         self.z_network = nn.Sequential(
-            nn.Linear(opt.nfeature*12*2, opt.nfeature),
+            nn.Linear(opt.nfeature*self.opt.h_height*self.opt.h_width, opt.nfeature),
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
@@ -780,7 +794,7 @@ class PolicyCNN(nn.Module):
         super(PolicyCNN, self).__init__()
         self.opt = opt
         self.encoder = policy_encoder(opt)
-        self.hsize = opt.nfeature*12*2
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
         self.fc = nn.Sequential(
             nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
@@ -828,7 +842,7 @@ class PolicyEEN(nn.Module):
             self.encoder2 = copy.deepcopy(pretrained_model.encoder)
             self.fc2 = copy.deepcopy(pretrained_model.fc)
 
-        self.hsize = opt.nfeature*12*2
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
 
         self.z_network = nn.Sequential(
             nn.BatchNorm1d(opt.n_actions*opt.npred),
@@ -928,7 +942,7 @@ class PolicyEEN_LP(nn.Module):
             self.encoder2 = copy.deepcopy(pretrained_model.encoder)
             self.fc2 = copy.deepcopy(pretrained_model.fc)
 
-        self.hsize = opt.nfeature*12*2
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
 
         self.z_network = nn.Sequential(
             nn.BatchNorm1d(opt.n_actions*opt.npred),
@@ -1028,7 +1042,7 @@ class PolicyCNN_VAE(nn.Module):
             self.encoder = pretrained_model.encoder
             self.fc = pretrained_model.fc
 
-        self.hsize = opt.nfeature*12*2
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
 
 
         self.z_network = nn.Sequential(

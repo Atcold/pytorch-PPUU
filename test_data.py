@@ -17,9 +17,9 @@ opt = parser.parse_args()
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 print(data_file)
 
-dataloader = DataLoader(data_file, opt)
-for i in range(100000):
-    images, states, actions = dataloader.get_batch_il('train')
+dataloader = DataLoader(data_file, opt, dataset='i80')
+for i in range(2):
+    inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
 #for _ in range(10):
 #    inputs, actions, targets, _, _  = dataloader.get_batch_fm('train')
 

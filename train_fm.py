@@ -11,10 +11,11 @@ import torch.optim as optim
 
 parser = argparse.ArgumentParser()
 # data params
+parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-nshards', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=10)
@@ -28,17 +29,17 @@ parser.add_argument('-beta', type=float, default=1.0)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
-parser.add_argument('-zeroact', type=int, default=1)
+parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=1)
 opt = parser.parse_args()
 
-
+opt.model_dir += f'/dataset_{opt.dataset}/models'
 opt.model_dir += f'_{opt.nshards}-shards/'
 os.system('mkdir -p ' + opt.model_dir)
 
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
-dataloader = DataLoader(data_file, opt)
+dataloader = DataLoader(data_file, opt, opt.dataset)
 
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-tieact={opt.tie_action}'
@@ -51,7 +52,7 @@ if 'vae' in opt.model:
     opt.model_file += f'-beta={opt.beta}'
     opt.model_file += f'-warmstart={opt.warmstart}'
 
-if 'een' in opt.model:
+if 'een' in opt.model or 'fwd-cnn-ae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-warmstart={opt.warmstart}'
 
@@ -59,12 +60,22 @@ print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
 opt.n_actions = 2
-opt.height = 97
-opt.width = 20
+if opt.dataset == 'simulator':
+    opt.height = 97
+    opt.width = 20
+    opt.h_height = 12
+    opt.h_width = 2
+
+elif opt.dataset == 'i80':
+    opt.height = 117
+    opt.width = 24
+    opt.h_height = 14
+    opt.h_width = 3
+
 
 
 if opt.warmstart == 1:
-    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_20-shards/'
+    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models_20-shards/'
     prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
 else:
     prev_model = ''
