@@ -389,17 +389,23 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def dump_state_image(self, save_dir='scratch/'):
+    def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         # im = self._states_image[100:]
         im = self._states_image
-        # save in torch format
-        im_pth = torch.stack(im).permute(0, 3, 2, 1)
-        pickle.dump({'images': im_pth, 'actions': torch.stack(self._actions)}, open(save_dir + f'/car{self.id}.pkl', 'wb'))
-        save_dir = save_dir + '/' + str(self.id)
         os.system('mkdir -p ' + save_dir)
-        for t in range(len(im)):
-            imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+        if mode == 'tensor':
+            # save in torch format
+            im_pth = torch.stack(im).permute(0, 3, 2, 1)
+            pickle.dump({
+                'images': im_pth,
+                'actions': torch.stack(self._actions)
+            }, open(save_dir + f'/car{self.id}.pkl', 'wb'))
+        elif mode == 'img':
+            save_dir = save_dir + '/' + str(self.id)
+            os.system('mkdir -p ' + save_dir)
+            for t in range(len(im)):
+                imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
 
 class StatefulEnv(core.Env):
@@ -651,7 +657,8 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                if self.store or v._id == self.policy_car_id:
+                w = width_height[0] / 2
+                if self.store and v.back > w and v.front < self.screen_size[0] - w or v.id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):

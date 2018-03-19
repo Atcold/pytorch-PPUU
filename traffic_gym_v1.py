@@ -160,7 +160,8 @@ class RealTraffic(StatefulEnv):
         self.lane_occupancy = [[] for _ in range(7)]
         for v in self.vehicles[:]:
             if v.off_screen:
-                v.dump_state_image('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80/' + os.path.basename(self.file_name))
+                if self.state_image:
+                    v.dump_state_image('./scratch/data_i80/' + os.path.basename(self.file_name), 'tensor')
                 self.vehicles.remove(v)
             else:
                 # Insort it in my vehicle list
@@ -190,7 +191,6 @@ class RealTraffic(StatefulEnv):
             # Perform such action
             v.step(action)
             v.store('action', action)
-
 
             # Store state and action pair
             v.store('state', state)
