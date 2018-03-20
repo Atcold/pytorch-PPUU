@@ -22,7 +22,7 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset):
+    def __init__(self, df, y_offset, look_ahead, screen_w):
         self._k = 15  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
@@ -47,6 +47,8 @@ class RealCar(Car):
         self._actions = list()
         self._states = list()
         self.states_image = list()
+        self.look_ahead = look_ahead
+        self.screen_w = screen_w
 
     def _get(self, what, k):
         trajectory = self._trajectory
@@ -153,7 +155,8 @@ class RealTraffic(StatefulEnv):
             if vehicle_id not in self.vehicles_history:
                 now_and_on = df['Frame ID'] >= self.frame
                 this_vehicle = df['Vehicle ID'] == vehicle_id
-                car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset)
+                car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset,
+                                  self.look_ahead, self.screen_size[0])
                 self.vehicles.append(car)
         self.vehicles_history |= vehicles  # union set operation
 
@@ -190,11 +193,11 @@ class RealTraffic(StatefulEnv):
 
             # Perform such action
             v.step(action)
-            v.store('action', action)
 
             # Store state and action pair
-            v.store('state', state)
-            v.store('action', action)
+            if self.store and v.valid:
+                v.store('state', state)
+                v.store('action', action)
 
         self.frame += 1
 
