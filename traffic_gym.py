@@ -56,7 +56,7 @@ class Car:
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, lanes, free_lanes, dt, car_id):
+    def __init__(self, lanes, free_lanes, dt, car_id, look_ahead, screen_w):
         """
         Initialise a sedan on a random lane
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
@@ -87,6 +87,8 @@ class Car:
         self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
         self.pid_k2 = np.random.normal(3e-3, 1e-4)
+        self.look_ahead = look_ahead
+        self.screen_w = screen_w
 
     def get_state(self):
         state = torch.zeros(4)
@@ -185,9 +187,9 @@ class Car:
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
 
-        # Hack... clip direction between -20 and +20
+        # Hack... clip direction between -10 and +10
         d = self._direction
-        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
         d = np.array((np.cos(alpha), np.sin(alpha)))
 
         if mode == 'human':
@@ -362,8 +364,8 @@ class Car:
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
 
-        # Hack... clip direction between -20 and +20
-        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        # Hack... clip direction between -10 and +10
+        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
         # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
@@ -389,17 +391,27 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def dump_state_image(self, save_dir='scratch/'):
+    def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         # im = self._states_image[100:]
         im = self._states_image
-        # save in torch format
-        im_pth = torch.stack(im).permute(0, 3, 2, 1)
-        pickle.dump({'images': im_pth, 'actions': torch.stack(self._actions)}, open(save_dir + f'/car{self.id}.pkl', 'wb'))
-        save_dir = save_dir + '/' + str(self.id)
         os.system('mkdir -p ' + save_dir)
-        for t in range(len(im)):
-            imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+        if mode == 'tensor':
+            # save in torch format
+            im_pth = torch.stack(im).permute(0, 3, 2, 1)
+            pickle.dump({
+                'images': im_pth,
+                'actions': torch.stack(self._actions)
+            }, open(save_dir + f'/car{self.id}.pkl', 'wb'))
+        elif mode == 'img':
+            save_dir = save_dir + '/' + str(self.id)
+            os.system('mkdir -p ' + save_dir)
+            for t in range(len(im)):
+                imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+
+    @property
+    def valid(self):
+        return self.back > self.look_ahead and self.front < self.screen_w - 1.75 * self.look_ahead
 
 
 class StatefulEnv(core.Env):
@@ -432,6 +444,8 @@ class StatefulEnv(core.Env):
         self.policy_car_id = None
         self.next_car_id = None
         self.photos = None
+        self.look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+        self.look_sideways = 2 * self.LANE_W
 
         self.display = display
         if self.display:  # if display is required
@@ -500,7 +514,8 @@ class StatefulEnv(core.Env):
         if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(
                 self.vehicles) == 0:
             if free_lanes:
-                car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id)
+                car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id,
+                                  self.look_ahead, self.screen_size[0])
                 self.next_car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
@@ -511,10 +526,7 @@ class StatefulEnv(core.Env):
             self.policy_car_id = 0
 
         if self.state_image:
-            # How much to look far ahead
-            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
-            look_sideways = 2 * self.LANE_W
-            self.render(mode='machine', width_height=(2 * look_ahead, 2 * look_sideways), scale=0.25)
+            self.render(mode='machine', width_height=(2 * self.look_ahead, 2 * self.look_sideways), scale=0.25)
 
         # Generate state representation for each vehicle
         for v in self.vehicles:
@@ -559,7 +571,7 @@ class StatefulEnv(core.Env):
             # Check for accident
             if v.crashed: self.collision = v
 
-            if self.store or v._id == self.policy_car_id:
+            if self.store and v.valid or v.id == self.policy_car_id:
                 v.store('state', state)
                 v.store('action', action)
 
@@ -651,7 +663,7 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                if self.store or v._id == self.policy_car_id:
+                if self.store and v.valid or v.id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):
