@@ -185,9 +185,9 @@ class Car:
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
 
-        # Hack... clip direction between -20 and +20
+        # Hack... clip direction between -10 and +10
         d = self._direction
-        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
         d = np.array((np.cos(alpha), np.sin(alpha)))
 
         if mode == 'human':
@@ -362,8 +362,8 @@ class Car:
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
 
-        # Hack... clip direction between -20 and +20
-        alpha = np.clip(np.arctan2(*d[::-1]), -20 * np.pi / 180, 20 * np.pi / 180)
+        # Hack... clip direction between -10 and +10
+        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
         # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
