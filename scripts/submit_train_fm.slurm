@@ -15,5 +15,5 @@
 
 module load python-3.6
 cd ../
-srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -n_hidden $4 -ncond $5 -npred $6 -beta $7 -nz $8
+srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -n_hidden $4 -ncond $5 -npred $6 -beta $7 -nz $8 -dataset $9 
 
