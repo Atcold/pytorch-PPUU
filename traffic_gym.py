@@ -658,7 +658,7 @@ class StatefulEnv(core.Env):
             # extract states
             for i, v in enumerate(self.vehicles):
                 w = width_height[0] / 2
-                if self.store and v.back > w and v.front < self.screen_size[0] - w or v.id == self.policy_car_id:
+                if self.store and v.back > w and v.front < self.screen_size[0] - w * 1.75 or v.id == self.policy_car_id:
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):

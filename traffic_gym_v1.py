@@ -101,7 +101,7 @@ class RealTraffic(StatefulEnv):
         kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
 
-        self.screen_size = (67 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
+        self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
         # self.photos = (
         #     pygame.image.load('vlcsnap-2018-02-22-14h40m23s503.png'),
         #     pygame.image.load('vlcsnap-2018-02-23-10h55m01s517.png'),
@@ -201,6 +201,7 @@ class RealTraffic(StatefulEnv):
         return None, None, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
+        slope = 0.035
         if mode == 'human':
             lanes = self.lanes  # lanes
             s = surface  # screen
@@ -215,12 +216,17 @@ class RealTraffic(StatefulEnv):
             draw_line(s, w, (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
             bottom = lanes[-1]['max']
             draw_line(s, w, (0, bottom), (18 * LANE_W, bottom), 3)
-            draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - 0.035 * 18 * LANE_W), 3)
+            draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 3)
             draw_dashed_line(s, w, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 3)
-            sw *= .9
-            draw_dashed_line(s, colours['r'], (0, bottom + 42), (sw, bottom + 42 - 0.035 * sw))
-            draw_line(s, w, (0, bottom + 53), (sw, bottom + 53 - 0.035 * sw), 3)
-            draw_line(s, w, (sw, bottom + 3), (self.screen_size[0], bottom + 2), 3)
+            draw_dashed_line(s, colours['r'], (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W))
+            draw_line(s, w, (0, bottom + 53), (60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 3)
+            draw_line(s, w, (60 * LANE_W, bottom + 3), (sw, bottom + 2), 3)
+
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            o = self.offset
+            draw_line(s, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
+            draw_line(s, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
+            draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
 
         if mode == 'machine':
             lanes = self.lanes  # lanes
@@ -236,8 +242,7 @@ class RealTraffic(StatefulEnv):
             draw_line(s, w, (0, lanes[0]['min'] + m), (sw, lanes[0]['min'] + m), 1)
             bottom = lanes[-1]['max'] + m
             draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
-            draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - 0.035 * 18 * LANE_W), 1)
+            draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
             draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
-            sw *= .9
-            draw_line(s, w, (m, bottom + 53), (m + sw, bottom + 53 - 0.035 * sw), 1)
-            draw_line(s, w, (m + sw, bottom + 3), (2 * m + self.screen_size[0], bottom), 1)
+            draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
+            draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
