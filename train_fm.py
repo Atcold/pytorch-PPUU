@@ -50,12 +50,11 @@ if opt.zeroact == 1:
 if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
-    opt.model_file += f'-warmstart={opt.warmstart}'
 
 if 'een' in opt.model or 'fwd-cnn-ae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
-    opt.model_file += f'-warmstart={opt.warmstart}'
 
+opt.model_file += f'-warmstart={opt.warmstart}'
 print(f'will save model as {opt.model_file}')
 
 opt.n_inputs = 4
@@ -76,7 +75,7 @@ elif opt.dataset == 'i80':
 
 if opt.warmstart == 1:
     prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models_20-shards/'
-    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
+    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred=20-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
 else:
     prev_model = ''
 
@@ -91,7 +90,7 @@ elif opt.model == 'fwd-cnn-een-fp':
 elif opt.model == 'fwd-cnn-ae-fp':
     model = models.FwdCNN_AE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn':
-    model = models.FwdCNN(opt)
+    model = models.FwdCNN(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn2':
     model = models.FwdCNN2(opt)
 

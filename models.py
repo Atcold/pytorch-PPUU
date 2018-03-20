@@ -334,11 +334,20 @@ class policy_encoder(nn.Module):
 # forward model, deterministic
 
 class FwdCNN(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, mfile):
         super(FwdCNN, self).__init__()
         self.opt = opt
-        self.encoder = encoder(opt, opt.n_actions, opt.ncond)
-        self.decoder = decoder(opt)
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions, opt.ncond)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            self.mfile = mfile
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+            self.encoder.n_inputs = opt.ncond
+
 
     def forward(self, inputs, actions, target):
         bsize = inputs.size(0)
@@ -412,6 +421,7 @@ class FwdCNN_VAE_LP(nn.Module):
             self.decoder = decoder(opt)
         else:
             print(f'[initializing encoder and decoder with: {mfile}]')
+            self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
@@ -485,6 +495,7 @@ class FwdCNN_EEN_FP(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
+            self.mfile = mfile
             print(f'[initializing encoder and decoder with: {mfile}]')
             pretrained_model = torch.load(mfile)
             self.encoder1 = pretrained_model.encoder
@@ -581,6 +592,7 @@ class FwdCNN_AE_FP(nn.Module):
             self.decoder = decoder(opt)
         else:
             print(f'[initializing encoder and decoder with: {mfile}]')
+            self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
@@ -686,6 +698,7 @@ class FwdCNN_EEN_LP(nn.Module):
             self.decoder = decoder(opt)
         else:
             print(f'[initializing encoder and decoder with: {mfile}]')
+            self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder1 = pretrained_model.encoder
             self.decoder1 = pretrained_model.decoder
