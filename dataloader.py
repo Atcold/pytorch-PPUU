@@ -2,18 +2,20 @@ import numpy, random, pdb, math, pickle, glob, time, os
 import torch
 
 class DataLoader():
-    def __init__(self, fname, opt, dataset='simulator'):
+    def __init__(self, fname, opt, dataset='simulator', single_shard=False):
         self.opt = opt
         self.data = []
         self.dataset = dataset
 
         if dataset == 'i80':
             data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80/'
-            data_files = ['trajectories-0400-0415.txt/', 
-                          'trajectories-0500-0515.txt/', 
-                          'trajectories-0515-0530.txt/']
-
-#            data_files = ['trajectories-0500-0515.txt/']
+            if single_shard:
+                # quick load for debugging
+                data_files = ['trajectories-0500-0515.txt/']
+            else:
+                data_files = ['trajectories-0400-0415.txt/', 
+                              'trajectories-0500-0515.txt/', 
+                              'trajectories-0515-0530.txt/']
 
             self.images = []
             self.actions = []

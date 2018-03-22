@@ -34,10 +34,13 @@ parser.add_argument('-warmstart', type=int, default=1)
 opt = parser.parse_args()
 
 opt.model_dir += f'/dataset_{opt.dataset}/models'
-opt.model_dir += f'_{opt.nshards}-shards/'
+if opt.dataset == 'simulator':
+    opt.model_dir += f'_{opt.nshards}-shards/'
+    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
+else:
+    data_file = None
 os.system('mkdir -p ' + opt.model_dir)
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
 dataloader = DataLoader(data_file, opt, opt.dataset)
 
@@ -71,11 +74,9 @@ elif opt.dataset == 'i80':
     opt.h_height = 14
     opt.h_width = 3
 
-
-
 if opt.warmstart == 1:
-    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models_20-shards/'
-    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred=20-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
+    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models/'
+    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0-warmstart=0.model'
 else:
     prev_model = ''
 

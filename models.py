@@ -533,12 +533,12 @@ class FwdCNN_EEN_FP(nn.Module):
 
         pred = []
         for t in range(npred):
-            h1 = self.encoder1(inputs, actions[:, t])
-            pred1 = F.sigmoid(self.decoder1(h1) + inputs[:, -1].unsqueeze(1).clone())
-            error = targets[:, t] - pred1.squeeze()
-            error = Variable(error.data)
             if targets is not None:
                 # we are training or estimating z distribution
+                h1 = self.encoder1(inputs, actions[:, t])
+                pred1 = F.sigmoid(self.decoder1(h1) + inputs[:, -1].unsqueeze(1).clone())
+                error = targets[:, t] - pred1.squeeze()
+                error = Variable(error.data)
                 z = self.z_network_det(error)
                 if save_z:
                     self.save_z(z)
