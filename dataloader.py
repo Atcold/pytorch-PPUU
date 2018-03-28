@@ -111,26 +111,27 @@ class DataLoader():
         nb = 0
         while nb < self.opt.batch_size:
             s = random.choice(indx)
-            T = len(self.states[s]) - 1
+            T = len(self.actions[s]) - 1
             if T > (self.opt.ncond + self.opt.npred):
                 t = random.randint(0, T - (self.opt.ncond+self.opt.npred))
                 images.append(self.images[s][t:t+(self.opt.ncond+self.opt.npred)])
-                states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)])
-                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
+#                states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)])
+#                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
                 actions.append(self.actions[s][t:t+(self.opt.ncond+self.opt.npred)])
                 nb += 1
         images = torch.stack(images)
-        states = torch.stack(states)
+#        states = torch.stack(states)
         actions = torch.stack(actions)
-        masks = torch.stack(masks)
+#        masks = torch.stack(masks)
         images = images[:, :self.opt.ncond].clone()
-        states = states[:, :self.opt.ncond, 0].clone()
-        masks = masks[:, :self.opt.ncond].clone()
+#        states = states[:, :self.opt.ncond, 0].clone()
+#        masks = masks[:, :self.opt.ncond].clone()
         actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
         images = images.float() / 255.0
 
-        actions -= self.a_mean.view(1, 1, 3).expand(actions.size())
-        actions /= (1e-8 + self.a_std.view(1, 1, 3).expand(actions.size()))
+        actions -= self.a_mean.view(1, 1, 2).expand(actions.size())
+        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size()))
+        states = torch.zeros(self.opt.batch_size, self.opt.ncond, self.opt.n_inputs).cuda()
         assert(images.max() <= 1 and images.min() >= 0)
         return images.float().cuda(), states.float().cuda(), actions.float().cuda()
 
