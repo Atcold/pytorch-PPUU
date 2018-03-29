@@ -243,11 +243,11 @@ class Car:
 
     @property
     def front(self):
-        return int(self._position[0] + self._length)
+        return self._position + self._length * self._direction
 
     @property
     def back(self):
-        return int(self._position[0])
+        return self._position
 
     def _brake(self, fraction):
         if self._passing: return 0
@@ -275,15 +275,15 @@ class Car:
 
     def __gt__(self, other):
         """
-        Check if self is in front of other: self.back > other.front
+        Check if self is in front of other: self.back[0] > other.front[0]
         """
-        return self.back > other.front
+        return self.back[0] > other.front[0]
 
     def __lt__(self, other):
         """
-        Check if self is behind of other: self.front < other.back
+        Check if self is behind of other: self.front[0] < other.back[0]
         """
-        return self.front < other.back
+        return self.front[0] < other.back[0]
 
     def __sub__(self, other):
         """
@@ -300,7 +300,7 @@ class Car:
 
         car_ahead = observation[1][1]
         if car_ahead:
-            distance = car_ahead - self
+            distance = (car_ahead - self)[0]
             if self.safe_distance > distance > 0:
                 if random.random() < 0.5:
                     if self._safe_left(observation):
@@ -346,19 +346,19 @@ class Car:
         return action
 
     def _safe_left(self, state):
-        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self.back[0] < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
         if state[0] is None: return False  # On the leftmost lane
-        if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
-        if state[0][1] and state[0][1] - self < self.safe_distance: return False
+        if state[0][0] and (self - state[0][0])[0] < state[0][0].safe_distance: return False
+        if state[0][1] and (state[0][1] - self)[0] < self.safe_distance: return False
         return True
 
     def _safe_right(self, state):
-        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self.back[0] < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
         if state[2] is None: return False  # On the rightmost lane
-        if state[2][0] and self - state[2][0] < state[2][0].safe_distance: return False
-        if state[2][1] and state[2][1] - self < self.safe_distance: return False
+        if state[2][0] and (self - state[2][0])[0] < state[2][0].safe_distance: return False
+        if state[2][1] and (state[2][1] - self)[0] < self.safe_distance: return False
         return True
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
@@ -411,7 +411,7 @@ class Car:
 
     @property
     def valid(self):
-        return self.back > self.look_ahead and self.front < self.screen_w - 1.75 * self.look_ahead
+        return self.back[0] > self.look_ahead and self.front[0] < self.screen_w - 1.75 * self.look_ahead
 
 
 class StatefulEnv(core.Env):
@@ -499,7 +499,7 @@ class StatefulEnv(core.Env):
                     # Leave lane
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
-            if v.back > self.screen_size[0]:
+            if v.back[0] > self.screen_size[0]:
                 # if this is the controlled car, pick new car
                 if v.id == self.policy_car_id:
                     self.policy_car_id = self.vehicles[-1].id
@@ -507,7 +507,7 @@ class StatefulEnv(core.Env):
                 self.vehicles.remove(v)
 
             # Update available lane beginnings
-            if v.back < v.safe_distance:  # at most safe_distance ahead
+            if v.back[0] < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
