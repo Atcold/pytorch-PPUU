@@ -106,8 +106,8 @@ class Car:
         """
         d = self._direction
         d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction
-        # abs() required because my.front can > other.back
-        cost_ahead = max(0, 1 - np.sqrt(abs((other - self) @ d) / self.safe_distance))
+        # max(0, .) required because my.front can > other.back
+        cost_ahead = max(0, 1 - np.sqrt(max(0, (other - self) @ d) / self.safe_distance))
         # abs() required because there are cars on the right too
         cost_sideways = max(0, 1 - np.sqrt(abs((other - self) @ d_o) / self.LANE_W))
 
@@ -180,6 +180,8 @@ class Car:
         else:
             obs[5].copy_(vstate)
             obs[6].copy_(vstate)
+
+        # self._colour = (255 * cost, 0, 255 * (1 - cost))
 
         return obs, mask, cost
 
@@ -571,10 +573,6 @@ class StatefulEnv(core.Env):
                             s2 = v.get_state()
                             if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
                                 v.crashed = True
-            #                                print('crash')
-
-            #            if car_ahead:
-            #                distance = car_ahead - self
 
             # Check for accident
             if v.crashed: self.collision = v
@@ -602,7 +600,6 @@ class StatefulEnv(core.Env):
         self.frame += 1
 
         obs = []
-        # TODO: cost function
         cost = 0
         return obs, cost, self.vehicles
 
@@ -675,20 +672,28 @@ class StatefulEnv(core.Env):
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):
+        draw_line = pygame.draw.line
         if mode == 'human':
             lanes = self.lanes
             for lane in lanes:
                 sw = self.screen_size[0]  # screen width
                 draw_dashed_line(surface, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
                 draw_dashed_line(surface, colours['r'], (0, lane['mid']), (sw, lane['mid']))
-            pygame.draw.line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
-            pygame.draw.line(surface, colours['w'], (0, lanes[-1]['max']), (sw, lanes[-1]['max']), 3)
+            draw_line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
+            bottom = lanes[-1]['max']
+            draw_line(surface, colours['w'], (0, bottom), (sw, bottom), 3)
+
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            o = self.offset
+            draw_line(surface, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
+            draw_line(surface, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
+            draw_line(surface, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
         if mode == 'machine':
             for lane in self.lanes:
                 sw = self.screen_size[0] + 2 * offset  # screen width
                 m = offset
-                pygame.draw.line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
-                pygame.draw.line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
+                draw_line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
+                draw_line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
 
     def _pause(self):
         pause = True
