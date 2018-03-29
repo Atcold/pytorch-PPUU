@@ -98,12 +98,20 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
-    @staticmethod
-    def _compute_cost(s1, s2):
-        diff = -torch.abs(s1[0:2] - s2[0:2])
-        diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
-        c = torch.prod(torch.exp(diff))
-        return c
+    def compute_cost(self, other):
+        """
+        Computes the cost associated with distance to the preceding vehicle
+        :param other: the guy in front of me
+        :return: cost
+        """
+        d = self._direction
+        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction
+        # abs() required because my.front can > other.back
+        cost_ahead = max(0, 1 - np.sqrt(abs((other - self) @ d) / self.safe_distance))
+        # abs() required because there are cars on the right too
+        cost_sideways = max(0, 1 - np.sqrt(abs((other - self) @ d_o) / self.LANE_W))
+
+        return cost_ahead * cost_sideways
 
     def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
@@ -120,7 +128,7 @@ class Car:
                 s = left_vehicles[0].get_state()
                 obs[1].copy_(s)
                 mask[1] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, left_vehicles[0].compute_cost(self))
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
@@ -130,7 +138,7 @@ class Car:
                 s = left_vehicles[1].get_state()
                 obs[2].copy_(s)
                 mask[2] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, self.compute_cost(left_vehicles[1]))
             else:
                 obs[2].copy_(vstate)
         else:
@@ -141,7 +149,7 @@ class Car:
             s = mid_vehicles[0].get_state()
             obs[3].copy_(s)
             mask[3] = 1
-            cost = max(cost, self._compute_cost(s, vstate))
+            cost = max(cost, mid_vehicles[0].compute_cost(self))
         else:
             obs[3].copy_(vstate)
 
@@ -149,7 +157,7 @@ class Car:
             s = mid_vehicles[1].get_state()
             obs[4].copy_(s)
             mask[4] = 1
-            cost = max(cost, self._compute_cost(s, vstate))
+            cost = max(cost, self.compute_cost(mid_vehicles[1]))
         else:
             obs[4].copy_(vstate)
 
@@ -158,7 +166,7 @@ class Car:
                 s = right_vehicles[0].get_state()
                 obs[5].copy_(s)
                 mask[5] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, right_vehicles[0].compute_cost(self))
             else:
                 obs[5].copy_(vstate)
 
@@ -166,7 +174,7 @@ class Car:
                 s = right_vehicles[1].get_state()
                 obs[6].copy_(s)
                 mask[6] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, self.compute_cost(right_vehicles[1]))
             else:
                 obs[6].copy_(vstate)
         else:
@@ -239,7 +247,7 @@ class Car:
 
     @property
     def safe_distance(self):
-        return self._speed * self._safe_factor
+        return self._speed * self._safe_factor + 1 * self.SCALE  # plus one metre
 
     @property
     def front(self):
