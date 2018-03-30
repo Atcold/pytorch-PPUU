@@ -4,23 +4,28 @@ from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.nn as nn
 from sklearn import decomposition
 
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
+parser.add_argument('-loss', type=str, default='sphere')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=16)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-nz', type=int, default=32)
+parser.add_argument('-u_sphere', type=int, default=1)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-zsphere=1-gclip=-1-warmstart=1.model')
 opt = parser.parse_args()
 opt.model_dir += f'/dataset_{opt.dataset}/models/'
+
 
 if opt.dataset == 'simulator':
     opt.height = 97
@@ -36,41 +41,73 @@ elif opt.dataset == 'i80':
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
-mfile = 'model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-warmstart=1.model'
-model = torch.load(opt.model_dir + mfile)
+
+
+
+model = torch.load(opt.model_dir + opt.mfile)
 opt.nz = model.opt.nz
-model.q_network = models.z_network_full(opt, opt.ncond) #TODO: add actions?
+if opt.loss == 'pdf':
+    model.u_network = models.z_network_full(opt, opt.ncond) #TODO: add actions?
+else:
+    model.u_network = models.u_network(opt, opt.ncond) #TODO: add actions?
 model.intype('gpu')
-optimizer = optim.Adam(model.q_network.parameters(), 0.001)
+optimizer = optim.Adam(model.u_network.parameters(), 0.001)
+
+mfile_prior = f'{opt.model_dir}/{opt.mfile}-loss={opt.loss}-usphere={opt.u_sphere}-nfeature={opt.nfeature}.prior'
+print(f'[will save prior model as: {mfile_prior}]')
 
 
-
-def forward_z_network(model, inputs, actions, targets):
+def forward_u_network(model, inputs, actions, targets):
     bsize = inputs.size(0)
     inputs = inputs.view(bsize, model.opt.ncond, 3, model.opt.height, model.opt.width)
     actions = actions.view(bsize, -1, model.opt.n_actions)
     npred = actions.size(1)
     
+    eye = Variable(torch.eye(bsize))
     loss = Variable(torch.zeros(1))
     if model.use_cuda:
         loss = loss.cuda()
+        eye = eye.cuda()
+
 
     pred = []
-    inputs_list, mu_list, sigma_list, z_list = [], [], [], []
+    inputs_list, mu_list, sigma_list, z_list, u_list = [], [], [], [], []
     for t in range(npred):
         h_x = model.encoder(inputs, actions[:, t])
         h_y = model.y_encoder(targets[:, t].unsqueeze(1).contiguous())
         z = model.z_network((h_x + h_y).view(bsize, -1))
+        if model.opt.z_sphere == 1:
+            z = z / torch.norm(z, 2, 1).view(-1, 1).expand(z.size())
         if opt.loss == 'pdf':
-            mu, sigma = model.q_network(inputs)
+            mu, sigma = model.u_network(inputs)
             loss += utils.log_pdf(z, mu, sigma)
             mu_list.append(mu)
             sigma_list.append(sigma)
         elif opt.loss == 'nll':
-            u = model.q_network(inputs)
+            u = model.u_network(inputs)
+            if opt.u_sphere == 1:
+                u = u / torch.norm(u, 2, 1).view(-1, 1).expand(u.size())
             e = torch.mm(u, z.t())
             log_p = F.log_softmax(e, dim=1)
-            loss += F.nll_loss(log_p, Variable(torch.eye(bsize).cuda()))
+            loss += F.nll_loss(log_p, Variable(torch.arange(bsize).cuda().long()))
+            u_list.append(u)
+        elif opt.loss == 'nll-w':
+            us = model.u_network(inputs)
+            u = us[:, :model.opt.nz]
+            if opt.u_sphere == 1:
+                u = u / torch.norm(u, 2, 1).view(-1, 1).expand(u.size())
+            s = F.softplus(us[:, -1])
+            e = torch.mm(u, z.t())
+            e *= s.clone().view(-1, 1).expand(e.size())
+            log_p = F.log_softmax(e, dim=1)
+            loss += F.nll_loss(log_p, Variable(torch.arange(bsize).cuda().long()))
+            u_list.append(u)
+        elif opt.loss == 'sphere':
+            u = model.u_network(inputs)
+            e = torch.mm(u, z.t())
+            loss += F.mse_loss(e, eye)
+            u_list.append(u)
+
 
         z_exp = model.z_expander(z)
         h = h_x + z_exp.squeeze()
@@ -81,7 +118,11 @@ def forward_z_network(model, inputs, actions, targets):
         inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
     pred = torch.cat(pred, 1)
-    return loss, inputs_list, mu_list, sigma_list, z_list
+    if opt.loss == 'pdf':
+        q_list = (mu_list, sigma_list)
+    else:
+        q_list = u_list
+    return loss, inputs_list, z_list, q_list
 
 
 def train(nbatches):
@@ -93,7 +134,7 @@ def train(nbatches):
         actions = Variable(actions)
         targets = Variable(targets)
         optimizer.zero_grad()
-        loss, inputs_list, mu_list, sigma_list, z_list = forward_z_network(model, inputs, actions, targets)
+        loss, inputs_list, z_list, q_list = forward_u_network(model, inputs, actions, targets)
         loss.backward()
         optimizer.step()
         total_loss += loss.data[0]
@@ -107,17 +148,27 @@ def test(nbatches):
         inputs = Variable(inputs)
         actions = Variable(actions)
         targets = Variable(targets)
-        loss, inputs_list, mu_list, sigma_list, z_list = forward_z_network(model, inputs, actions, targets)
+        loss, inputs_list, z_list, q_list = forward_u_network(model, inputs, actions, targets)
         total_loss += loss.data[0]
     return total_loss / nbatches
     
 
-for i in range(1000):
+for i in range(500):
     loss_train = train(50)
     loss_test = test(50)
-    print(f'epoch {i} | train: {loss_train:.5f}, test: {loss_test:.5f}')
+    log_string = f'epoch {i} | train loss: {loss_train:.5f}, test loss: {loss_test:.5f}'
+    print(log_string)
+    utils.log(mfile_prior + '.log', log_string)
+    model.intype('cpu')
+    model.u_network.cpu()
+    torch.save(model.u_network, mfile_prior)
+    model.intype('gpu')
+    model.u_network.cuda()
 
 
+
+
+'''
 z_list, mu_list, sigma_list, inputs_list = [], [], [], []
 model.intype('cpu')
 for i in range(50):
@@ -154,3 +205,4 @@ def sample():
     torch.save({'Zpca': Z, 'Upca': U}, 'pca.pth')
 
 torch.save(model, opt.model_dir + mfile + '.pz')
+'''

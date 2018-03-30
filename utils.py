@@ -38,11 +38,16 @@ def embed(Z, ztop):
     nsamples = ztop.shape[1]
     dim = ztop.shape[2]
     ztop = ztop.reshape(bsize*nsamples, dim)
-    pca = decomposition.PCA(n_components=2)
-    pca.fit(Z)
-    Z_pca = pca.transform(Z)
-    ztop_pca = pca.transform(ztop).reshape(bsize, nsamples, 2)
     Z_all=numpy.concatenate((ztop, Z), axis=0)
+
+    # PCA
+    pca = decomposition.PCA(n_components=2)
+    pca.fit(Z_all)
+    Z_all_pca = pca.transform(Z_all)
+    ztop_pca = Z_all_pca[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_pca = Z_all_pca[bsize*nsamples:]
+
+    # TSNE
     Z_all_tsne = TSNE(n_components=2).fit_transform(Z_all)
     ztop_tsne = Z_all_tsne[0:bsize*nsamples].reshape(bsize, nsamples, 2)
     Z_tsne = Z_all_tsne[bsize*nsamples:]
