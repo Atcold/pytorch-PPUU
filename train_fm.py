@@ -13,6 +13,7 @@ parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
+parser.add_argument('-loss2', type=str, default='pdf')
 parser.add_argument('-nshards', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
@@ -21,7 +22,7 @@ parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-seed', type=int, default=1)
-parser.add_argument('-batch_size', type=int, default=32)
+parser.add_argument('-batch_size', type=int, default=16)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-tie_action', type=int, default=0)
@@ -31,13 +32,18 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=1)
+parser.add_argument('-grad_clip', type=float, default=-1)
+parser.add_argument('-z_sphere', type=int, default=1)
 opt = parser.parse_args()
 
 opt.model_dir += f'/dataset_{opt.dataset}/models'
-opt.model_dir += f'_{opt.nshards}-shards/'
+if opt.dataset == 'simulator':
+    opt.model_dir += f'_{opt.nshards}-shards/'
+    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
+else:
+    data_file = None
 os.system('mkdir -p ' + opt.model_dir)
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
 dataloader = DataLoader(data_file, opt, opt.dataset)
 
@@ -50,12 +56,20 @@ if opt.zeroact == 1:
 if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
+    opt.loss2 = 'KL'
 
 if 'een' in opt.model or 'fwd-cnn-ae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
 
+if '-ae-lp' in opt.model:
+    opt.model_file += f'-loss2={opt.loss2}'
+
+if opt.z_sphere == 1:
+    opt.model_file += f'-zsphere=1'
+
+opt.model_file += f'-gclip={opt.grad_clip}'
 opt.model_file += f'-warmstart={opt.warmstart}'
-print(f'will save model as {opt.model_file}')
+print(f'[will save model as: {opt.model_file}]')
 
 opt.n_inputs = 4
 opt.n_actions = 2
@@ -71,11 +85,9 @@ elif opt.dataset == 'i80':
     opt.h_height = 14
     opt.h_width = 3
 
-
-
 if opt.warmstart == 1:
-    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models_20-shards/'
-    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred=20-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0.model'
+    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}/models/'
+    prev_model += f'model=fwd-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-tieact=0-warmstart=0.model'
 else:
     prev_model = ''
 
@@ -89,6 +101,8 @@ elif opt.model == 'fwd-cnn-een-fp':
     model = models.FwdCNN_EEN_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-ae-fp':
     model = models.FwdCNN_AE_FP(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-ae-lp':
+    model = models.FwdCNN_AE_LP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn2':
@@ -106,7 +120,6 @@ def train(nbatches, npred):
         t0 = time.time()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
         t = time.time()-t0
-#        print(f'get_batch: {t}')
         t0 = time.time()
         inputs = Variable(inputs)
         actions = Variable(actions)
@@ -117,9 +130,10 @@ def train(nbatches, npred):
         loss_mse = F.mse_loss(pred, targets)
         loss = loss_mse + opt.beta*loss_kl.cuda()
         loss.backward()
+        if opt.grad_clip != -1:
+            torch.nn.utils.clip_grad_norm(model.parameters(), opt.grad_clip)
         optimizer.step()
         t = time.time()-t0
-#        print(f'update: {t}')
         total_loss_mse += loss_mse.data[0]
         total_loss_kl += loss_kl.data[0]
     return total_loss_mse / nbatches, total_loss_kl / nbatches
@@ -142,7 +156,7 @@ def test(nbatches):
     return total_loss_mse / nbatches, total_loss_kl / nbatches
 
 
-def een_compute_pz(nbatches):
+def compute_pz(nbatches):
     model.p_z = []
     for j in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred)
@@ -161,14 +175,14 @@ for i in range(100):
     t = time.time() - t0
     if valid_loss_mse < best_valid_loss_mse:
         best_valid_loss_mse = valid_loss_mse                
-        if 'een' in opt.model:
-            een_compute_pz(500)
+        if '-een-' in opt.model or '-ae-' in opt.model:
+            compute_pz(int(opt.epoch_size/2))
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')
 
     
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test loss: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best loss: {best_valid_loss_mse:.5f}, time={t:.4f}'
+    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, {opt.loss2}: {train_loss_kl:.5f}], test loss: [{valid_loss_mse:.5f}, {opt.loss2}: {valid_loss_kl:.5f}], best loss: {best_valid_loss_mse:.5f}, time={t:.4f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 

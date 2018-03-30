@@ -117,7 +117,7 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        self.file_name = './data_i80/trajectories-0400-0415.txt'
+        self.file_name = './data_i80/trajectories-0515-0530.txt'
         self.df = self._get_data_frame(self.file_name)
         self.vehicles_history = set()
         self.lane_occupancy = None
@@ -164,7 +164,7 @@ class RealTraffic(StatefulEnv):
         for v in self.vehicles[:]:
             if v.off_screen:
                 if self.state_image:
-                    v.dump_state_image('./scratch/data_i80/' + os.path.basename(self.file_name), 'tensor')
+                    v.dump_state_image('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80/' + os.path.basename(self.file_name), 'tensor')
                 self.vehicles.remove(v)
             else:
                 # Insort it in my vehicle list

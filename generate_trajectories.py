@@ -77,11 +77,8 @@ def prepare_trajectory_state(states, actions):
 
 
 def run_episode(ep):
-    action = np.array([0, 0, 1, 0, 0, 0])
-    states_, actions_, rewards_ = [], [], []
-    done = False
 
-    state, objects = env.reset()
+    env.reset()
     for t in range(opt.steps):
         if True:
             state, reward, vehicles = env.step(None)
@@ -114,13 +111,7 @@ def run_episode(ep):
         if len(v._states_image) > 1:
             images = torch.stack(v._states_image).permute(0, 3, 2, 1)
             states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-            # remove the first part, so cars don't appear from outside the frame
-            if images.size(0) > 100:
-                images = images[100:]
-                states = states[100:]
-                masks = masks[100:]
-                actions = actions[100:]
-                runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
+            runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
 
     return runs
 

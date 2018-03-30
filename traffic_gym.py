@@ -98,12 +98,20 @@ class Car:
         state[3] = self._direction[1] * self._speed  # dy
         return state
 
-    @staticmethod
-    def _compute_cost(s1, s2):
-        diff = -torch.abs(s1[0:2] - s2[0:2])
-        diff *= torch.Tensor([2 / (4 * LANE_W), 2 / (1.1 * LANE_W)])
-        c = torch.prod(torch.exp(diff))
-        return c
+    def compute_cost(self, other):
+        """
+        Computes the cost associated with distance to the preceding vehicle
+        :param other: the guy in front of me
+        :return: cost
+        """
+        d = self._direction
+        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction
+        # max(0, .) required because my.front can > other.back
+        cost_ahead = max(0, 1 - np.sqrt(max(0, (other - self) @ d) / self.safe_distance))
+        # abs() required because there are cars on the right too
+        cost_sideways = max(0, 1 - np.sqrt(abs((other - self) @ d_o) / self.LANE_W))
+
+        return cost_ahead * cost_sideways
 
     def _get_obs(self, left_vehicles, mid_vehicles, right_vehicles):
         n_cars = 1 + 6  # this car + 6 neighbors
@@ -120,7 +128,7 @@ class Car:
                 s = left_vehicles[0].get_state()
                 obs[1].copy_(s)
                 mask[1] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, left_vehicles[0].compute_cost(self))
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
@@ -130,7 +138,7 @@ class Car:
                 s = left_vehicles[1].get_state()
                 obs[2].copy_(s)
                 mask[2] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, self.compute_cost(left_vehicles[1]))
             else:
                 obs[2].copy_(vstate)
         else:
@@ -141,7 +149,7 @@ class Car:
             s = mid_vehicles[0].get_state()
             obs[3].copy_(s)
             mask[3] = 1
-            cost = max(cost, self._compute_cost(s, vstate))
+            cost = max(cost, mid_vehicles[0].compute_cost(self))
         else:
             obs[3].copy_(vstate)
 
@@ -149,7 +157,7 @@ class Car:
             s = mid_vehicles[1].get_state()
             obs[4].copy_(s)
             mask[4] = 1
-            cost = max(cost, self._compute_cost(s, vstate))
+            cost = max(cost, self.compute_cost(mid_vehicles[1]))
         else:
             obs[4].copy_(vstate)
 
@@ -158,7 +166,7 @@ class Car:
                 s = right_vehicles[0].get_state()
                 obs[5].copy_(s)
                 mask[5] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, right_vehicles[0].compute_cost(self))
             else:
                 obs[5].copy_(vstate)
 
@@ -166,12 +174,14 @@ class Car:
                 s = right_vehicles[1].get_state()
                 obs[6].copy_(s)
                 mask[6] = 1
-                cost = max(cost, self._compute_cost(s, vstate))
+                cost = max(cost, self.compute_cost(right_vehicles[1]))
             else:
                 obs[6].copy_(vstate)
         else:
             obs[5].copy_(vstate)
             obs[6].copy_(vstate)
+
+        # self._colour = (255 * cost, 0, 255 * (1 - cost))
 
         return obs, mask, cost
 
@@ -239,15 +249,15 @@ class Car:
 
     @property
     def safe_distance(self):
-        return self._speed * self._safe_factor
+        return self._speed * self._safe_factor + 1 * self.SCALE  # plus one metre
 
     @property
     def front(self):
-        return int(self._position[0] + self._length)
+        return self._position + self._length * self._direction
 
     @property
     def back(self):
-        return int(self._position[0])
+        return self._position
 
     def _brake(self, fraction):
         if self._passing: return 0
@@ -275,15 +285,15 @@ class Car:
 
     def __gt__(self, other):
         """
-        Check if self is in front of other: self.back > other.front
+        Check if self is in front of other: self.back[0] > other.front[0]
         """
-        return self.back > other.front
+        return self.back[0] > other.front[0]
 
     def __lt__(self, other):
         """
-        Check if self is behind of other: self.front < other.back
+        Check if self is behind of other: self.front[0] < other.back[0]
         """
-        return self.front < other.back
+        return self.front[0] < other.back[0]
 
     def __sub__(self, other):
         """
@@ -300,7 +310,7 @@ class Car:
 
         car_ahead = observation[1][1]
         if car_ahead:
-            distance = car_ahead - self
+            distance = (car_ahead - self)[0]
             if self.safe_distance > distance > 0:
                 if random.random() < 0.5:
                     if self._safe_left(observation):
@@ -346,19 +356,19 @@ class Car:
         return action
 
     def _safe_left(self, state):
-        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self.back[0] < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
         if state[0] is None: return False  # On the leftmost lane
-        if state[0][0] and self - state[0][0] < state[0][0].safe_distance: return False
-        if state[0][1] and state[0][1] - self < self.safe_distance: return False
+        if state[0][0] and (self - state[0][0])[0] < state[0][0].safe_distance: return False
+        if state[0][1] and (state[0][1] - self)[0] < self.safe_distance: return False
         return True
 
     def _safe_right(self, state):
-        if self.back < self.safe_distance: return False  # Cannot see in the future
+        if self.back[0] < self.safe_distance: return False  # Cannot see in the future
         if self._passing: return False
         if state[2] is None: return False  # On the rightmost lane
-        if state[2][0] and self - state[2][0] < state[2][0].safe_distance: return False
-        if state[2][1] and state[2][1] - self < self.safe_distance: return False
+        if state[2][0] and (self - state[2][0])[0] < state[2][0].safe_distance: return False
+        if state[2][1] and (state[2][1] - self)[0] < self.safe_distance: return False
         return True
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
@@ -411,7 +421,7 @@ class Car:
 
     @property
     def valid(self):
-        return self.back > self.look_ahead and self.front < self.screen_w - 1.75 * self.look_ahead
+        return self.back[0] > self.look_ahead and self.front[0] < self.screen_w - 1.75 * self.look_ahead
 
 
 class StatefulEnv(core.Env):
@@ -499,7 +509,7 @@ class StatefulEnv(core.Env):
                     # Leave lane
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
-            if v.back > self.screen_size[0]:
+            if v.back[0] > self.screen_size[0]:
                 # if this is the controlled car, pick new car
                 if v.id == self.policy_car_id:
                     self.policy_car_id = self.vehicles[-1].id
@@ -507,7 +517,7 @@ class StatefulEnv(core.Env):
                 self.vehicles.remove(v)
 
             # Update available lane beginnings
-            if v.back < v.safe_distance:  # at most safe_distance ahead
+            if v.back[0] < v.safe_distance:  # at most safe_distance ahead
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
@@ -563,10 +573,6 @@ class StatefulEnv(core.Env):
                             s2 = v.get_state()
                             if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
                                 v.crashed = True
-            #                                print('crash')
-
-            #            if car_ahead:
-            #                distance = car_ahead - self
 
             # Check for accident
             if v.crashed: self.collision = v
@@ -594,7 +600,6 @@ class StatefulEnv(core.Env):
         self.frame += 1
 
         obs = []
-        # TODO: cost function
         cost = 0
         return obs, cost, self.vehicles
 
@@ -667,20 +672,28 @@ class StatefulEnv(core.Env):
                     v.store('state_image', (max_extension, screen_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):
+        draw_line = pygame.draw.line
         if mode == 'human':
             lanes = self.lanes
             for lane in lanes:
                 sw = self.screen_size[0]  # screen width
                 draw_dashed_line(surface, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
                 draw_dashed_line(surface, colours['r'], (0, lane['mid']), (sw, lane['mid']))
-            pygame.draw.line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
-            pygame.draw.line(surface, colours['w'], (0, lanes[-1]['max']), (sw, lanes[-1]['max']), 3)
+            draw_line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
+            bottom = lanes[-1]['max']
+            draw_line(surface, colours['w'], (0, bottom), (sw, bottom), 3)
+
+            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+            o = self.offset
+            draw_line(surface, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
+            draw_line(surface, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
+            draw_line(surface, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
         if mode == 'machine':
             for lane in self.lanes:
                 sw = self.screen_size[0] + 2 * offset  # screen width
                 m = offset
-                pygame.draw.line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
-                pygame.draw.line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
+                draw_line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
+                draw_line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
 
     def _pause(self):
         pause = True
