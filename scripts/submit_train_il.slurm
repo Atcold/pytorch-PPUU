@@ -5,7 +5,8 @@
 #SBATCH --error=train_il.err
 #SBATCH --time=24:00:00
 #SBATCH --gres gpu:1
-#SBATCH --constraint="gpu_12gb"
+#SBATCH --constraint="gpu_12gb&pascal"
+#SBATCH --exclude="weaver1, weaver2, weaver3, weaver4, weaver5, vine5, vine11"
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=48000
