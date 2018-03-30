@@ -623,6 +623,12 @@ class FwdCNN_AE_FP(nn.Module):
                     z = mu + Variable(torch.randn(sigma.size()).cuda()) * sigma
                     pdb.set_trace()
                     z.detach()
+                elif sampling == 'sphere':
+                    Z = self.sample_z(bsize*500)
+                    u = self.q_network(inputs)
+                    e = torch.mm(u, Z.t())
+                    pdb.set_trace()
+                    
                 elif sampling == 'lp-nll':
                     Z = self.sample_z(bsize*500)
                     u = self.q_network(inputs)
