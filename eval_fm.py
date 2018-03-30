@@ -1,5 +1,3 @@
-
-
 import argparse, pdb, os, pickle, random
 import gym
 import numpy as np
@@ -25,7 +23,7 @@ parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-tie_action', type=int, default=0)
 parser.add_argument('-sigmout', type=int, default=1)
 parser.add_argument('-n_samples', type=int, default=10)
-parser.add_argument('-sampling', type=str, default='lp-nll')
+parser.add_argument('-sampling', type=str, default='sphere')
 parser.add_argument('-usphere', type=int, default=1)
 parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
@@ -35,40 +33,6 @@ opt = parser.parse_args()
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
-
-class z_network_det(nn.Module):
-    def __init__(self, opt, n_inputs):
-        super(z_network_det, self).__init__()
-        self.opt = opt
-        self.n_inputs = n_inputs
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(3*n_inputs, opt.nfeature, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1)
-        )
-
-        if self.opt.loss == 'nll-w':
-            n_out = opt.nz + 1
-        elif self.opt.loss == 'nll':
-            n_out = opt.nz
-
-        self.fc = nn.Sequential(
-            nn.Linear(opt.nfeature*self.opt.h_height*self.opt.h_width, opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, n_out)
-        )
-
-    def forward(self, inputs, sample=False):
-        bsize = inputs.size(0)
-        inputs = inputs.view(bsize, self.n_inputs*3, self.opt.height, self.opt.width)
-        z = self.fc(self.conv(inputs).view(bsize, -1))
-        return z
-
 
 
 opt.model_dir += f'/dataset_{opt.dataset}/models'
@@ -81,7 +45,7 @@ opt.model_dir += '/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
-model.q_network = torch.load(opt.model_dir + opt.mfile + f'-loss=nll-usphere={opt.usphere}-nfeature=64.prior')
+model.q_network = torch.load(opt.model_dir + opt.mfile + f'-loss={opt.sampling}-usphere={opt.usphere}-nfeature=64.prior')
 model.intype('gpu')
 model.q_network.cuda()
 
@@ -131,7 +95,7 @@ for i in range(n_batches):
             for b in range(opt.batch_size):
                 pred_b = pred[b].clone()
                 pred_b = pred_b.squeeze().permute(0, 2, 3, 1).data.cpu().numpy()
-                dirname_movie = '{}/videos/pred{:d}/sample{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                dirname_movie = '{}/videos/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 os.system("mkdir -p " + dirname_movie)
                 print(f'[saving video: {dirname_movie}]')
                 for t in range(opt.npred):
