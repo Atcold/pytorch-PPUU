@@ -105,11 +105,11 @@ class Car:
         :return: cost
         """
         d = self._direction
-        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction
+        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction, pointing left
         # max(0, .) required because my.front can > other.back
-        cost_ahead = max(0, 1 - np.sqrt(max(0, (other - self) @ d) / self.safe_distance))
+        cost_ahead = max(0, 1 - max(0, (other - self) @ d) / self.safe_distance)
         # abs() required because there are cars on the right too
-        cost_sideways = max(0, 1 - np.sqrt(abs((other - self) @ d_o) / self.LANE_W))
+        cost_sideways = max(0, 1 - abs((other - self) @ d_o) / self.LANE_W)
 
         return cost_ahead * cost_sideways
 

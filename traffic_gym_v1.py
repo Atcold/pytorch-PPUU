@@ -49,6 +49,7 @@ class RealCar(Car):
         self.states_image = list()
         self.look_ahead = look_ahead
         self.screen_w = screen_w
+        self._safe_factor = 1  # second, manually matching the data
 
     def _get(self, what, k):
         trajectory = self._trajectory
@@ -182,10 +183,10 @@ class RealTraffic(StatefulEnv):
             # Generate symbolic state
             lane_idx = v.current_lane
             left_vehicles = self._get_neighbours(lane_idx, -1, v) \
-                if 0 < lane_idx < 6 or lane_idx == 6 and v.front > 18 * LANE_W else None
+                if 0 < lane_idx < 6 or lane_idx == 6 and v.front[0] > 18 * LANE_W else None
             mid_vehicles = self._get_neighbours(lane_idx, 0, v)
             right_vehicles = self._get_neighbours(lane_idx, + 1, v) \
-                if lane_idx < 5 or lane_idx == 5 and v.front > 18 * LANE_W else None
+                if lane_idx < 5 or lane_idx == 5 and v.front[0] > 18 * LANE_W else None
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
