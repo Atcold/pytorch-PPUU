@@ -78,7 +78,7 @@ class Car:
         self._braked = False
         self._passing = False
         self._target_lane = self._position[1]
-        self._target_lane_ = self._target_lane
+        self._noisy_target_lane = self._target_lane
         self.crashed = False
         self._error = 0
         self._states = list()
@@ -271,14 +271,14 @@ class Car:
 
     def _pass_left(self):
         self._target_lane = self._position[1] - self.LANE_W
-        self._target_lane_ = self._target_lane_
+        self._noisy_target_lane = self._noisy_target_lane
         self._passing = True
         self._colour = colours['m']
         self._braked = False
 
     def _pass_right(self):
         self._target_lane = self._position[1] + self.LANE_W
-        self._target_lane_ = self._target_lane_
+        self._noisy_target_lane = self._noisy_target_lane
         self._passing = True
         self._colour = colours['m']
         self._braked = False
@@ -340,12 +340,12 @@ class Car:
             a = 1 * (self._target_speed - self._speed)
 
         if random.random() < 0.1:
-            self._target_lane_ = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+            self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
 
         if random.random() < 0.05 and not self._passing:
             self._target_speed *= (1 + np.random.normal(0, 0.05))
 
-        error = -(self._target_lane_ - self._position[1])
+        error = -(self._noisy_target_lane - self._position[1])
         d_error = error - self._error
         d_clip = 2
         if abs(d_error) > d_clip:
