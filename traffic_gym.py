@@ -78,7 +78,7 @@ class Car:
         self._braked = False
         self._passing = False
         self._target_lane = self._position[1]
-        self._target_lane_ = self._target_lane
+        self._noisy_target_lane = self._target_lane
         self.crashed = False
         self._error = 0
         self._states = list()
@@ -105,11 +105,11 @@ class Car:
         :return: cost
         """
         d = self._direction
-        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction
+        d_o = np.array((self._direction[1], -self._direction[0]))  # ortho direction, pointing left
         # max(0, .) required because my.front can > other.back
-        cost_ahead = max(0, 1 - np.sqrt(max(0, (other - self) @ d) / self.safe_distance))
+        cost_ahead = max(0, 1 - max(0, (other - self) @ d) / self.safe_distance)
         # abs() required because there are cars on the right too
-        cost_sideways = max(0, 1 - np.sqrt(abs((other - self) @ d_o) / self.LANE_W))
+        cost_sideways = max(0, 1 - abs((other - self) @ d_o) / self.LANE_W)
 
         return cost_ahead * cost_sideways
 
@@ -271,14 +271,14 @@ class Car:
 
     def _pass_left(self):
         self._target_lane = self._position[1] - self.LANE_W
-        self._target_lane_ = self._target_lane_
+        self._noisy_target_lane = self._noisy_target_lane
         self._passing = True
         self._colour = colours['m']
         self._braked = False
 
     def _pass_right(self):
         self._target_lane = self._position[1] + self.LANE_W
-        self._target_lane_ = self._target_lane_
+        self._noisy_target_lane = self._noisy_target_lane
         self._passing = True
         self._colour = colours['m']
         self._braked = False
@@ -340,12 +340,12 @@ class Car:
             a = 1 * (self._target_speed - self._speed)
 
         if random.random() < 0.1:
-            self._target_lane_ = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+            self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
 
         if random.random() < 0.05 and not self._passing:
             self._target_speed *= (1 + np.random.normal(0, 0.05))
 
-        error = -(self._target_lane_ - self._position[1])
+        error = -(self._noisy_target_lane - self._position[1])
         d_error = error - self._error
         d_clip = 2
         if abs(d_error) > d_clip:
