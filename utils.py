@@ -2,7 +2,7 @@ import torch
 import os, json, pdb, math, numpy
 from datetime import datetime
 from sklearn import decomposition
-from sklearn.manifold import TSNE
+import sklearn.manifold as manifold
 
 # Logging function
 def log(fname, s):
@@ -29,7 +29,7 @@ def log_pdf(z, mu, sigma):
     a = 0.5*torch.sum(((z-mu)/sigma)**2, 1)
     b = torch.log(2*math.pi*torch.prod(sigma, 1))
     loss = a.squeeze() + b.squeeze()
-    return torch.mean(loss)
+    return loss
 
 # embed Z distribution as well as some special z's (ztop) using PCA and tSNE. 
 # Useful for visualizing predicted z vectors. 
@@ -41,14 +41,40 @@ def embed(Z, ztop):
     Z_all=numpy.concatenate((ztop, Z), axis=0)
 
     # PCA
-    pca = decomposition.PCA(n_components=2)
+    pca = decomposition.PCA(n_components=3)
     pca.fit(Z_all)
     Z_all_pca = pca.transform(Z_all)
     ztop_pca = Z_all_pca[0:bsize*nsamples].reshape(bsize, nsamples, 2)
     Z_pca = Z_all_pca[bsize*nsamples:]
 
+    '''
+    # LLE
+    print('[embedding: lle]')
+    Z_all_lle = manifold.LocallyLinearEmbedding(n_components=2, method='modified', eigen_solver='dense').fit_transform(Z_all)
+    ztop_lle = Z_all_lle[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_lle = Z_all_lle[bsize*nsamples:]
+    '''
+
+    # Spectral
+    Z_all_laplacian = manifold.SpectralEmbedding(n_components=3).fit_transform(Z_all)
+    ztop_laplacian = Z_all_laplacian[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_laplacian = Z_all_laplacian[bsize*nsamples:]
+
+    # Isomap
+    Z_all_isomap = manifold.Isomap(n_components=3).fit_transform(Z_all)
+    ztop_isomap = Z_all_isomap[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_isomap = Z_all_isomap[bsize*nsamples:]
+
+
+
     # TSNE
+    '''
     Z_all_tsne = TSNE(n_components=2).fit_transform(Z_all)
     ztop_tsne = Z_all_tsne[0:bsize*nsamples].reshape(bsize, nsamples, 2)
     Z_tsne = Z_all_tsne[bsize*nsamples:]
-    return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca, 'Z_tsne': Z_tsne, 'ztop_tsne': ztop_tsne}
+    '''
+#    Z_tsne, ztop_tsne = None, None
+    return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca, 
+            'Z_lle': Z_lle, 'ztop_lle': ztop_lle,
+            'Z_laplacian': Z_laplacian, 'ztop_laplacian': ztop_laplacian,
+            'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap}

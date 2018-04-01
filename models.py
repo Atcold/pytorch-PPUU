@@ -168,11 +168,10 @@ class z_network_det(nn.Module):
         return z
 
 
-
-# encodes a sequence of frames or errors and produces a latent variable
-class z_network_full(nn.Module):
+# takes as input a sequence of frames, outputs the means and variances of a diagonal Gaussian. 
+class u_network_gaussian(nn.Module):
     def __init__(self, opt, n_inputs):
-        super(z_network_full, self).__init__()
+        super(u_network_gaussian, self).__init__()
         self.opt = opt
         self.n_inputs = n_inputs
 
@@ -192,7 +191,7 @@ class z_network_full(nn.Module):
             nn.Linear(opt.nfeature, 2*opt.nz)
         )
 
-    def forward(self, inputs, sample=False):
+    def forward(self, inputs):
         bsize = inputs.size(0)
         inputs = inputs.view(bsize, self.n_inputs*3, self.opt.height, self.opt.width)
         z = self.fc(self.conv(inputs).view(bsize, -1))
@@ -359,8 +358,19 @@ class FwdCNN_VAE_FP(nn.Module):
     def __init__(self, opt):
         super(FwdCNN_VAE_FP, self).__init__()
         self.opt = opt
-        self.encoder = encoder(opt, opt.n_actions)
-        self.decoder = decoder(opt)
+
+
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions, opt.ncond)
+            self.decoder = decoder(opt)
+        else:
+            print(f'[initializing encoder and decoder with: {mfile}]')
+            self.mfile = mfile
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+            self.encoder.n_inputs = opt.ncond
+
         self.z_network = z_network(opt, opt.ncond+opt.npred)
         self.z_expander = z_expander(opt)
 
@@ -415,7 +425,7 @@ class FwdCNN_VAE_LP(nn.Module):
         self.q_network = z_network(opt)
         self.z_expander = z_expander(opt, 1)
 
-    def forward(self, inputs, actions, targets):
+    def forward(self, inputs, actions, targets, sampling=None):
         bsize = inputs.size(0)
         inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         actions = actions.view(bsize, -1, self.opt.n_actions)
@@ -496,7 +506,7 @@ class FwdCNN_EEN_FP(nn.Module):
         z = []
         for b in range(bsize):
             z.append(random.choice(self.p_z))
-        z = torch.stack(z)
+        z = torch.stack(z).contiguous()
         if self.use_cuda: z = z.cuda()
         return Variable(z)
 
@@ -618,17 +628,54 @@ class FwdCNN_AE_FP(nn.Module):
                 if sampling == 'fp':
                     z = self.sample_z(bsize)
                 elif sampling == 'lp-pdf':
-                    z0 = self.sample_z(bsize)
                     mu, sigma = self.q_network(inputs)
                     z = mu + Variable(torch.randn(sigma.size()).cuda()) * sigma
-                    pdb.set_trace()
-                    z.detach()
+                elif sampling == 'pdf':
+                    n_sample=100
+                    n_z = bsize*1000
+                    Z = self.sample_z(n_z)
+                    mu, sigma = self.q_network(inputs)
+                    mu = mu.contiguous()
+                    sigma = sigma.contiguous()
+                    Z_exp = Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
+                    mu_exp = mu.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
+                    sigma_exp = sigma.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
+                    mu_exp = mu_exp.contiguous().view(-1, self.opt.nz)
+                    sigma_exp = sigma_exp.contiguous().view(-1, self.opt.nz)
+                    Z_exp = Z_exp.clone().view(-1, self.opt.nz)
+                    z_loss = utils.log_pdf(Z_exp, mu_exp, sigma_exp)
+                    z_loss = z_loss.view(bsize, -1)
+                    _, z_ind = torch.topk(z_loss, n_sample, dim=1, largest=False)
+                    z_top = Variable(Z.data.index(z_ind.data.view(-1))).view(bsize, n_sample, self.opt.nz)
+                    z_ind = random.choice(z_ind.t())
+                    z = Variable(Z.data.index(z_ind.data))
+
+                    if random.random() < 0.01:
+                        # save
+                        print('[saving]')
+                        hsh = random.randint(0, 10000)
+                        Z = Z.data.cpu().numpy()
+                        z_top = z_top.data.cpu().numpy()
+                        embed = utils.embed(Z, z_top)
+                        os.system('mkdir -p z_viz/pdf_{}samples'.format(n_sample))
+                        torch.save(embed, 'z_viz/pdf_{}samples/{:05d}.pth'.format(n_sample, hsh))
+                    del Z, mu, sigma, Z_exp, mu_exp, sigma_exp
                 elif sampling == 'sphere':
                     Z = self.sample_z(bsize*500)
                     u = self.q_network(inputs)
                     e = torch.mm(u, Z.t())
-                    pdb.set_trace()
-                    
+                    # sample from 100 closest vectors
+                    _, z_ind = torch.topk(e, 100, dim=1)
+                    z_ind = random.choice(z_ind.t())
+                    z = Variable(Z.data.index(z_ind.data))
+                    if random.random() < 0.02:
+                        # save
+                        print('[saving]')
+                        hsh = random.randint(0, 10000)
+                        Z = Z.data.cpu().numpy()
+                        z_top = z_top.data.cpu().numpy()
+                        embed = utils.embed(Z, z_top)
+                        torch.save(embed, 'z_viz/{:05d}.pth'.format(hsh))
                 elif sampling == 'lp-nll':
                     Z = self.sample_z(bsize*500)
                     u = self.q_network(inputs)
@@ -648,11 +695,18 @@ class FwdCNN_AE_FP(nn.Module):
                         embed = utils.embed(Z, z_top)
                         torch.save(embed, 'z_viz/{:05d}.pth'.format(hsh))
 
+                if self.opt.z_sphere == 1:
+                    z = z / (1e-8 + torch.norm(z, 2, 1).view(-1, 1).expand(z.size()))
+
+
             try:
                 z_exp = self.z_expander(z)
             except:
                 pdb.set_trace()
-            h = h_x + z_exp.squeeze()
+            if self.opt.z_mult == 1:
+                h = h_x * z_exp.squeeze()
+            else:
+                h = h_x + z_exp.squeeze()
             pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)

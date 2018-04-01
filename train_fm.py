@@ -34,6 +34,8 @@ parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=1)
 parser.add_argument('-grad_clip', type=float, default=-1)
 parser.add_argument('-z_sphere', type=int, default=1)
+parser.add_argument('-z_mult', type=int, default=0)
+parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
 opt.model_dir += f'/dataset_{opt.dataset}/models'
@@ -66,6 +68,10 @@ if '-ae-lp' in opt.model:
 
 if opt.z_sphere == 1:
     opt.model_file += f'-zsphere=1'
+
+if opt.z_mult == 1:
+    opt.model_file += f'-zmult=1'
+
 
 opt.model_file += f'-gclip={opt.grad_clip}'
 opt.model_file += f'-warmstart={opt.warmstart}'

@@ -17,12 +17,14 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=16)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-nz', type=int, default=32)
-parser.add_argument('-u_sphere', type=int, default=1)
+parser.add_argument('-u_sphere', type=int, default=0)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-zsphere=1-gclip=-1-warmstart=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-zsphere=0-gclip=-1-warmstart=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-warmstart=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-zsphere=1-gclip=-1-warmstart=1.model')
 opt = parser.parse_args()
 opt.model_dir += f'/dataset_{opt.dataset}/models/'
 
@@ -42,12 +44,10 @@ elif opt.dataset == 'i80':
 dataloader = DataLoader(None, opt, opt.dataset)
 
 
-
-
 model = torch.load(opt.model_dir + opt.mfile)
 opt.nz = model.opt.nz
 if opt.loss == 'pdf':
-    model.u_network = models.z_network_full(opt, opt.ncond) #TODO: add actions?
+    model.u_network = models.u_network_gaussian(opt, opt.ncond) #TODO: add actions?
 else:
     model.u_network = models.u_network(opt, opt.ncond) #TODO: add actions?
 model.intype('gpu')
@@ -69,20 +69,17 @@ def forward_u_network(model, inputs, actions, targets):
         loss = loss.cuda()
         eye = eye.cuda()
 
-
     pred = []
-    inputs_list, mu_list, sigma_list, z_list, u_list = [], [], [], [], []
+    inputs_list, z_list, u_list = [], [], []
     for t in range(npred):
         h_x = model.encoder(inputs, actions[:, t])
         h_y = model.y_encoder(targets[:, t].unsqueeze(1).contiguous())
         z = model.z_network((h_x + h_y).view(bsize, -1))
-        if model.opt.z_sphere == 1:
-            z = z / torch.norm(z, 2, 1).view(-1, 1).expand(z.size())
         if opt.loss == 'pdf':
             mu, sigma = model.u_network(inputs)
-            loss += utils.log_pdf(z, mu, sigma)
-            mu_list.append(mu)
-            sigma_list.append(sigma)
+            loss_t = utils.log_pdf(z, mu, sigma)
+            loss += torch.mean(loss_t)
+            u_list.append({'mu': mu, 'sigma': sigma})
         elif opt.loss == 'nll':
             u = model.u_network(inputs)
             if opt.u_sphere == 1:
@@ -118,18 +115,15 @@ def forward_u_network(model, inputs, actions, targets):
         inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
     pred = torch.cat(pred, 1)
-    if opt.loss == 'pdf':
-        q_list = (mu_list, sigma_list)
-    else:
-        q_list = u_list
-    return loss, inputs_list, z_list, q_list
+    loss /= npred
+    return loss, inputs_list, z_list, u_list
 
 
 def train(nbatches):
 #    model.train()
     total_loss = 0
     for i in range(nbatches):
-        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', 20)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', 50)
         inputs = Variable(inputs)
         actions = Variable(actions)
         targets = Variable(targets)
@@ -154,8 +148,8 @@ def test(nbatches):
     
 
 for i in range(500):
-    loss_train = train(50)
-    loss_test = test(50)
+    loss_train = train(100)
+    loss_test = test(100)
     log_string = f'epoch {i} | train loss: {loss_train:.5f}, test loss: {loss_test:.5f}'
     print(log_string)
     utils.log(mfile_prior + '.log', log_string)

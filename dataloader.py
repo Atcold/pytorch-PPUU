@@ -6,6 +6,8 @@ class DataLoader():
         self.opt = opt
         self.data = []
         self.dataset = dataset
+        if self.opt.debug == 1:
+            return 
 
         if dataset == 'i80':
             data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80/'
@@ -62,7 +64,7 @@ class DataLoader():
                 self.test_indx = perm[self.n_train+self.n_valid+1:self.n_train+self.n_valid+self.n_test]
                 torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
 
-        else:        
+        elif dataset == 'simulator':        
             for i in range(opt.nshards):
                 f = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={i+1}.pkl'
                 print(f'[loading {f}]')
@@ -88,14 +90,16 @@ class DataLoader():
             self.valid_indx = range(self.n_train+1, self.n_train+self.n_valid)
             self.test_indx = range(self.n_train+self.n_valid+1, self.n_episodes)        
 
-        print('[computing action stats]')
-        all_actions = []
-        for i in self.train_indx:
-            all_actions.append(self.actions[i])
-        print('[done]')
-        all_actions = torch.cat(all_actions, 0)
-        self.a_mean = torch.mean(all_actions, 0)
-        self.a_std = torch.std(all_actions, 0)
+
+        if dataset != 'random':
+            print('[computing action stats]')
+            all_actions = []
+            for i in self.train_indx:
+                all_actions.append(self.actions[i])
+            print('[done]')
+            all_actions = torch.cat(all_actions, 0)
+            self.a_mean = torch.mean(all_actions, 0)
+            self.a_std = torch.std(all_actions, 0)
 
     # get batch to use for imitation learning:
     # a sequence of ncond consecutive states, and a sequence of npred actions
@@ -140,7 +144,16 @@ class DataLoader():
     # get batch to use for forward modeling
     # a sequence of ncond given states, a sequence of npred actions, 
     # and a sequence of npred states to be predicted
-    def get_batch_fm(self, split, npred=-1):
+    def get_batch_fm(self, split, npred=-1, cuda=True):
+        if self.opt.debug == 1:
+            self.opt.height = 117
+            self.opt.width = 24
+            self.opt.n_actions = 2
+            input_images = torch.randn(self.opt.batch_size, self.opt.ncond, 3, self.opt.height, self.opt.width)
+            actions = torch.randn(self.opt.batch_size, self.opt.npred, self.opt.n_actions)
+            target_images = torch.randn(self.opt.batch_size, self.opt.npred, 3, self.opt.height, self.opt.width)
+            return input_images.cuda(), actions.cuda(), target_images.cuda(), None, None 
+
         if split == 'train':
             indx = self.train_indx
         elif split == 'valid':
@@ -173,6 +186,11 @@ class DataLoader():
         input_images.div_(255.0)
         target_images.div_(255.0)
 
+        if not cuda:
+            input_images = input_images.cpu()
+            actions = actions.cpu()
+            target_images = target_images.cpu()
+
         input_states, target_states, masks = None, None, None
 
 
@@ -181,6 +199,7 @@ class DataLoader():
 #        input_states = states[:, :self.opt.ncond, 0].clone()
 #        target_states = states[:, self.opt.ncond:(self.opt.ncond+npred), 0].clone()
 #        masks = masks[:, :self.opt.ncond].clone()
+
 
         return input_images, actions, target_images, None, None #input_states.float().cuda(), target_states.float().cuda()
 
