@@ -330,7 +330,7 @@ class FwdCNN(nn.Module):
             self.encoder.n_inputs = opt.ncond
 
 
-    def forward(self, inputs, actions, target):
+    def forward(self, inputs, actions, target, sampling=None):
         bsize = inputs.size(0)
         inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         actions = actions.view(bsize, -1, self.opt.n_actions)
@@ -510,7 +510,7 @@ class FwdCNN_EEN_FP(nn.Module):
         if self.use_cuda: z = z.cuda()
         return Variable(z)
 
-    def forward(self, inputs, actions, targets, save_z = False):
+    def forward(self, inputs, actions, targets, save_z = False, sampling='fp'):
         bsize = inputs.size(0)
         inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         actions = actions.view(bsize, -1, self.opt.n_actions)
@@ -553,6 +553,36 @@ class FwdCNN_EEN_FP(nn.Module):
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
+
+
+
+class LSTMCritic(nn.Module):
+    def __init__(self, opt):
+        super(LSTMCritic, self).__init__()
+        self.opt = opt
+        self.encoder = encoder(opt, 0, 1)
+        self.input_size = opt.nfeature*opt.h_height*opt.h_width
+        self.lstm = nn.LSTM(self.input_size, opt.nhidden)
+        self.classifier = nn.Linear(opt.nhidden, 1)
+        self.hidden = (Variable(torch.randn(1, 2*opt.batch_size, opt.nhidden).cuda()),
+                       Variable(torch.randn(1, 2*opt.batch_size, opt.nhidden).cuda()))
+
+
+    def forward(self, inputs):
+        self.hidden = (Variable(torch.randn(1, 2*self.opt.batch_size, self.opt.nhidden).cuda()),
+                       Variable(torch.randn(1, 2*self.opt.batch_size, self.opt.nhidden).cuda()))
+        inputs.detach()
+        bsize = inputs.size(0)
+        T = inputs.size(1)
+        for t in range(T):
+            enc = self.encoder(inputs[:, t].contiguous()).view(1, 2*self.opt.batch_size, -1)
+            out, self.hidden = self.lstm(enc, self.hidden)
+        logits = self.classifier(out.squeeze())
+        return logits.squeeze()
+            
+        
+
+
 
 
 
@@ -650,7 +680,7 @@ class FwdCNN_AE_FP(nn.Module):
                     z_ind = random.choice(z_ind.t())
                     z = Variable(Z.data.index(z_ind.data))
 
-                    if random.random() < 0.01:
+                    if random.random() < 0.01 and False:
                         # save
                         print('[saving]')
                         hsh = random.randint(0, 10000)

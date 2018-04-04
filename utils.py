@@ -1,6 +1,7 @@
 import torch
 import os, json, pdb, math, numpy
 from datetime import datetime
+import scipy
 from sklearn import decomposition
 import sklearn.manifold as manifold
 
@@ -11,6 +12,19 @@ def log(fname, s):
     f = open(fname, 'a')
     f.write(str(datetime.now()) + ': ' + s + '\n')
     f.close()
+
+
+def save_movie(dirname, x, smooth=False, pytorch=True):
+    os.system('mkdir -p ' + dirname)
+    if pytorch:
+        x = x.squeeze().permute(0, 2, 3, 1).cpu().numpy()
+    for t in range(x.shape[0]):
+        if smooth and t > 0:
+            p = (x[t] + x[t-1])/2
+        else:
+            p = x[t]
+        scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), p)
+
 
 def grad_norm(net):
     total_norm = 0
@@ -33,7 +47,7 @@ def log_pdf(z, mu, sigma):
 
 # embed Z distribution as well as some special z's (ztop) using PCA and tSNE. 
 # Useful for visualizing predicted z vectors. 
-def embed(Z, ztop):
+def embed(Z, ztop, ndim=3):
     bsize = ztop.shape[0]
     nsamples = ztop.shape[1]
     dim = ztop.shape[2]
@@ -41,29 +55,22 @@ def embed(Z, ztop):
     Z_all=numpy.concatenate((ztop, Z), axis=0)
 
     # PCA
-    pca = decomposition.PCA(n_components=3)
-    pca.fit(Z_all)
-    Z_all_pca = pca.transform(Z_all)
-    ztop_pca = Z_all_pca[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_all_pca = decomposition.PCA(n_components=ndim).fit_transform(Z_all)
+    ztop_pca = Z_all_pca[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
     Z_pca = Z_all_pca[bsize*nsamples:]
-
-    '''
-    # LLE
-    print('[embedding: lle]')
-    Z_all_lle = manifold.LocallyLinearEmbedding(n_components=2, method='modified', eigen_solver='dense').fit_transform(Z_all)
-    ztop_lle = Z_all_lle[0:bsize*nsamples].reshape(bsize, nsamples, 2)
-    Z_lle = Z_all_lle[bsize*nsamples:]
-    '''
+    ztop_only_pca = decomposition.PCA(n_components=3).fit_transform(ztop)
 
     # Spectral
-    Z_all_laplacian = manifold.SpectralEmbedding(n_components=3).fit_transform(Z_all)
-    ztop_laplacian = Z_all_laplacian[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_all_laplacian = manifold.SpectralEmbedding(n_components=ndim).fit_transform(Z_all)
+    ztop_laplacian = Z_all_laplacian[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
     Z_laplacian = Z_all_laplacian[bsize*nsamples:]
+    ztop_only_laplacian = manifold.SpectralEmbedding(n_components=3).fit_transform(ztop)
 
     # Isomap
-    Z_all_isomap = manifold.Isomap(n_components=3).fit_transform(Z_all)
-    ztop_isomap = Z_all_isomap[0:bsize*nsamples].reshape(bsize, nsamples, 2)
+    Z_all_isomap = manifold.Isomap(n_components=ndim).fit_transform(Z_all)
+    ztop_isomap = Z_all_isomap[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
     Z_isomap = Z_all_isomap[bsize*nsamples:]
+    ztop_only_isomap = manifold.Isomap(n_components=3).fit_transform(ztop)
 
 
 
@@ -75,6 +82,8 @@ def embed(Z, ztop):
     '''
 #    Z_tsne, ztop_tsne = None, None
     return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca, 
-            'Z_lle': Z_lle, 'ztop_lle': ztop_lle,
             'Z_laplacian': Z_laplacian, 'ztop_laplacian': ztop_laplacian,
-            'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap}
+            'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap, 
+            'ztop_only_pca': ztop_only_pca, 
+            'ztop_only_laplacian': ztop_only_laplacian, 
+            'ztop_only_isomap': ztop_only_isomap}
