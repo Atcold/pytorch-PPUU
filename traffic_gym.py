@@ -9,7 +9,9 @@ import sys, pickle
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
 import os
-from scipy.misc import imsave
+from imageio import imwrite
+# from skimage.transform import rescale
+
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -376,7 +378,7 @@ class Car:
 
         # Hack... clip direction between -10 and +10
         alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        # d = np.array((np.cos(alpha), np.sin(alpha)))
+        d = np.array((np.cos(alpha), np.sin(alpha)))
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
@@ -388,10 +390,24 @@ class Car:
         y = (rot_surface.get_height() - width_height[1]) // 2
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
-        sub_rot_array = scipy.misc.imresize(sub_rot_array, scale)
-        sub_rot_array[:, :, 0] *= 4
-        assert (sub_rot_array.max() <= 255.0)
-        return torch.from_numpy(sub_rot_array)
+        # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
+        sub_rot_array_scaled = scipy.misc.imresize(sub_rot_array, scale)  # is deprecated, need to be replaced
+        sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
+        sub_rot_array_scaled_up[:, :, 0] *= 4
+        assert sub_rot_array_scaled_up.max() <= 255
+
+        # Compute cost relative to position within the lane
+        x = np.ceil((rot_surface.get_width() - self._length) / 2)
+        y = np.ceil((rot_surface.get_height() - self.LANE_W) / 2)
+        neighbourhood = rot_surface.subsurface(x, y, self._length, self.LANE_W)
+        neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
+        lanes = neighbourhood_array[:, :, 0]
+        mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
+        lane_cost = (lanes * mask).max() / 255
+
+        # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
+
+        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost
 
     def store(self, object_name, object_):
         if object_name == 'action':
@@ -404,20 +420,23 @@ class Car:
     def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         # im = self._states_image[100:]
-        im = self._states_image
+        transpose = list(zip(*self._states_image))
+        im = transpose[0]
+        lane_cost = transpose[1]
         os.system('mkdir -p ' + save_dir)
         if mode == 'tensor':
             # save in torch format
-            im_pth = torch.stack(im).permute(0, 3, 2, 1)
+            im_pth = torch.stack(im).permute(0, 3, 1, 2)
             pickle.dump({
                 'images': im_pth,
-                'actions': torch.stack(self._actions)
+                'actions': torch.stack(self._actions),
+                'lane_cost': torch.Tensor(lane_cost)
             }, open(save_dir + f'/car{self.id}.pkl', 'wb'))
         elif mode == 'img':
             save_dir = save_dir + '/' + str(self.id)
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imsave(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
     @property
     def valid(self):
@@ -590,11 +609,11 @@ class StatefulEnv(core.Env):
             if cost > 0.2:
                 img = v._states_image[-1]
                 hsh = random.random()
-                scipy.misc.imsave(f'cost_images/high/im{hsh:.5f}_cost{cost}.png', img.numpy())
+                imwrite(f'cost_images/high/im{hsh:.5f}_cost{cost}.png', img.numpy())
             elif cost < 0.01 and random.random() < 0.01:
                 img = v._states_image[-1]
                 hsh = random.random()
-                scipy.misc.imsave(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
+                imwrite(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
         '''
 
         self.frame += 1
@@ -658,13 +677,16 @@ class StatefulEnv(core.Env):
         if mode == 'machine':
             m = max_extension = np.linalg.norm(width_height)
             screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
             self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
 
             # draw vehicles
             for v in self.vehicles:
-                v.draw(screen_surface, mode=mode, offset=max_extension)
+                v.draw(vehicle_surface, mode=mode, offset=max_extension)
+
+            screen_surface.blit(vehicle_surface, (0, 0), special_flags=pygame.BLEND_ADD)
 
             # extract states
             for i, v in enumerate(self.vehicles):
