@@ -111,7 +111,7 @@ for i in range(n_batches):
 #                pred_b = pred_b.squeeze().permute(0, 2, 3, 1).data.cpu().numpy()
                 dirname_movie = '{}/videos/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
-                utils.save_movie(dirname_movie, pred_b.data, smooth=True)
+                utils.save_movie(dirname_movie, pred_b.data, smooth=False)
                 '''
                 os.system("mkdir -p " + dirname_movie)
                 for t in range(opt.npred):
