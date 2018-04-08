@@ -6,6 +6,7 @@ import numpy as np
 import pdb
 import bisect
 import pdb, pickle, os
+# from pykalman import KalmanFilter
 
 
 # Conversion LANE_W from real world to pixels
@@ -22,14 +23,36 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset, look_ahead, screen_w):
+    def __init__(self, df, y_offset, look_ahead, screen_w):  #, kf):
         self._k = 15  # running window size
+        # self._k = 0
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
         # X and Y are swapped in the I-80 data set...
-        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE - X_OFFSET - self._length
-        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE + y_offset
+        # x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE - X_OFFSET - self._length
+        # y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE + y_offset
+        x = (df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k)).values
+        y = (df['Local X'].rolling(window=self._k).mean().shift(1 - self._k)).values
+        # x = df['Local Y'].values
+        # y = df['Local X'].values
+        # x = df['Local Y'] * FOOT * SCALE - X_OFFSET - self._length
+        # y = df['Local X'].values
+        # speed = df['Vehicle Velocity'].values
+        for t in range(len(y) - 1):
+            # a, b = -1, .1
+            # gain = np.maximum(0, np.tanh(a + b * speed[t]))
+            # y[t + 1] = y[t] * (1 - gain) + gain * y[t + 1]
+            delta_x = x[t + 1] - x[t]
+            delta_y = y[t + 1] - y[t]
+            if abs(delta_y) > abs(delta_x) * 0.1:
+                y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        # kf.initial_state_mean = np.array((y[0], y[1] - y[0]))
+        # a, b = kf.smooth(y)
+        # y = pd.Series(a[:, 0] * FOOT * SCALE + y_offset, index=df.index)
+        x = pd.Series(x  * FOOT * SCALE - X_OFFSET - self._length, index=df.index)
+        y = pd.Series(y * FOOT * SCALE + y_offset, index=df.index)
+
         self._trajectory = pd.concat((x, y), axis=1, keys=('x', 'y'))
         self._position = self._trajectory.loc[self._trajectory.index[0], ['x', 'y']].values
         self._df = df
@@ -74,7 +97,7 @@ class RealCar(Car):
 
     def policy(self, observation):
         self._frame += 1
-        self.off_screen = self._frame >= len(self._df) - self._k - 1
+        self.off_screen = self._frame >= len(self._df) - self._k - 2
 
         new_speed = self._get('speed', self._frame)
         a = (new_speed - self._speed) / self._dt
@@ -122,6 +145,10 @@ class RealTraffic(StatefulEnv):
         self.df = self._get_data_frame(self.file_name)
         self.vehicles_history = set()
         self.lane_occupancy = None
+        # self._kf = KalmanFilter(
+        #     transition_matrices=np.array([[1, 1], [0, 1]]),
+        #     transition_covariance=0.00001 * np.eye(2)
+        # ).em(self.df[self.df['Vehicle ID'] == self.df.at[self.df.index[0], 'Vehicle ID']].loc[:, ['Local X']].values)
 
     @staticmethod
     def _get_data_frame(file_name):
@@ -157,7 +184,7 @@ class RealTraffic(StatefulEnv):
                 now_and_on = df['Frame ID'] >= self.frame
                 this_vehicle = df['Vehicle ID'] == vehicle_id
                 car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset,
-                                  self.look_ahead, self.screen_size[0])
+                                  self.look_ahead, self.screen_size[0])  #, self._kf)
                 self.vehicles.append(car)
         self.vehicles_history |= vehicles  # union set operation
 

@@ -201,8 +201,8 @@ class Car:
 
         # Hack... clip direction between -10 and +10
         d = self._direction
-        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        d = np.array((np.cos(alpha), np.sin(alpha)))
+        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
+        # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         if mode == 'human':
             if c:
@@ -226,7 +226,7 @@ class Car:
 
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
         direction_vector = self._direction + ortho_direction * b * self._speed * self._dt
-        self._direction = direction_vector / np.linalg.norm(direction_vector)
+        self._direction = direction_vector / (np.linalg.norm(direction_vector) + 1e-3)
 
         self._speed += a * self._dt
 
@@ -377,8 +377,8 @@ class Car:
         d = self._direction
 
         # Hack... clip direction between -10 and +10
-        alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        d = np.array((np.cos(alpha), np.sin(alpha)))
+        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
+        # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
