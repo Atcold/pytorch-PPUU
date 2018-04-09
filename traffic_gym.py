@@ -431,12 +431,12 @@ class Car:
                 'images': im_pth,
                 'actions': torch.stack(self._actions),
                 'lane_cost': torch.Tensor(lane_cost)
-            }, open(save_dir + f'/car{self.id}.pkl', 'wb'))
+            }, open(save_dir + '/car{}.pkl'.format(self.id), 'wb'))
         elif mode == 'img':
             save_dir = save_dir + '/' + str(self.id)
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+                imwrite('{}/im{:05d}.png'.format(save_dir, t), im[t].numpy())
 
     @property
     def valid(self):
@@ -500,7 +500,7 @@ class StatefulEnv(core.Env):
         self.policy_car_id = -1
         self.next_car_id = 0
         self.mean_fps = None
-        pygame.display.set_caption(f'Traffic simulator, episode {self.episode}')
+        pygame.display.set_caption('Traffic simulator, episode {}'.format(self.episode))
         state = list()
         objects = list()
         return state, objects
@@ -666,9 +666,9 @@ class StatefulEnv(core.Env):
                 c = (v.id == self.policy_car_id)
                 v.draw(self.screen, c)
 
-            draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2))
-            draw_text(self.screen, f'frame #: {self.frame}', (120, 2))
-            draw_text(self.screen, f'fps: {self.mean_fps:.0f}', (270, 2))
+            draw_text(self.screen, '# cars: {}'.format(len(self.vehicles)), (10, 2))
+            draw_text(self.screen, 'frame #: {}'.format(self.frame), (120, 2))
+            draw_text(self.screen, 'fps: {:.0f}'.format(self.mean_fps), (270, 2))
 
             pygame.display.flip()
 
