@@ -353,13 +353,12 @@ class FwdCNN(nn.Module):
             self.cpu()
 
 
-# forward VAE model with a fixed prior
+
+# forward VAE model with a learned prior
 class FwdCNN_VAE_FP(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, mfile=''):
         super(FwdCNN_VAE_FP, self).__init__()
         self.opt = opt
-
-
         if mfile == '':
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
@@ -371,36 +370,57 @@ class FwdCNN_VAE_FP(nn.Module):
             self.decoder = pretrained_model.decoder
             self.encoder.n_inputs = opt.ncond
 
-        self.z_network = z_network(opt, opt.ncond+opt.npred)
-        self.z_expander = z_expander(opt)
 
-    def forward(self, inputs, actions, targets):
+        self.y_encoder = encoder(opt, 0, 1)
+        self.z_network = z_network(opt)
+        self.z_expander = z_expander(opt, 1)
+
+    def forward(self, inputs, actions, targets, sampling=None):
         bsize = inputs.size(0)
         inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
 
-        z, mu, logvar = self.z_network(torch.cat((inputs, targets), 1))
-        z_exp = self.z_expander(z)
-
+        kld = Variable(torch.zeros(1))
+        if self.use_cuda:
+            kld = kld.cuda()
         pred = []
         for t in range(npred):
-            h = self.encoder(inputs, actions[:, t])
-            h = h + z_exp[:, t]
+            h_x = self.encoder(inputs, actions[:, t])
+            if targets is not None:
+                # we are training
+                h_y = self.y_encoder(targets[:, t].unsqueeze(1).contiguous())
+                z, mu, logvar = self.z_network(h_x + h_y)
+                logvar = torch.clamp(logvar, max = 4) # this can go to inf when taking exp(), so clamp it
+                kld_t = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+#                kld_t = torch.clamp(kld_t, max=50)
+#                kld_t = -0.5 * torch.clamp(torch.sum(1 + logvar - mu.pow(2) - logvar.exp()), min=50, max=50)                    
+                kld_t /= bsize
+                kld += kld_t
+                z_exp = self.z_expander(z)
+            else:
+                # we are generating samples
+                z = Variable(torch.randn(bsize, self.opt.nz).cuda())
+                z_exp = self.z_expander(z)
+
+            h = h_x + z_exp.squeeze()
             pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
             pred.append(pred_)
             inputs = torch.cat((inputs[:, 1:], pred_), 1)
 
+        kld /= npred
         pred = torch.cat(pred, 1)
-        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        kld /= bsize
         return pred, kld
 
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
+            self.use_cuda = True
         elif t == 'cpu':
             self.cpu()
+            self.use_cuda = False
+
+
 
 
 # forward VAE model with a learned prior
@@ -643,6 +663,8 @@ class FwdCNN_AE_FP(nn.Module):
             kld = kld.cuda()
 
         pred = []
+        self.Z = []
+        self.z_top_list = []
         for t in range(npred):
             h_x = self.encoder(inputs, actions[:, t])
             if targets is not None:
@@ -663,11 +685,12 @@ class FwdCNN_AE_FP(nn.Module):
                 elif sampling == 'pdf':
                     n_sample=100
                     n_z = bsize*1000
-                    Z = self.sample_z(n_z)
+                    if len(self.Z) == 0:
+                        self.Z = self.sample_z(n_z)
                     mu, sigma = self.q_network(inputs)
                     mu = mu.contiguous()
                     sigma = sigma.contiguous()
-                    Z_exp = Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
+                    Z_exp = self.Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
                     mu_exp = mu.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
                     sigma_exp = sigma.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
                     mu_exp = mu_exp.contiguous().view(-1, self.opt.nz)
@@ -676,9 +699,10 @@ class FwdCNN_AE_FP(nn.Module):
                     z_loss = utils.log_pdf(Z_exp, mu_exp, sigma_exp)
                     z_loss = z_loss.view(bsize, -1)
                     _, z_ind = torch.topk(z_loss, n_sample, dim=1, largest=False)
-                    z_top = Variable(Z.data.index(z_ind.data.view(-1))).view(bsize, n_sample, self.opt.nz)
+                    z_top = Variable(self.Z.data.index(z_ind.data.view(-1))).view(bsize, n_sample, self.opt.nz)
                     z_ind = random.choice(z_ind.t())
-                    z = Variable(Z.data.index(z_ind.data))
+                    z = Variable(self.Z.data.index(z_ind.data))
+                    self.z_top_list.append(z_top.data)
 
                     if random.random() < 0.01 and False:
                         # save
@@ -689,7 +713,8 @@ class FwdCNN_AE_FP(nn.Module):
                         embed = utils.embed(Z, z_top)
                         os.system('mkdir -p z_viz/pdf_{}samples'.format(n_sample))
                         torch.save(embed, 'z_viz/pdf_{}samples/{:05d}.pth'.format(n_sample, hsh))
-                    del Z, mu, sigma, Z_exp, mu_exp, sigma_exp
+                    del mu, sigma, Z_exp, mu_exp, sigma_exp
+                    
                 elif sampling == 'sphere':
                     Z = self.sample_z(bsize*500)
                     u = self.q_network(inputs)
@@ -729,10 +754,7 @@ class FwdCNN_AE_FP(nn.Module):
                     z = z / (1e-8 + torch.norm(z, 2, 1).view(-1, 1).expand(z.size()))
 
 
-            try:
-                z_exp = self.z_expander(z)
-            except:
-                pdb.set_trace()
+            z_exp = self.z_expander(z)
             if self.opt.z_mult == 1:
                 h = h_x * z_exp.squeeze()
             else:
