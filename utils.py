@@ -14,6 +14,17 @@ def log(fname, s):
     f.close()
 
 
+def format_losses(loss_i, loss_s, loss_c, loss_p, split):
+    log_string = ''
+    log_string += f'{split} loss ['
+    log_string += f'i: {loss_i:.5f}, '
+    log_string += f's: {loss_s:.5f}, '
+    log_string += f'c: {loss_c:.5f}, '
+    log_string += f'p: {loss_p:.5f}] '
+    return log_string
+    
+
+
 def save_movie(dirname, x, smooth=False, pytorch=True):
     os.system('mkdir -p ' + dirname)
     if pytorch:

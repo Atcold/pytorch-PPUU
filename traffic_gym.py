@@ -421,16 +421,27 @@ class Car:
         os.system('mkdir -p ' + save_dir)
         # im = self._states_image[100:]
         transpose = list(zip(*self._states_image))
+        if len(transpose) == 0:
+            print('failure, {}'.format(save_dir))
+            print(transpose)
+            return 
         im = transpose[0]
-        lane_cost = transpose[1]
         os.system('mkdir -p ' + save_dir)
         if mode == 'tensor':
+            lane_cost = transpose[1]
+            zip_ = list(zip(*self._states))
+            proximity_cost = torch.Tensor(zip_[2])
+            states = torch.stack(zip_[0])
+            mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
             pickle.dump({
                 'images': im_pth,
                 'actions': torch.stack(self._actions),
-                'lane_cost': torch.Tensor(lane_cost)
+                'lane_cost': torch.Tensor(lane_cost), 
+                'states': states, 
+                'proximity_cost': proximity_cost, 
+                'mask': mask
             }, open(save_dir + '/car{}.pkl'.format(self.id), 'wb'))
         elif mode == 'img':
             save_dir = save_dir + '/' + str(self.id)

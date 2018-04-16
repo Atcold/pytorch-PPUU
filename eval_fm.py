@@ -38,7 +38,7 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 
-opt.model_dir += f'/dataset_{opt.dataset}/models'
+opt.model_dir += f'/dataset_{opt.dataset}_v4/models'
 if opt.dataset == 'simulator':
     opt.model_dir += f'_{opt.nshards}-shards/'
     data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'

@@ -142,8 +142,8 @@ class RealTraffic(StatefulEnv):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
 #        self.file_name = './data_i80/trajectories-0515-0530.txt'
-#        self.file_name = './data_i80/trajectories-0500-0515.txt'
-        self.file_name = './data_i80/trajectories-0400-0415.txt'
+        self.file_name = './data_i80/trajectories-0500-0515.txt'
+#        self.file_name = './data_i80/trajectories-0400-0415.txt'
         self.df = self._get_data_frame(self.file_name)
         self.vehicles_history = set()
         self.lane_occupancy = None

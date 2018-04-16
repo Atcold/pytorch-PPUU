@@ -9,13 +9,14 @@ import scipy.misc
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
+parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
-parser.add_argument('-save_images', type=int, default=1)
+parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-steps', type=int, default=500)
@@ -31,31 +32,39 @@ torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
-print(f'Will save as {data_file}')
-
 tags = {'wrapper_config.TimeLimit.max_episodesteps': 100}
-kwargs = {
-    'display': opt.display,
-    'nb_lanes': opt.lanes,
-    'traffic_rate': opt.traffic_rate,
-    'state_image': opt.state_image,
-    'store': opt.store,
-}
+if opt.dataset == 'simulator':
+    data_file = '{}/traffic_data_lanes={}-episodes={}-seed={}.pkl'.format(opt.data_dir, opt.lanes, opt.n_episodes, opt.seed)
+    print('will save as {}'.format(data_file))
+    register(
+        id='Traffic-v0',
+        entry_point='traffic_gym:StatefulEnv',
+        tags=tags,
+        kwargs=kwargs
+    )
+    kwargs = {
+        'display': opt.display,
+        'nb_lanes': opt.lanes,
+        'traffic_rate': opt.traffic_rate,
+        'state_image': opt.state_image,
+        'store': opt.store,
+    }
 
-register(
-    id='Traffic-v0',
-    entry_point='traffic_gym:StatefulEnv',
-    tags=tags,
-    kwargs=kwargs
-)
+elif opt.dataset == 'i80':
+    opt.steps = 10000000000
+    kwargs = {
+        'display': opt.display,
+        'state_image': opt.state_image,
+        'store': opt.store,
+    }
 
-register(
-    id='Traffic-v1',
-    entry_point='traffic_gym_v1:RealTraffic',
-    tags=tags,
-    kwargs=kwargs
-)
+    register(
+        id='Traffic-v1',
+        entry_point='traffic_gym_v1:RealTraffic',
+        tags=tags,
+        kwargs=kwargs
+    )
+
 
 env = gym.make('Traffic-v' + opt.v)
 
@@ -77,7 +86,6 @@ def prepare_trajectory_state(states, actions):
 
 
 def run_episode(ep):
-
     env.reset()
     for t in range(opt.steps):
         if True:
@@ -94,9 +102,8 @@ def run_episode(ep):
         if env.collision:
             print('collision, breaking')
             break
-
     runs = []
-
+    vehicles = env.vehicles
     if opt.save_images == 1:
         vid = 0
         for v in vehicles:
@@ -118,7 +125,7 @@ def run_episode(ep):
 
 episodes = []
 for i in range(opt.n_episodes):
-    print(f'episode {i + 1}/{opt.n_episodes}')
+    print('[episode {}]'.format(i))
     runs = run_episode(i)
     episodes += runs
 
