@@ -118,7 +118,6 @@ class DataLoader():
             all_actions = torch.cat(all_actions, 0)
             self.a_mean = torch.mean(all_actions, 0)
             self.a_std = torch.std(all_actions, 0)
-            print('[done]')
 
             print('[computing state stats]')
             all_states = []
@@ -127,7 +126,6 @@ class DataLoader():
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
-            print('[done]')
 
             '''
             print('[computing cost stats]')
@@ -207,7 +205,7 @@ class DataLoader():
         nb = 0
         while nb < self.opt.batch_size:
             s = random.choice(indx)
-            T = self.images[s].size(0)
+            T = self.states[s].size(0)
             if T > (self.opt.ncond + npred + 1):
                 t = random.randint(0, T - (self.opt.ncond+npred + 1))
                 images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
@@ -220,7 +218,10 @@ class DataLoader():
         images = torch.stack(images).float()
         images.div_(255.0)
 
-        states = torch.stack(states)
+        try:
+            states = torch.stack(states)
+        except:
+            pdb.set_trace()
         states = states[:, :, 0].contiguous()
         states -= self.s_mean.view(1, 1, 4).expand(states.size()).cuda()
         states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).cuda()
@@ -248,11 +249,11 @@ class DataLoader():
             actions = actions.cpu()
             target_images = target_images.cpu()
             
-        input_images = Variable(input_images)
-        input_states = Variable(input_states)
-        target_images = Variable(target_images)
-        target_states = Variable(target_states)
-        actions = Variable(actions)
-        target_costs = Variable(target_costs)
+#        input_images = Variable(input_images)
+#        input_states = Variable(input_states)
+#        target_images = Variable(target_images)
+#        target_states = Variable(target_states)
+#        actions = Variable(actions)
+#        target_costs = Variable(target_costs)
         return [input_images, input_states], actions, [target_images, target_states, target_costs]
 

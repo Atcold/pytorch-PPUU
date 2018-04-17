@@ -14,6 +14,13 @@ def log(fname, s):
     f.close()
 
 
+
+def combine(x, y, method):
+    if method == 'add':
+        return x + y
+    elif method == 'mult':
+        return x * y
+
 def format_losses(loss_i, loss_s, loss_c, loss_p, split):
     log_string = ''
     log_string += f'{split} loss ['
@@ -55,6 +62,31 @@ def log_pdf(z, mu, sigma):
     b = torch.log(2*math.pi*torch.prod(sigma, 1))
     loss = a.squeeze() + b.squeeze()
     return loss
+
+
+
+# TODO: check this by hand
+def gaussian_distribution(y, mu, sigma):
+    oneDivSqrtTwoPI = 1.0 / (numpy.sqrt(2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians
+    # make |mu|=K copies of y, subtract mu, divide by sigma
+    result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
+    result = -0.5 * torch.sum(result * result, 2)
+    result = torch.exp(result) / (1e-8 + torch.sqrt(torch.prod(sigma, 2)))
+    result *= oneDivSqrtTwoPI
+    return result
+#    return (torch.exp(result) * torch.reciprocal(sigma)) * oneDivSqrtTwoPI
+
+def mdn_loss_fn(pi, sigma, mu, y):
+    result = gaussian_distribution(y, mu, sigma) 
+    result = result * pi
+    result = torch.sum(result, dim=1)
+    result = -torch.log(1e-8 + result)
+    try:
+        result = torch.mean(result)
+    except:
+        pdb.set_trace()
+    return result
+
 
 # embed Z distribution as well as some special z's (ztop) using PCA and tSNE. 
 # Useful for visualizing predicted z vectors. 

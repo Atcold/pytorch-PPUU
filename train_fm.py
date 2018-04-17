@@ -35,15 +35,13 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
-parser.add_argument('-grad_clip', type=float, default=-1)
 parser.add_argument('-z_sphere', type=int, default=0)
-parser.add_argument('-z_mult', type=int, default=0)
-parser.add_argument('-n_gaussians', type=int, default=10)
-parser.add_argument('-iterate_z', type=int, default=5)
+parser.add_argument('-combine', type=str, default='mult')
+parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
-opt.model_dir += f'/dataset_{opt.dataset}_costs/models/'
+opt.model_dir += f'/dataset_{opt.dataset}_costs2/models/'
 if opt.dataset == 'simulator':
     opt.model_dir += f'_{opt.nshards}-shards/'
     data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
@@ -55,32 +53,23 @@ os.system('mkdir -p ' + opt.model_dir)
 dataloader = DataLoader(data_file, opt, opt.dataset)
 
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-decoder={opt.decoder}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-decoder={opt.decoder}-combine={opt.combine}'
 
 if opt.zeroact == 1:
     opt.model_file += '-zeroact'
 
-if 'vae' in opt.model:
+if 'vae' or 'fwd-cnn-ae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
 
-if 'een' in opt.model or 'fwd-cnn-ae' in opt.model:
-    opt.model_file += f'-nz={opt.nz}'
+if 'fwd-cnn-ae' in opt.model:
+    opt.model_file += f'-nmix={opt.n_mixture}'
 
 if '-ae-lp' in opt.model:
     opt.model_file += f'-loss_p={opt.loss2}'
 
-if opt.z_sphere == 1:
-    opt.model_file += f'-zsphere=1'
-
-if opt.z_mult == 1:
-    opt.model_file += f'-zmult=1'
 
 
-if opt.iterate_z > -1:
-    opt.model_file += f'-ziter={opt.iterate_z}'
-
-opt.model_file += f'-gclip={opt.grad_clip}'
 opt.model_file += f'-warmstart={opt.warmstart}'
 print(f'[will save model as: {opt.model_file}]')
 
@@ -97,13 +86,11 @@ elif opt.dataset == 'i80':
     opt.width = 24
     opt.h_height = 14
     opt.h_width = 3
-#    opt.h_height = 7
-#    opt.h_width = 1
     opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 if opt.warmstart == 1:
-    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}_v4/models/'
-    prev_model += f'model=fwd-cnn-bsize=16-ncond=10-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-decoder={opt.decoder}-zsphere=1-gclip=-1-warmstart=0.model'
+    prev_model = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/dataset_{opt.dataset}_costs2/models/'
+    prev_model += f'model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0002-nhidden=100-nfeature={opt.nfeature}-decoder={opt.decoder}-combine={opt.combine}-warmstart=0.model'
 else:
     prev_model = ''
 
@@ -134,8 +121,6 @@ optimizer = optim.Adam(model.parameters(), opt.lrt)
 def compute_loss(targets, predictions):
     pred_images, pred_states, pred_costs = predictions
     target_images, target_states, target_costs = targets
-#    print(target_states.min(), target_states.max())
-#    print(target_costs.data.min(), target_costs.data.mean(), target_costs.data.max())
     loss_i = F.mse_loss(pred_images, target_images)
     loss_s = F.mse_loss(pred_states, target_states)
     loss_c = F.mse_loss(pred_costs, target_costs)
@@ -147,6 +132,12 @@ def compute_loss(targets, predictions):
 # loss_c: costs
 # loss_p: prior
 
+def make_variables(x):
+    y = []
+    for i in range(len(x)):
+        y.append(Variable(x[i]))
+    return y
+
 def train(nbatches, npred):
     model.train()
     total_loss_i, total_loss_s, total_loss_c, total_loss_p = 0, 0, 0, 0
@@ -154,11 +145,14 @@ def train(nbatches, npred):
         optimizer.zero_grad()
         t0 = time.time()
         inputs, actions, targets = dataloader.get_batch_fm('train', npred)
+        inputs = make_variables(inputs)
+        targets = make_variables(targets)
+        actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
         pred, loss_p = model(inputs, actions, targets)
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
-        loss = loss_i + loss_s + loss_c + loss_p
+        loss = loss_i + loss_s + loss_c + opt.beta * loss_p
         loss.backward()
         optimizer.step()
         t = time.time()-t0
@@ -166,6 +160,7 @@ def train(nbatches, npred):
         total_loss_s += loss_s.data[0]
         total_loss_c += loss_c.data[0]
         total_loss_p += loss_p.data[0]
+        del inputs, actions, targets
 
     total_loss_i /= nbatches
     total_loss_s /= nbatches
@@ -179,6 +174,9 @@ def test(nbatches):
     total_loss_i, total_loss_s, total_loss_c, total_loss_p = 0, 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets = dataloader.get_batch_fm('valid')
+        inputs = make_variables(inputs)
+        targets = make_variables(targets)
+        actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
         pred, loss_p = model(inputs, actions, targets)
@@ -187,6 +185,7 @@ def test(nbatches):
         total_loss_s += loss_s.data[0]
         total_loss_c += loss_c.data[0]
         total_loss_p += loss_p.data[0]
+        del inputs, actions, targets
 
     total_loss_i /= nbatches
     total_loss_s /= nbatches
@@ -206,29 +205,24 @@ def compute_pz(nbatches):
         
 
 print('[training]')
-best_valid_loss_mse = 1e6
+best_total_valid_loss = 1e6
 for i in range(100):
     t0 = time.time()
     train_losses = train(opt.epoch_size, opt.npred)
     valid_losses = test(int(opt.epoch_size / 2))
     t = time.time() - t0
-    '''
-    if valid_loss_mse < best_valid_loss_mse:
-        best_valid_loss_mse = valid_loss_mse                
-        if '-een-' in opt.model or '-ae-' in opt.model:
-            compute_pz(int(opt.epoch_size/2))
-    '''
+    total_valid_loss = 0
+    for loss in valid_losses:
+        total_valid_loss += loss
+    if total_valid_loss < best_total_valid_loss:
+        best_total_valid_loss = total_valid_loss
+        model.intype('cpu')
+        torch.save(model, opt.model_file + '.model')
+        model.intype('gpu')
+
     log_string = f'step {i*opt.epoch_size} | '
     log_string += utils.format_losses(*train_losses, 'train')
     log_string += utils.format_losses(*valid_losses, 'valid')
-    
     print(log_string)
-
-    model.intype('cpu')
-    torch.save(model, opt.model_file + '.model')
-    model.intype('gpu')
-
     utils.log(opt.model_file + '.log', log_string)
-
-
 

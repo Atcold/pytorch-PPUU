@@ -11,15 +11,15 @@ parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
+parser.add_argument('-debug', type=int, default=0)
+
 opt = parser.parse_args()
 
 
 data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 print(data_file)
 
-dataloader = DataLoader(data_file, opt, dataset='i80')
+dataloader = DataLoader(None, opt, dataset='i80')
 for i in range(2):
-    inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
-#for _ in range(10):
-#    inputs, actions, targets, _, _  = dataloader.get_batch_fm('train')
+    inputs, actions, targets = dataloader.get_batch_fm('train')
 
