@@ -121,7 +121,8 @@ def mdn_loss_fn(pi, sigma, mu, y):
     result += 0.5*c*math.log(2*math.pi)
     result += torch.log(torch.prod(sigma, 2))
     result = -result
-    return -log_sum_exp(result, dim=1)
+    result = -log_sum_exp(result, dim=1)
+    return torch.mean(result)
 
 
 
