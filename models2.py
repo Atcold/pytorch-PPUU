@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 from torch.autograd import Variable
-import random, pdb, copy, os, math
+import random, pdb, copy, os, math, numpy
 import utils
 
 
@@ -279,6 +279,7 @@ class u_network_mdn_fc(nn.Module):
         pi = F.softmax(self.pi_net(h), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
         sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
+        sigma = torch.clamp(sigma, min=1e-3)
         return pi, mu, sigma
 
 
@@ -488,6 +489,9 @@ class FwdCNN_AE_FP(nn.Module):
             if self.opt.beta > 0:
                 pi, mu, sigma = self.u_network(h_x)
                 ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
+                if math.isnan(ploss.data[0]):
+                    pdb.set_trace()
+                
 
             z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -682,7 +686,7 @@ class FwdCNN_VAE_LP(nn.Module):
                 z2, mu2, logvar2 = self.q_network(h_x)
                 sigma1 = logvar1.mul(0.5).exp()
                 sigma2 = logvar2.mul(0.5).exp()
-                kld_t = torch.log(sigma2/sigma1 + 1e-6) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+                kld_t = torch.log(sigma2/sigma1 + 1e-6) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(1e-6 + 2*torch.exp(logvar2)) - 1/2
                 kld_t = torch.clamp(kld_t, max=50)
                 kld_t = torch.sum(kld_t) / bsize
                 kld += kld_t
