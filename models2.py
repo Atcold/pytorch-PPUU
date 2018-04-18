@@ -682,7 +682,7 @@ class FwdCNN_VAE_LP(nn.Module):
                 z2, mu2, logvar2 = self.q_network(h_x)
                 sigma1 = logvar1.mul(0.5).exp()
                 sigma2 = logvar2.mul(0.5).exp()
-                kld_t = torch.log(sigma2/sigma1 + 1e-8) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+                kld_t = torch.log(sigma2/sigma1 + 1e-6) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
                 kld_t = torch.clamp(kld_t, max=50)
                 kld_t = torch.sum(kld_t) / bsize
                 kld += kld_t
@@ -719,22 +719,6 @@ class FwdCNN_VAE_LP(nn.Module):
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

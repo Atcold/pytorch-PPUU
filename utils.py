@@ -4,6 +4,7 @@ from datetime import datetime
 import scipy
 from sklearn import decomposition
 import sklearn.manifold as manifold
+from torch.autograd import Variable
 
 # Logging function
 def log(fname, s):
@@ -13,6 +14,11 @@ def log(fname, s):
     f.write(str(datetime.now()) + ': ' + s + '\n')
     f.close()
 
+def make_variables(x):
+    y = []
+    for i in range(len(x)):
+        y.append(Variable(x[i]))
+    return y
 
 
 def combine(x, y, method):
@@ -65,26 +71,20 @@ def log_pdf(z, mu, sigma):
 
 
 
-# TODO: check this by hand
 def gaussian_distribution(y, mu, sigma):
-    oneDivSqrtTwoPI = 1.0 / (numpy.sqrt(2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians
-    # make |mu|=K copies of y, subtract mu, divide by sigma
+    oneDivSqrtTwoPI = 1.0 / (numpy.sqrt(2.0*numpy.pi)**mu.size(2)) # normalization factor for Gaussians
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = -0.5 * torch.sum(result * result, 2)
-    result = torch.exp(result) / (1e-8 + torch.sqrt(torch.prod(sigma, 2)))
+    result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
     result *= oneDivSqrtTwoPI
     return result
-#    return (torch.exp(result) * torch.reciprocal(sigma)) * oneDivSqrtTwoPI
 
 def mdn_loss_fn(pi, sigma, mu, y):
     result = gaussian_distribution(y, mu, sigma) 
     result = result * pi
     result = torch.sum(result, dim=1)
-    result = -torch.log(1e-8 + result)
-    try:
-        result = torch.mean(result)
-    except:
-        pdb.set_trace()
+    result = -torch.log(1e-6 + result)
+    result = torch.mean(result)
     return result
 
 
