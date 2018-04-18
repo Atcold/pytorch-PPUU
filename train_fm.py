@@ -118,12 +118,12 @@ model.intype('gpu')
 optimizer = optim.Adam(model.parameters(), opt.lrt)
 
 
-def compute_loss(targets, predictions):
+def compute_loss(targets, predictions, r=True):
     pred_images, pred_states, pred_costs = predictions
     target_images, target_states, target_costs = targets
-    loss_i = F.mse_loss(pred_images, target_images)
-    loss_s = F.mse_loss(pred_states, target_states)
-    loss_c = F.mse_loss(pred_costs, target_costs)
+    loss_i = F.mse_loss(pred_images, target_images, reduce=r)
+    loss_s = F.mse_loss(pred_states, target_states, reduce=r)
+    loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
     return loss_i, loss_s, loss_c
     
 
