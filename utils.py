@@ -29,7 +29,7 @@ def format_losses(loss_i, loss_s, loss_c, loss_p, split):
     log_string += f'c: {loss_c:.5f}, '
     log_string += f'p: {loss_p:.5f}] '
     return log_string
-    
+
 
 
 def save_movie(dirname, x, smooth=False, pytorch=True):
@@ -65,31 +65,68 @@ def log_pdf(z, mu, sigma):
 
 
 
-# TODO: check this by hand
+def log_gaussian_distribution(y, mu, sigma):
+    Z = 1.0 / ((2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians (!!can be numerically unstable)
+    result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
+    result = 0.5 * torch.sum(result * result, 2)
+    result += torch.log(2*math.pi*torch.prod(sigma, 2))
+#    result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
+#    result *= oneDivSqrtTwoPI
+    return result
+
+
 def gaussian_distribution(y, mu, sigma):
-    oneDivSqrtTwoPI = 1.0 / (numpy.sqrt(2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians
-    # make |mu|=K copies of y, subtract mu, divide by sigma
+    oneDivSqrtTwoPI = 1.0 / ((2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians (!!can be numerically unstable)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = -0.5 * torch.sum(result * result, 2)
-    result = torch.exp(result) / (1e-8 + torch.sqrt(torch.prod(sigma, 2)))
+    result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
     result *= oneDivSqrtTwoPI
     return result
-#    return (torch.exp(result) * torch.reciprocal(sigma)) * oneDivSqrtTwoPI
 
-def mdn_loss_fn(pi, sigma, mu, y):
-    result = gaussian_distribution(y, mu, sigma) 
+def mdn_loss_fn_v0(pi, sigma, mu, y):
+    result = gaussian_distribution(y, mu, sigma)
     result = result * pi
     result = torch.sum(result, dim=1)
-    result = -torch.log(1e-8 + result)
-    try:
-        result = torch.mean(result)
-    except:
-        pdb.set_trace()
+    result = -torch.log(1e-6 + result)
+    result = torch.mean(result)
     return result
 
 
-# embed Z distribution as well as some special z's (ztop) using PCA and tSNE. 
-# Useful for visualizing predicted z vectors. 
+def log_sum_exp(value, dim=None, keepdim=False):
+    """Numerically stable implementation of the operation
+    value.exp().sum(dim, keepdim).log()
+    """
+    # TODO: torch.max(value, dim=None) threw an error at time of writing
+    if dim is not None:
+        m, _ = torch.max(value, dim=dim, keepdim=True)
+        value0 = value - m
+        if keepdim is False:
+            m = m.squeeze(dim)
+        return m + torch.log(torch.sum(torch.exp(value0),
+                                       dim=dim, keepdim=keepdim))
+    else:
+        m = torch.max(value)
+        sum_exp = torch.sum(torch.exp(value - m))
+        if isinstance(sum_exp, Number):
+            return m + math.log(sum_exp)
+        else:
+            return m + torch.log(sum_exp)
+
+# TODO: check this again by hand
+def mdn_loss_fn(pi, sigma, mu, y):
+    c = mu.size(2)
+    result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
+    result = 0.5 * torch.sum(result * result, 2)
+    result -= torch.log(pi)
+    result += 0.5*c*math.log(2*math.pi)
+    result += torch.log(torch.prod(sigma, 2))
+    result = -result
+    return -log_sum_exp(result, dim=1)
+
+
+
+# embed Z distribution as well as some special z's (ztop) using PCA and tSNE.
+# Useful for visualizing predicted z vectors.
 def embed(Z, ztop, ndim=3):
     bsize = ztop.shape[0]
     nsamples = ztop.shape[1]
@@ -124,9 +161,9 @@ def embed(Z, ztop, ndim=3):
     Z_tsne = Z_all_tsne[bsize*nsamples:]
     '''
 #    Z_tsne, ztop_tsne = None, None
-    return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca, 
+    return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca,
             'Z_laplacian': Z_laplacian, 'ztop_laplacian': ztop_laplacian,
-            'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap, 
-            'ztop_only_pca': ztop_only_pca, 
-            'ztop_only_laplacian': ztop_only_laplacian, 
+            'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap,
+            'ztop_only_pca': ztop_only_pca,
+            'ztop_only_laplacian': ztop_only_laplacian,
             'ztop_only_isomap': ztop_only_isomap}
