@@ -21,6 +21,7 @@ parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
+parser.add_argument('-fps', type=int, default=30)
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -31,15 +32,20 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
+kwargs = {
+        'display': opt.display,
+        'state_image': opt.state_image,
+        'store': opt.store,
+        'fps': opt.fps,
+    }
 
-tags = {'wrapper_config.TimeLimit.max_episodesteps': 100}
+data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
+
 if opt.dataset == 'simulator':
-    data_file = '{}/traffic_data_lanes={}-episodes={}-seed={}.pkl'.format(opt.data_dir, opt.lanes, opt.n_episodes, opt.seed)
-    print('will save as {}'.format(data_file))
+    print(f'will save as {data_file}')
     register(
         id='Traffic-v0',
         entry_point='traffic_gym:StatefulEnv',
-        tags=tags,
         kwargs=kwargs
     )
     kwargs = {
@@ -52,20 +58,14 @@ if opt.dataset == 'simulator':
 
 elif opt.dataset == 'i80':
     opt.steps = 10000000000
-    kwargs = {
-        'display': opt.display,
-        'state_image': opt.state_image,
-        'store': opt.store,
-    }
 
     register(
         id='Traffic-v1',
         entry_point='traffic_gym_v1:RealTraffic',
-        tags=tags,
         kwargs=kwargs
     )
 
-
+print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
 
@@ -85,19 +85,11 @@ def prepare_trajectory_state(states, actions):
     return s, m, a
 
 
-def run_episode(ep):
+def run_episode():
     env.reset()
     for t in range(opt.steps):
-        if True:
-            state, reward, vehicles = env.step(None)
-            env.render()
-        else:
-            try:
-                state, reward, vehicles = env.step(None)
-                env.render()
-            except:
-                print('exception, breaking')
-                break
+        state, reward, vehicles = env.step(None)
+        env.render()
 
         if env.collision:
             print('collision, breaking')
@@ -105,14 +97,9 @@ def run_episode(ep):
     runs = []
     vehicles = env.vehicles
     if opt.save_images == 1:
-        vid = 0
         for v in vehicles:
-            im = v._states_image[100:]
-            save_dir = 'videos/states/ex{:d}'.format(vid)
-            os.system('mkdir -p ' + save_dir)
-            for t in range(len(im)):
-                scipy.misc.imsave('{}/im{:05d}.png'.format(save_dir, t), im[t])
-            vid += 1
+            save_dir = f'videos/states/ex{vid:d}'
+            v.dump_state_image(save_dir)
 
     for v in vehicles:
         if len(v._states_image) > 1:
@@ -125,8 +112,8 @@ def run_episode(ep):
 
 episodes = []
 for i in range(opt.n_episodes):
-    print('[episode {}]'.format(i))
-    runs = run_episode(i)
+    print(f'[episode {i + 1}]')
+    runs = run_episode()
     episodes += runs
 
 pickle.dump(episodes, open(data_file, 'wb'))
