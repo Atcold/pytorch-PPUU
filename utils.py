@@ -4,6 +4,7 @@ from datetime import datetime
 import scipy
 from sklearn import decomposition
 import sklearn.manifold as manifold
+from torch.autograd import Variable
 
 # Logging function
 def log(fname, s):
@@ -13,6 +14,11 @@ def log(fname, s):
     f.write(str(datetime.now()) + ': ' + s + '\n')
     f.close()
 
+def make_variables(x):
+    y = []
+    for i in range(len(x)):
+        y.append(Variable(x[i]))
+    return y
 
 
 def combine(x, y, method):
@@ -113,7 +119,11 @@ def log_sum_exp(value, dim=None, keepdim=False):
             return m + torch.log(sum_exp)
 
 # TODO: check this again by hand
-def mdn_loss_fn(pi, sigma, mu, y):
+def mdn_loss_fn(pi, sigma, mu, y, avg=True):
+    minsigma = sigma.min().data[0]
+    if minsigma < 0:
+        pdb.set_trace()
+    assert(minsigma >= 0, '{} < 0'.format(minsigma))
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
@@ -124,7 +134,11 @@ def mdn_loss_fn(pi, sigma, mu, y):
     result += torch.sum(torch.log(sigma), 2)
     result = -result
     result = -log_sum_exp(result, dim=1)
-    return torch.mean(result)
+    if avg:
+        result = torch.mean(result)
+#    if math.isnan(result.data[0]):
+#        pdb.set_trace()
+    return result
 
 
 

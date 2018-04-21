@@ -120,7 +120,7 @@ class decoder(nn.Module):
                 nn.Linear(opt.nfeature, opt.nfeature), 
                 #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2), 
-                nn.Linear(opt.nfeature, 2), 
+                nn.Linear(opt.nfeature, self.n_out*2), 
                 nn.Sigmoid()
             )
 
@@ -131,7 +131,7 @@ class decoder(nn.Module):
                 nn.Linear(opt.nfeature, opt.nfeature), 
                 #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2), 
-                nn.Linear(opt.nfeature, 4)
+                nn.Linear(opt.nfeature, self.n_out*4)
             )
 
             if self.opt.decoder > 0:
@@ -339,7 +339,6 @@ class FwdCNN(nn.Module):
             self.decoder = pretrained_model.decoder
             self.encoder.n_inputs = opt.ncond
 
-
     def forward(self, inputs, actions, target, sampling=None):
         npred = actions.size(1)
         input_images, input_states = inputs
@@ -361,7 +360,6 @@ class FwdCNN(nn.Module):
         pred_costs = torch.stack(pred_costs, 1)
         return [pred_images, pred_states, pred_costs], Variable(torch.zeros(1).cuda())
 
-
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
@@ -371,6 +369,90 @@ class FwdCNN(nn.Module):
 
 
 
+# forward model, Mixture Density Network.
+class FwdCNN_MDN(nn.Module):
+    def __init__(self, opt, mfile):
+        super(FwdCNN_MDN, self).__init__()
+        self.opt = opt
+        self.encoder = encoder(opt, opt.n_actions, opt.ncond)
+        self.decoder = decoder(opt, n_out = 2*opt.n_mixture)
+
+        self.pi_network = nn.Sequential(
+            nn.Linear(self.opt.hidden_size, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.nfeature), 
+            nn.LeakyReLU(0.2),
+            nn.Linear(opt.nfeature, opt.n_mixture)
+        )
+
+    def forward(self, inputs, actions, targets, sampling=None):
+        npred = actions.size(1)
+        input_images, input_states = inputs
+        bsize = actions.size(0)
+        pred_images_mu, pred_states_mu, pred_costs_mu = [], [], []
+        pred_images_sigma, pred_states_sigma, pred_costs_sigma = [], [], []
+        latent_probs = []
+        for t in range(npred):
+            h = self.encoder(input_images, input_states, actions[:, t])
+            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image = pred_image.view(bsize, self.opt.n_mixture, 2, 3, self.opt.height, self.opt.width)
+            pred_image_mu = pred_image[:, :, 0].contiguous().view(bsize, -1)
+            pred_image_sigma = pred_image[:, :, 1].contiguous().view(bsize, -1)
+            pred_state = pred_state.view(bsize, self.opt.n_mixture, 2, 4)
+            pred_state_mu = pred_state[:, :, 0].contiguous().view(bsize, -1)
+            pred_state_sigma = pred_state[:, :, 1].contiguous().view(bsize, -1)
+            pred_cost = pred_cost.view(bsize, self.opt.n_mixture, 2, 2)
+            pred_cost_mu = pred_cost[:, :, 0].contiguous().view(bsize, -1)
+            pred_cost_sigma = pred_cost[:, :, 1].contiguous().view(bsize, -1)
+
+            pi = F.softmax(self.pi_network(h.view(bsize, -1)), dim=1)
+            pred_image_mu = F.sigmoid(pred_image_mu)
+            pred_image_sigma = F.softplus(pred_image_sigma)
+            pred_state_sigma = F.softplus(pred_state_sigma)
+            pred_cost_sigma = F.softplus(pred_cost_sigma)
+
+#            pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+#            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+#            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+            if targets is not None:
+                target_images, target_states, target_costs = targets
+                input_images = torch.cat((input_images[:, 1:], target_images[:, t].unsqueeze(1)), 1)
+                input_states = torch.cat((input_states[:, 1:], target_states[:, t].unsqueeze(1)), 1)
+            else:
+                # sample, TODO
+                pdb.set_trace()
+
+            pred_images_mu.append(pred_image_mu)
+            pred_states_mu.append(pred_state_mu)
+            pred_costs_mu.append(pred_cost_mu)
+            pred_images_sigma.append(pred_image_sigma)
+            pred_states_sigma.append(pred_state_sigma)
+            pred_costs_sigma.append(pred_cost_sigma)
+            latent_probs.append(pi)
+
+            
+        pred_images_mu = torch.stack(pred_images_mu, 1)
+        pred_states_mu = torch.stack(pred_states_mu, 1)
+        pred_costs_mu = torch.stack(pred_costs_mu, 1)
+        pred_images_sigma = torch.stack(pred_images_sigma, 1)
+        pred_states_sigma = torch.stack(pred_states_sigma, 1)
+        pred_costs_sigma = torch.stack(pred_costs_sigma, 1)
+        latent_probs = torch.stack(latent_probs, 1)
+
+        pred_images_sigma = torch.clamp(pred_images_sigma, min=1e-1)
+        pred_states_sigma = torch.clamp(pred_states_sigma, min=1e-5)
+        pred_costs_sigma = torch.clamp(pred_costs_sigma, min=1e-5)
+
+        return [[pred_images_mu, pred_images_sigma], [pred_states_mu, pred_states_sigma], [pred_costs_mu, pred_costs_sigma], latent_probs], Variable(torch.zeros(1).cuda())
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
 
 
 
@@ -416,32 +498,34 @@ class FwdCNN_AE_FP(nn.Module):
         else:
             self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
 
-    def sample_z(self, bsize, method='fp'):
+    def sample_z(self, bsize, method='fp', input_images=None, input_states=None, action=None):
         z = []
         if method == 'fp':
             for b in range(bsize):
                 z.append(random.choice(self.p_z))
             z = torch.stack(z).contiguous()
         elif method == 'pdf':
-            n_sample=100
             n_z = bsize*1000
             if len(self.Z) == 0:
                 self.Z = self.sample_z(n_z)
-            mu, sigma = self.q_network(inputs)
+
+            h_x = self.encoder(input_images, input_states, action)
+            pi, mu, sigma = self.u_network(h_x)
             mu = mu.contiguous()
             sigma = sigma.contiguous()
             Z_exp = self.Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-            mu_exp = mu.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-            sigma_exp = sigma.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-            mu_exp = mu_exp.contiguous().view(-1, self.opt.nz)
-            sigma_exp = sigma_exp.contiguous().view(-1, self.opt.nz)
+            mu_exp = mu.view(bsize, 1, self.opt.n_mixture, self.opt.nz).expand(bsize, n_z, self.opt.n_mixture, self.opt.nz)
+            sigma_exp = sigma.view(bsize, 1, self.opt.n_mixture, self.opt.nz).expand(bsize, n_z, self.opt.n_mixture, self.opt.nz)
+            mu_exp = mu_exp.contiguous().view(-1, self.opt.n_mixture, self.opt.nz)
+            sigma_exp = sigma_exp.contiguous().view(-1, self.opt.n_mixture, self.opt.nz)
+            pi_exp = pi.view(bsize, 1, self.opt.n_mixture).expand(bsize, n_z, self.opt.n_mixture).contiguous().view(-1, self.opt.n_mixture)
             Z_exp = Z_exp.clone().view(-1, self.opt.nz)
-            z_loss = utils.log_pdf(Z_exp, mu_exp, sigma_exp)
+            z_loss = utils.mdn_loss_fn(pi_exp, sigma_exp, mu_exp, Z_exp, avg=False)
             z_loss = z_loss.view(bsize, -1)
-            _, z_ind = torch.topk(z_loss, n_sample, dim=1, largest=False)
-            z_top = Variable(self.Z.data.index(z_ind.data.view(-1))).view(bsize, n_sample, self.opt.nz)
+            _, z_ind = torch.topk(z_loss, self.opt.topz_sample, dim=1, largest=False)
+            z_top = Variable(self.Z.data.index(z_ind.data.view(-1))).view(bsize, self.opt.topz_sample, self.opt.nz)
             z_ind = random.choice(z_ind.t())
-            z = Variable(self.Z.data.index(z_ind.data))
+            z = self.Z.data.index(z_ind.data)
             self.z_top_list.append(z_top.data)
 
             if random.random() < 0.01 and False:
@@ -461,7 +545,6 @@ class FwdCNN_AE_FP(nn.Module):
 
     def forward(self, inputs, actions, targets, save_z = False, sampling='fp'):
         input_images, input_states = inputs
-        target_images, target_states, target_costs = targets
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
@@ -477,20 +560,22 @@ class FwdCNN_AE_FP(nn.Module):
         for t in range(npred):
             h_x = self.encoder(input_images, input_states, actions[:, t])
             if targets is not None:
+                target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
                 z = self.z_network((h_x + h_y).view(bsize, -1))                    
                 if save_z:
                     self.save_z(z)
+
+                if self.opt.beta > 0:
+                    pi, mu, sigma = self.u_network(h_x)
+                    ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
+                    if math.isnan(ploss.data[0]):
+                        pdb.set_trace()
             else:
                 # we are doing inference
-                z = self.sample_z(bsize, opt.sample)
+                z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t])
                 
-            if self.opt.beta > 0:
-                pi, mu, sigma = self.u_network(h_x)
-                ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
-                if math.isnan(ploss.data[0]):
-                    pdb.set_trace()
                 
 
             z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -526,47 +611,6 @@ class FwdCNN_AE_FP(nn.Module):
 
 
 
-# TODO: finish
-class FwdCNN_MDN(nn.Module):
-    def __init__(self, opt, mfile=''):
-        super(FwdCNN_MDN, self).__init__()
-        self.opt = opt
-        self.encoder = encoder(opt, opt.n_actions, opt.ncond)
-        self.decoder = decoder(opt, n_out=opt.n_gaussians*3)
-
-    def forward(self, inputs, actions, target, sampling=None):
-        bsize = inputs.size(0)
-        inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        actions = actions.view(bsize, -1, self.opt.n_actions)
-        npred = actions.size(1)
-        pred = []
-        for t in range(npred):
-            h = self.encoder(inputs, actions[:, t])
-            pred_ = self.decoder(h)
-            pred = pred_.view(bsize, 1, self.opt.n_gaussians, 3, 3, self.opt.height, self.opt.width)
-            pdb.set_trace()
-            if sampling == None:
-                pred.append(pred_)
-            else:
-                mu = pred_[:, :, :, 0]
-                sigma = F.softplus(pred_[:, :, :, 1])
-                pi = F.softplus(pred_[:, :, :, 2])
-                
-            inputs = torch.cat((inputs[:, 1:], target[:, t].unsqueeze(1)), 1)
-
-        pred = torch.cat(pred, 1)
-        pdb.set_trace()
-        pi = nn.functional.softmax(self.z_pi(pred), -1)
-        sigma = torch.exp(self.z_sigma(z_h))
-        mu = self.z_mu(z_h)
-        return pred, Variable(torch.zeros(1))
-
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-        elif t == 'cpu':
-            self.cpu()
         
 
 # forward VAE model with a learned prior
@@ -667,7 +711,6 @@ class FwdCNN_VAE_LP(nn.Module):
 
     def forward(self, inputs, actions, targets, sampling=None):
         input_images, input_states = inputs
-        target_images, target_states, target_costs = targets
         bsize = input_images.size(0)
         npred = actions.size(1)
         pred_images, pred_states, pred_costs = [], [], []
@@ -681,6 +724,7 @@ class FwdCNN_VAE_LP(nn.Module):
             h_x = self.encoder(input_images, input_states, actions[:, t])
             if targets is not None:
                 # we are training
+                target_images, target_states, target_costs = targets
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
                 z1, mu1, logvar1 = self.z_network(h_x + h_y)
                 z2, mu2, logvar2 = self.q_network(h_x)

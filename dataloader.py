@@ -4,11 +4,15 @@ from torch.autograd import Variable
 
 class DataLoader():
     def __init__(self, fname, opt, dataset='simulator', single_shard=False):
+        if opt.debug == 1:
+            single_shard = True
         self.opt = opt
         self.data = []
         self.dataset = dataset
-        if self.opt.debug == 1:
-            return 
+        self.random = random.Random()
+        self.random.seed(12345) # use this so that the same batches will always be picked
+#        if self.opt.debug == 1:
+#            return 
 
         if dataset == 'i80':
             data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v2/'
@@ -108,9 +112,10 @@ class DataLoader():
             self.train_indx = range(0, self.n_train)
             self.valid_indx = range(self.n_train+1, self.n_train+self.n_valid)
             self.test_indx = range(self.n_train+self.n_valid+1, self.n_episodes)        
+            self.test_indx_iterator = 0
 
 
-        if dataset != 'random':
+        if dataset != 'random' and opt.debug == 0:
             print('[computing action stats]')
             all_actions = []
             for i in self.train_indx:
@@ -151,10 +156,10 @@ class DataLoader():
         images, states, masks, actions = [], [], [], []
         nb = 0
         while nb < self.opt.batch_size:
-            s = random.choice(indx)
+            s = self.random.choice(indx)
             T = len(self.actions[s]) - 1
             if T > (self.opt.ncond + self.opt.npred):
-                t = random.randint(0, T - (self.opt.ncond+self.opt.npred))
+                t = self.random.randint(0, T - (self.opt.ncond+self.opt.npred))
                 images.append(self.images[s][t:t+(self.opt.ncond+self.opt.npred)])
 #                states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)])
 #                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
@@ -182,7 +187,7 @@ class DataLoader():
     # a sequence of ncond given states, a sequence of npred actions, 
     # and a sequence of npred states to be predicted
     def get_batch_fm(self, split, npred=-1, cuda=True):
-        if self.opt.debug == 1:
+        if self.opt.debug == 1 and False:
             self.opt.height = 117
             self.opt.width = 24
             self.opt.n_actions = 2
@@ -197,6 +202,8 @@ class DataLoader():
             indx = self.valid_indx
         elif split == 'test':
             indx = self.test_indx
+            self.current_indx = 0
+            t = 0
 
         if npred == -1:
             npred = self.opt.npred
@@ -204,31 +211,36 @@ class DataLoader():
         images, states, actions, costs = [], [], [], []
         nb = 0
         while nb < self.opt.batch_size:
-            s = random.choice(indx)
+            if self.opt.debug == 1:
+                s = self.random.choice(range(0, len(self.images)))
+            else:
+                s = self.random.choice(indx)
             T = self.states[s].size(0)
             if T > (self.opt.ncond + npred + 1):
-                t = random.randint(0, T - (self.opt.ncond+npred + 1))
+                t = self.random.randint(0, T - (self.opt.ncond+npred + 1))
                 images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
                 states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 nb += 1
-
-        
+                            
         images = torch.stack(images).float()
         images.div_(255.0)
+        print(images.mean())
 
         try:
             states = torch.stack(states)
         except:
             pdb.set_trace()
-        states = states[:, :, 0].contiguous()
-        states -= self.s_mean.view(1, 1, 4).expand(states.size()).cuda()
-        states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).cuda()
 
+        states = states[:, :, 0].contiguous()
         actions = torch.stack(actions)
-        actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).cuda()
-        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).cuda()
+
+        if self.opt.debug == 0:
+            actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).cuda()
+            actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).cuda()
+            states -= self.s_mean.view(1, 1, 4).expand(states.size()).cuda()
+            states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).cuda()
 
         costs = torch.stack(costs)
         '''

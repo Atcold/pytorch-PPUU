@@ -5,6 +5,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
+import importlib
+
 import models2 as models
 
 #################################################
@@ -26,7 +28,7 @@ parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=16)
-parser.add_argument('-nfeature', type=int, default=64)
+parser.add_argument('-nfeature', type=int, default=96)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-tie_action', type=int, default=0)
 parser.add_argument('-beta', type=float, default=1.0)
@@ -36,7 +38,7 @@ parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-z_sphere', type=int, default=0)
-parser.add_argument('-combine', type=str, default='mult')
+parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
@@ -109,7 +111,7 @@ elif opt.model == 'fwd-cnn-ae-lp':
 elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-mdn':
-    model = models.FwdCNN_MDN(opt, mfile=prev_model)
+    model = models.FwdCNN_MDN(opt, mfile='')
 elif opt.model == 'fwd-cnn2':
     model = models.FwdCNN2(opt)
 
@@ -119,11 +121,31 @@ optimizer = optim.Adam(model.parameters(), opt.lrt)
 
 
 def compute_loss(targets, predictions, r=True):
-    pred_images, pred_states, pred_costs = predictions
     target_images, target_states, target_costs = targets
-    loss_i = F.mse_loss(pred_images, target_images, reduce=r)
-    loss_s = F.mse_loss(pred_states, target_states, reduce=r)
-    loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
+    if opt.model == 'fwd-cnn-mdn':
+        pred_images, pred_states, pred_costs, latent_probs = predictions
+        pred_images_mu = pred_images[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        pred_images_sigma = pred_images[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        target_images = target_images.view(opt.batch_size*opt.npred, -1)
+        target_states = target_states.view(opt.batch_size*opt.npred, -1)
+        target_costs = target_costs.view(opt.batch_size*opt.npred, -1)
+        latent_probs = latent_probs.view(opt.batch_size*opt.npred, -1)
+
+        loss_i = utils.mdn_loss_fn(latent_probs, pred_images_sigma, pred_images_mu, target_images)
+
+        pred_states_mu = pred_states[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        pred_states_sigma = pred_states[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        loss_s = utils.mdn_loss_fn(latent_probs, pred_states_sigma, pred_states_mu, target_states)
+
+        pred_costs_mu = pred_costs[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        pred_costs_sigma = pred_costs[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
+        loss_c = utils.mdn_loss_fn(latent_probs, pred_costs_sigma, pred_costs_mu, target_costs)
+
+    else:
+        pred_images, pred_states, pred_costs = predictions
+        loss_i = F.mse_loss(pred_images, target_images, reduce=r)
+        loss_s = F.mse_loss(pred_states, target_states, reduce=r)
+        loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
     return loss_i, loss_s, loss_c
     
 
@@ -154,6 +176,8 @@ def train(nbatches, npred):
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
         loss = loss_i + loss_s + loss_c + opt.beta * loss_p
         loss.backward()
+        if opt.model == 'fwd-cnn-mdn':
+            torch.nn.utils.clip_grad_norm(model.parameters(), 50)
         optimizer.step()
         t = time.time()-t0
         total_loss_i += loss_i.data[0]
@@ -203,7 +227,9 @@ def compute_pz(nbatches):
         targets = Variable(targets)
         pred, loss_kl = model(inputs, actions, targets, save_z = True)
         
-
+importlib.reload(models2)
+model = models.FwdCNN_MDN(opt, mfile='').cuda()
+optimizer = optim.Adam(model.parameters(), opt.lrt)
 print('[training]')
 best_total_valid_loss = 1e6
 for i in range(100):
@@ -219,7 +245,6 @@ for i in range(100):
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')
-
     log_string = f'step {i*opt.epoch_size} | '
     log_string += utils.format_losses(*train_losses, 'train')
     log_string += utils.format_losses(*valid_losses, 'valid')
