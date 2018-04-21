@@ -6,8 +6,6 @@ import numpy as np
 import pdb
 import bisect
 import pdb, pickle, os
-# from pykalman import KalmanFilter
-
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -23,38 +21,24 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset, look_ahead, screen_w):  #, kf):
+    def __init__(self, df, y_offset, look_ahead, screen_w, font):
         self._k = 15  # running window size
         # self._k = 0
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
+
         # X and Y are swapped in the I-80 data set...
-        # x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE - X_OFFSET - self._length
-        # y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k) * FOOT * SCALE + y_offset
-        x = (df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k)).values
-        y = (df['Local X'].rolling(window=self._k).mean().shift(1 - self._k)).values
-        # x = df['Local Y'].values
-        # y = df['Local X'].values
-        # x = df['Local Y'] * FOOT * SCALE - X_OFFSET - self._length
-        # y = df['Local X'].values
-        # speed = df['Vehicle Velocity'].values
+        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
+        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
         for t in range(len(y) - 1):
-            # a, b = -1, .1
-            # gain = np.maximum(0, np.tanh(a + b * speed[t]))
-            # y[t + 1] = y[t] * (1 - gain) + gain * y[t + 1]
             delta_x = x[t + 1] - x[t]
             delta_y = y[t + 1] - y[t]
             if abs(delta_y) > abs(delta_x) * 0.1:
                 y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
-        # kf.initial_state_mean = np.array((y[0], y[1] - y[0]))
-        # a, b = kf.smooth(y)
-        # y = pd.Series(a[:, 0] * FOOT * SCALE + y_offset, index=df.index)
-        x = pd.Series(x  * FOOT * SCALE - X_OFFSET - self._length, index=df.index)
-        y = pd.Series(y * FOOT * SCALE + y_offset, index=df.index)
 
-        self._trajectory = pd.concat((x, y), axis=1, keys=('x', 'y'))
-        self._position = self._trajectory.loc[self._trajectory.index[0], ['x', 'y']].values
+        self._trajectory = np.column_stack((x, y))
+        self._position = self._trajectory[0]
         self._df = df
         self._frame = 0
         self._dt = 1 / 10
@@ -73,12 +57,10 @@ class RealCar(Car):
         self.look_ahead = look_ahead
         self.screen_w = screen_w
         self._safe_factor = 1  # second, manually matching the data
+        self._text = self.get_text(self.id, font)
 
     def _get(self, what, k):
-        trajectory = self._trajectory
-        next_ = trajectory.index[k + 1]
-        now = trajectory.index[k]
-        direction_vector = trajectory.loc[next_].values - trajectory.loc[now].values
+        direction_vector = self._trajectory[k + 1] - self._trajectory[k]
         if what == 'direction':
             return direction_vector / (np.linalg.norm(direction_vector) + 1e-6)
         if what == 'speed':
@@ -144,17 +126,18 @@ class RealTraffic(StatefulEnv):
 #        self.file_name = './data_i80/trajectories-0515-0530.txt'
         self.file_name = './data_i80/trajectories-0500-0515.txt'
 #        self.file_name = './data_i80/trajectories-0400-0415.txt'
-        self.df = self._get_data_frame(self.file_name)
+        self.df = self._get_data_frame(self.file_name, self.screen_size[0])
         self.vehicles_history = set()
         self.lane_occupancy = None
         # self._kf = KalmanFilter(
         #     transition_matrices=np.array([[1, 1], [0, 1]]),
         #     transition_covariance=0.00001 * np.eye(2)
         # ).em(self.df[self.df['Vehicle ID'] == self.df.at[self.df.index[0], 'Vehicle ID']].loc[:, ['Local X']].values)
+        self._lane_surfaces = dict()
 
     @staticmethod
-    def _get_data_frame(file_name):
-        return pd.read_table(file_name, sep='\s+', header=None, names=(
+    def _get_data_frame(file_name, x_max):
+        df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
             'Total Frames',
@@ -175,30 +158,36 @@ class RealTraffic(StatefulEnv):
             'Headway'
         ))
 
+        # Get valid x coordinate rows
+        valid_x = (df['Local Y'] * FOOT * SCALE - X_OFFSET).between(0, x_max)
+
+        # Restrict data frame to valid x coordinates
+        return df[valid_x]
+
     def step(self, policy_action=None):
 
         df = self.df
-        valid_x = (df['Local Y'] * FOOT * SCALE - X_OFFSET).between(0, self.screen_size[0])
         now = df['Frame ID'] == self.frame
-        vehicles = set(df[now & valid_x]['Vehicle ID'])
-        for vehicle_id in vehicles:
-            if vehicle_id not in self.vehicles_history:
-                now_and_on = df['Frame ID'] >= self.frame
+        vehicles = set(df[now]['Vehicle ID']) - self.vehicles_history
+
+        if vehicles:
+            now_and_on = df['Frame ID'] >= self.frame
+            for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
-                car = self.EnvCar(df[this_vehicle & valid_x & now_and_on], self.offset,
-                                  self.look_ahead, self.screen_size[0])  #, self._kf)
+                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], self.font[20])
                 self.vehicles.append(car)
-        self.vehicles_history |= vehicles  # union set operation
+            self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print('[t={}]'.format(self.frame), end="\r")
+        print(f'[t={self.frame}]', end="\r")
 
         for v in self.vehicles[:]:
             if v.off_screen:
-                print('[off screen]')
-                if self.state_image:
-                    print('[dumping {}]'.format(self.file_name))
-                    v.dump_state_image('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v2/' + os.path.basename(self.file_name), 'tensor')
+                print(f'vehicle {v.id} [off screen]')
+                if self.state_image and self.store:
+                    file_name = os.path.join('scratch/data_i80_v2', os.path.basename(self.file_name))
+                    print(f'[dumping {file_name}]')
+                    v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
             else:
                 # Insort it in my vehicle list
@@ -238,6 +227,7 @@ class RealTraffic(StatefulEnv):
         return None, None, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
+
         slope = 0.035
         if mode == 'human':
             lanes = self.lanes  # lanes
@@ -283,3 +273,5 @@ class RealTraffic(StatefulEnv):
             draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
             draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
             draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
+
+            self._lane_surfaces[mode] = surface.copy()

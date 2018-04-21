@@ -43,8 +43,9 @@ def draw_dashed_line(surf, color, start_pos, end_pos, width=1, dash_length=10):
         pygame.draw.line(surf, color, start.get(), end.get(), width)
 
 
-def draw_text(screen, text, xy, font_size=30, colour=(255, 255, 255)):
-    font = pygame.font.SysFont(None, font_size)
+def draw_text(screen, text, xy, font_size=30, colour=(255, 255, 255), font=None):
+    if font is None:
+        font = pygame.font.SysFont(None, font_size)
     text = font.render(text, True, colour)
     text_rect = text.get_rect()
     text_rect.left = xy[0]

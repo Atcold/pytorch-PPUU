@@ -58,7 +58,7 @@ class Car:
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, lanes, free_lanes, dt, car_id, look_ahead, screen_w):
+    def __init__(self, lanes, free_lanes, dt, car_id, look_ahead, screen_w, font):
         """
         Initialise a sedan on a random lane
         :param lanes: tuple of lanes, with ``min`` and ``max`` y coordinates
@@ -91,6 +91,13 @@ class Car:
         self.pid_k2 = np.random.normal(3e-3, 1e-4)
         self.look_ahead = look_ahead
         self.screen_w = screen_w
+        self._text = self.get_text(self.id, font)
+
+    @staticmethod
+    def get_text(n, font):
+        text = font.render(str(n), True, colours['b'])
+        text_rect = text.get_rect()
+        return text, text_rect
 
     def get_state(self):
         state = torch.zeros(4)
@@ -209,7 +216,13 @@ class Car:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
             draw_rect(surface, self._colour, rectangle, d, 3)
-            draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
+
+            # Drawing vehicle number
+            # draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
+            self._text[1].left = x
+            self._text[1].top = y - self._width // 2
+            surface.blit(self._text[0], self._text[1])
+
             if self._braked: self._colour = colours['g']
         if mode == 'machine':
             draw_rect(surface, colours['g'], rectangle, d)
@@ -419,7 +432,6 @@ class Car:
 
     def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
-        # im = self._states_image[100:]
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
             print('failure, {}'.format(save_dir))
@@ -435,19 +447,20 @@ class Car:
             mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
-            pickle.dump({
-                'images': im_pth,
-                'actions': torch.stack(self._actions),
-                'lane_cost': torch.Tensor(lane_cost), 
-                'states': states, 
-                'proximity_cost': proximity_cost, 
-                'mask': mask
-            }, open(save_dir + '/car{}.pkl'.format(self.id), 'wb'))
+            with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
+                pickle.dump({
+                    'images': im_pth,
+                    'actions': torch.stack(self._actions),
+                    'lane_cost': torch.Tensor(lane_cost),
+                    'states': states,
+                    'proximity_cost': proximity_cost,
+                    'mask': mask
+                }, f)
         elif mode == 'img':
-            save_dir = save_dir + '/' + str(self.id)
+            save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite('{}/im{:05d}.png'.format(save_dir, t), im[t].numpy())
+                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
     @property
     def valid(self):
@@ -492,6 +505,13 @@ class StatefulEnv(core.Env):
             pygame.init()  # init PyGame
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
             self.clock = pygame.time.Clock()  # set up timing
+            self.font = {
+                20: pygame.font.SysFont(None, 20),
+                30: pygame.font.SysFont(None, 30),
+            }
+
+
+        print(f'Frame rate: {fps} fps')
 
     def build_lanes(self, nb_lanes):
         return tuple(
@@ -555,7 +575,7 @@ class StatefulEnv(core.Env):
                 self.vehicles) == 0:
             if free_lanes:
                 car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id,
-                                  self.look_ahead, self.screen_size[0])
+                                  self.look_ahead, self.screen_size[0], self.font[20])
                 self.next_car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
@@ -677,32 +697,35 @@ class StatefulEnv(core.Env):
                 c = (v.id == self.policy_car_id)
                 v.draw(self.screen, c)
 
-            draw_text(self.screen, '# cars: {}'.format(len(self.vehicles)), (10, 2))
-            draw_text(self.screen, 'frame #: {}'.format(self.frame), (120, 2))
-            draw_text(self.screen, 'fps: {:.0f}'.format(self.mean_fps), (270, 2))
+            draw_text(self.screen, '# cars: {}'.format(len(self.vehicles)), (10, 2), font=self.font[30])
+            draw_text(self.screen, 'frame #: {}'.format(self.frame), (120, 2), font=self.font[30])
+            draw_text(self.screen, 'fps: {:.0f}'.format(self.mean_fps), (270, 2), font=self.font[30])
 
             pygame.display.flip()
 
             # if self.collision: self._pause()
 
         if mode == 'machine':
-            m = max_extension = np.linalg.norm(width_height)
-            screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            max_extension = np.linalg.norm(width_height)
             vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
-            self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
+            try:
+                screen_surface = self._lane_surfaces[mode]
+            except KeyError:
+                screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+                self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
 
             # draw vehicles
             for v in self.vehicles:
                 v.draw(vehicle_surface, mode=mode, offset=max_extension)
 
-            screen_surface.blit(vehicle_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+            vehicle_surface.blit(screen_surface, (0, 0), special_flags=pygame.BLEND_ADD)
 
             # extract states
             for i, v in enumerate(self.vehicles):
                 if self.store and v.valid or v.id == self.policy_car_id:
-                    v.store('state_image', (max_extension, screen_surface, width_height, scale))
+                    v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):
         draw_line = pygame.draw.line
