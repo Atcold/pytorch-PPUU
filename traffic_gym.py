@@ -432,6 +432,7 @@ class Car:
 
     def dump_state_image(self, save_dir='/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', mode='img'):
         os.system('mkdir -p ' + save_dir)
+        print('dumping')
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
             print('failure, {}'.format(save_dir))

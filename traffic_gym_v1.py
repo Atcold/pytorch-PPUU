@@ -21,7 +21,7 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font):
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
         self._k = 15  # running window size
         # self._k = 0
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
@@ -57,7 +57,8 @@ class RealCar(Car):
         self.look_ahead = look_ahead
         self.screen_w = screen_w
         self._safe_factor = 1.5  # second, manually matching the data
-        self._text = self.get_text(self.id, font)
+        if font is not None:
+            self._text = self.get_text(self.id, font)
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
@@ -174,19 +175,23 @@ class RealTraffic(StatefulEnv):
             now_and_on = df['Frame ID'] >= self.frame
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
-                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], self.font[20])
+                if self.display:
+                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], self.font[20])
+                else:
+                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0])
                 self.vehicles.append(car)
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
         print('[t={}]'.format(self.frame), end="\r")
 
+
         for v in self.vehicles[:]:
             if v.off_screen:
 #                print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('scratch/data_i80_v2', os.path.basename(self.file_name))
-#                    print(f'[dumping {file_name}]')
+                    file_name = os.path.join('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', os.path.basename(self.file_name))
+                    print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
             else:
