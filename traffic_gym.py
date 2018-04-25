@@ -430,7 +430,7 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def dump_state_image(self, save_dir='scratch/', mode='img'):
+    def dump_state_image(self, save_dir='/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
@@ -447,7 +447,7 @@ class Car:
             mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
-            with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
+            with open(os.path.join(save_dir, 'car{}.pkl'.format(self.id)), 'wb') as f:
                 pickle.dump({
                     'images': im_pth,
                     'actions': torch.stack(self._actions),
@@ -460,7 +460,7 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+                imwrite('{}/im{t:05d}.png'.format(save_dir), im[t].numpy())
 
     @property
     def valid(self):
@@ -511,7 +511,7 @@ class StatefulEnv(core.Env):
             }
 
 
-        print(f'Frame rate: {fps} fps')
+        print('Frame rate: {} fps'.format(fps))
 
     def build_lanes(self, nb_lanes):
         return tuple(

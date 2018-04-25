@@ -123,8 +123,8 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-#        self.file_name = './data_i80/trajectories-0515-0530.txt'
-        self.file_name = './data_i80/trajectories-0500-0515.txt'
+        self.file_name = './data_i80/trajectories-0515-0530.txt'
+#        self.file_name = './data_i80/trajectories-0500-0515.txt'
 #        self.file_name = './data_i80/trajectories-0400-0415.txt'
         self.df = self._get_data_frame(self.file_name, self.screen_size[0])
         self.vehicles_history = set()
@@ -179,14 +179,14 @@ class RealTraffic(StatefulEnv):
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print(f'[t={self.frame}]', end="\r")
+        print('[t={}]'.format(self.frame), end="\r")
 
         for v in self.vehicles[:]:
             if v.off_screen:
-                print(f'vehicle {v.id} [off screen]')
+#                print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
                     file_name = os.path.join('scratch/data_i80_v2', os.path.basename(self.file_name))
-                    print(f'[dumping {file_name}]')
+#                    print(f'[dumping {file_name}]')
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
             else:

@@ -15,5 +15,6 @@
 
 module load python-3.6
 cd ../
-srun python eval_fm.py -mfile $1 -batch_size 4 -npred 400 -sampling pdf -n_sample 50
+#srun python eval_fm.py -mfile $1 -batch_size 2 -npred 100 -sampling dist -n_sample 50 -n_batches 100 -save_video 0 -topz_sample 20
+srun python eval_fm.py -mfile $1 -batch_size 2 -npred 400 -sampling $2 -n_sample 10 -n_batches 20 -save_video 1 -topz_sample 200
 

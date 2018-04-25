@@ -24,7 +24,7 @@ parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
-parser.add_argument('-nfeature', type=int, default=64)
+parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-nz', type=int, default=2)
@@ -33,6 +33,7 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
+parser.add_argument('-grad_clip', type=float, default=10)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
@@ -65,9 +66,9 @@ os.system('mkdir -p ' + opt.model_dir)
 
 dataloader = DataLoader(data_file, opt, opt.dataset)
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}'
 
-if 'vae' or '-ae-' in opt.model:
+if 'vae' in opt.model or '-ae-' in opt.model:
     opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
 
 print(f'will save model as {opt.model_file}')
@@ -94,6 +95,7 @@ def train(nbatches):
         pi, mu, sigma = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         loss.backward()
+        torch.nn.utils.clip_grad_norm(policy.parameters(), opt.grad_clip)
         optimizer.step()
         total_loss += loss.data[0]
     return total_loss / nbatches

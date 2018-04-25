@@ -39,10 +39,10 @@ kwargs = {
         'fps': opt.fps,
     }
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
+#data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
 
 if opt.dataset == 'simulator':
-    print(f'will save as {data_file}')
+ #   print(f'will save as {data_file}')
     register(
         id='Traffic-v0',
         entry_point='traffic_gym:StatefulEnv',
@@ -98,7 +98,7 @@ def run_episode():
     vehicles = env.vehicles
     if opt.save_images == 1:
         for v in vehicles:
-            save_dir = f'videos/states/ex{vid:d}'
+#            save_dir = f'videos/states/ex{vid:d}'
             v.dump_state_image(save_dir)
 
     for v in vehicles:
@@ -112,7 +112,7 @@ def run_episode():
 
 episodes = []
 for i in range(opt.n_episodes):
-    print(f'[episode {i + 1}]')
+#    print(f'[episode {i + 1}]')
     runs = run_episode()
     episodes += runs
 
