@@ -1,5 +1,6 @@
 import torch, numpy, argparse, pdb, os
-import models, utils
+import utils
+import models2 as models
 from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -13,7 +14,7 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-model', type=str, default='policy-cnn')
+parser.add_argument('-model', type=str, default='policy-cnn-mdn')
 parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
@@ -25,14 +26,17 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=32)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-n_hidden', type=int, default=100)
+parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-beta', type=float, default=0.1)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-epoch_size', type=int, default=1000)
+parser.add_argument('-combine', type=str, default='add')
+parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
-opt.model_dir += f'/dataset_{opt.dataset}/models/'
+opt.model_dir += f'/dataset_{opt.dataset}_costs2/models_il/'
 
 opt.n_actions = 2
 opt.n_inputs = opt.ncond
@@ -48,9 +52,9 @@ elif opt.dataset == 'i80':
     opt.width = 24
     opt.h_height = 14
     opt.h_width = 3
+    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
 
 if opt.dataset == 'simulator':
     opt.model_dir += f'_{opt.nshards}-shards/'
@@ -63,96 +67,64 @@ dataloader = DataLoader(data_file, opt, opt.dataset)
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}'
 
-if 'vae' in opt.model:
+if 'vae' or '-ae-' in opt.model:
     opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
-if 'een' in opt.model or '-ae' in opt.model:
-    opt.model_file += f'-nz={opt.nz}'
 
 print(f'will save model as {opt.model_file}')
 
 if opt.warmstart == 0:
     prev_model = ''
 
-if opt.model == 'policy-mlp':
-    policy = models.PolicyMLP(opt)
-elif opt.model == 'policy-vae':
-    policy = models.PolicyVAE(opt)
-elif opt.model == 'policy-ae':
-    policy = models.PolicyAE(opt, prev_model)
-elif opt.model == 'policy-cnn':
-    policy = models.PolicyCNN(opt)
-elif opt.model == 'policy-cnn-vae':
-    policy = models.PolicyCNN_VAE(opt, prev_model)
-elif opt.model == 'policy-cnn-een':
-    policy = models.PolicyEEN(opt, prev_model)
+policy = models.PolicyMDN(opt)
     
 
 policy.intype('gpu')
 
 optimizer = optim.Adam(policy.parameters(), opt.lrt)
 
-images, states, actions = dataloader.get_batch_il('train')
-images = Variable(images)
-states = Variable(states)
-actions = Variable(actions)
-
 def train(nbatches):
     policy.train()
-    total_loss_mse, total_loss_kl = 0, 0
+    total_loss = 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        images, states, actions = dataloader.get_batch_il('train') 
-        images = Variable(images)
-        states = Variable(states)
+        inputs, actions, targets = dataloader.get_batch_fm('train')
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred_a, loss_kl = policy(images, states, actions)
-        loss_mse = F.mse_loss(pred_a, actions)
-        loss = loss_mse + opt.beta*loss_kl.cuda()
+        pi, mu, sigma = policy(inputs[0], inputs[1])
+        loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         loss.backward()
         optimizer.step()
-        total_loss_mse += loss_mse.data[0]
-        total_loss_kl += loss_kl.data[0]
-    return total_loss_mse / nbatches, total_loss_kl / nbatches
+        total_loss += loss.data[0]
+    return total_loss / nbatches
 
 def test(nbatches):
     policy.eval()
-    total_loss_mse, total_loss_kl = 0, 0
+    total_loss = 0
     for i in range(nbatches):
-        images, states, actions = dataloader.get_batch_il('valid')
-        images = Variable(images)
-        states = Variable(states)
+        inputs, actions, targets = dataloader.get_batch_fm('valid')
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred_a, loss_kl = policy(images, states, actions)
-        loss_mse = F.mse_loss(pred_a, actions)
-        total_loss_mse += loss_mse.data[0]
-        total_loss_kl += loss_kl.data[0]
-    return total_loss_mse / nbatches, total_loss_kl / nbatches
+        pi, mu, sigma = policy(inputs[0], inputs[1])
+        loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
+        total_loss += loss.data[0]
+    return total_loss / nbatches
 
 
-def een_compute_pz(nbatches):
-    print('sampling z vectors')
-    policy.p_z = []
-    for j in range(nbatches):
-        images, states, actions = dataloader.get_batch_il('train')
-        images = Variable(images)
-        states = Variable(states)
-        actions = Variable(actions)
-        pred_a, loss_kl = policy(images, states, actions, save_z=True)
 
 
 print('[training]')
-best_valid_loss_mse = 1e6
+best_valid_loss = 1e6
 for i in range(100):
-    train_loss_mse, train_loss_kl = train(opt.epoch_size)
-    valid_loss_mse, valid_loss_kl = test(opt.epoch_size)
-    if valid_loss_mse < best_valid_loss_mse:
-        best_valid_loss_mse = valid_loss_mse
-        if 'een' in opt.model:
-            een_compute_pz(500)
+    train_loss = train(opt.epoch_size)
+    valid_loss = test(opt.epoch_size)
+    if valid_loss < best_valid_loss:
+        best_valid_loss = valid_loss
         policy.intype('cpu')
         torch.save(policy, opt.model_file + '.model')
         policy.intype('gpu')
 
-    log_string = f'iter {opt.epoch_size*i} | train loss: [MSE: {train_loss_mse:.5f}, KL: {train_loss_kl:.5f}], test: [{valid_loss_mse:.5f}, KL: {valid_loss_kl:.5f}], best MSE loss: {best_valid_loss_mse:.5f}'
+    log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)

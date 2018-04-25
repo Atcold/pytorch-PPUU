@@ -28,7 +28,9 @@ parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-topz_sample', type=int, default=100)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-bsize=16-ncond=10-npred=20-lrt=0.0002-nhidden=100-nfeature=96-decoder=0-combine=add-warmstart=0.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-lp-bsize=16-ncond=10-npred=20-lrt=0.0002-nhidden=100-nfeature=96-decoder=0-combine=add-nz=32-beta=0.0001-warmstart=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-lp-bsize=16-ncond=10-npred=20-lrt=0.0002-nhidden=100-nfeature=96-decoder=0-combine=add-nz=32-beta=0.0001-warmstart=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-decoder=0-combine=add-nz=32-beta=0.0001-nmix=100-warmstart=1.model')
+
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
@@ -39,7 +41,7 @@ torch.manual_seed(opt.seed)
 
 opt.save_video = (opt.save_video == 1)
 opt.model_dir += f'/dataset_{opt.dataset}_costs2/models/'
-opt.eval_dir = opt.model_dir + f'/eval2/'
+opt.eval_dir = opt.model_dir + f'/eval5/'
 
 if opt.dataset == 'simulator':
     opt.model_dir += f'_{opt.nshards}-shards/'
@@ -80,7 +82,11 @@ if '-ae' in opt.mfile:
         if opt.cuda == 1:
             model.q_network.cuda()
     '''
-    compute_pz(10)
+    if opt.debug == 0:
+        compute_pz(200)
+    elif opt.debug == 1:
+        compute_pz(10)
+        
         
     print('[done]')
 
@@ -89,6 +95,9 @@ loss_s = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples)
 loss_c = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples)
 true_costs = torch.zeros(opt.n_batches, opt.batch_size, opt.npred, 2)
 pred_costs = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred, 2)
+true_states = torch.zeros(opt.n_batches, opt.batch_size, opt.npred, 4)
+pred_states = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred, 4)
+
 dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
 
 if 'fwd-cnn-ae-' in opt.mfile:
@@ -134,6 +143,10 @@ for i in range(opt.n_batches):
         loss_c[i, :, s] += loss_c_s.mean(2).mean(1).data.cpu()
         pred_costs[i, :, s].copy_(pred_[2].data)
         true_costs[i].copy_(targets[2].data)
+        pred_states[i, :, s].copy_(pred_[1].data)
+        true_states[i].copy_(targets[1].data)
+
+
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
                 pred_b = pred_[0][b].clone()
@@ -146,7 +159,9 @@ torch.save({'loss_i': loss_i,
             'loss_s': loss_s, 
             'loss_c': loss_c, 
             'true_costs': true_costs, 
-            'pred_costs': pred_costs}, 
+            'pred_costs': pred_costs, 
+            'true_states': true_states, 
+            'pred_states': pred_states},
            f'{dirname}/loss.pth')
 
 os.system('tar -cvf {}.tar.gz {}'.format(dirname, dirname))

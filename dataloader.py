@@ -226,7 +226,7 @@ class DataLoader():
                             
         images = torch.stack(images).float()
         images.div_(255.0)
-        print(images.mean())
+#        print(images.mean())
 
         try:
             states = torch.stack(states)

@@ -312,6 +312,44 @@ class z_expander(nn.Module):
 
 
 
+# combines a sequence of images with the state representing absolute speed
+class policy_encoder(nn.Module):
+    def __init__(self, opt):
+        super(policy_encoder, self).__init__()
+        self.opt = opt
+
+        self.convnet = nn.Sequential(
+            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.ReLU()
+        )
+
+        self.embed = nn.Sequential(
+            nn.Linear(opt.ncond*opt.n_inputs, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden)
+        )
+
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+
+    def forward(self, state_images, states):
+        bsize = state_images.size(0)
+        state_images = state_images.view(bsize, 3*self.opt.ncond, self.opt.height, self.opt.width)
+        states = states.view(bsize, -1)
+        hi = self.convnet(state_images).view(bsize, self.hsize)
+        hs = self.embed(states)
+        h = torch.cat((hi, hs), 1)
+        return h
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
 
 
 
@@ -504,6 +542,14 @@ class FwdCNN_AE_FP(nn.Module):
             for b in range(bsize):
                 z.append(random.choice(self.p_z))
             z = torch.stack(z).contiguous()
+        elif method == 'dist':
+            h_x = self.encoder(input_images, input_states, action)
+            pi, mu, sigma = self.u_network(h_x)
+            k = torch.multinomial(pi, 1)
+            for b in range(bsize):
+                z.append(torch.randn(self.opt.nz).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
+            z = torch.stack(z).squeeze()
+
         elif method == 'pdf':
             n_z = bsize*1000
             if len(self.Z) == 0:
@@ -604,10 +650,6 @@ class FwdCNN_AE_FP(nn.Module):
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
-
-
-
-
 
 
 
@@ -879,198 +921,12 @@ class LSTMCritic(nn.Module):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            
-
-
-
-# forward AE model with a fixed prior
-class FwdCNN_AE_FP_v0(nn.Module):
-    def __init__(self, opt, mfile=''):
-        super(FwdCNN_AE_FP_v0, self).__init__()
-        self.opt = opt
-
-        if mfile == '':
-            self.encoder = encoder(opt, opt.n_actions, opt.ncond)
-            self.decoder = decoder(opt)
-        else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
-            self.mfile = mfile
-            pretrained_model = torch.load(mfile)
-            self.encoder = pretrained_model.encoder
-            self.decoder = pretrained_model.decoder
-            self.encoder.n_inputs = opt.ncond
-            self.decoder.n_out = 1
-
-        self.y_encoder = encoder(opt, 0, 1)
-
-        self.z_network = nn.Sequential(
-            nn.Linear(opt.hidden_size, opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nfeature),
-            nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nz)
-        )
-
-        self.z_expander = nn.Linear(opt.nz, opt.hidden_size)
-        self.p_z = []
-
-    def save_z(self, z):
-        if len(self.p_z) == 0:
-            self.p_z = z.data.cpu()
-        else:
-            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
-
-    def sample_z(self, bsize):
-        z = []
-        for b in range(bsize):
-            z.append(random.choice(self.p_z))
-        z = torch.stack(z).contiguous()
-        if self.use_cuda: z = z.cuda()
-        return Variable(z)
-
-    def forward(self, inputs, actions, targets, save_z = False, sampling='fp'):
-        bsize = inputs.size(0)
-        inputs = inputs.view(bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        actions = actions.view(bsize, -1, self.opt.n_actions)
-        npred = actions.size(1)
-
-        kld = Variable(torch.zeros(1))
-        if self.use_cuda:
-            kld = kld.cuda()
-
-        pred = []
-        self.Z = []
-        self.z_top_list = []
-        for t in range(npred):
-            h_x = self.encoder(inputs, actions[:, t])
-            if targets is not None:
-                # we are training or estimating z distribution
-                h_y = self.y_encoder(targets[:, t].unsqueeze(1).contiguous())
-                z = self.z_network((h_x + h_y).view(bsize, -1))
-                if self.opt.iterate_z > 0:
-                    if self.current_z == 0:
-                        z_middle = z[:, 0].contiguous().view(bsize, 1)
-                        z_right = z[:, 1:]
-                        z_right = Variable(z_right.data)
-                        z = torch.cat((z_middle, z_right), 1)
-                    elif self.current_z == self.opt.nz - 1:
-                        z_middle = z[:, self.opt.nz - 1].contiguous().view(bsize, 1)
-                        z_left = z[:, :self.opt.nz - 1]
-                        z_left = Variable(z_left.data)
-                        z = torch.cat((z_left, z_middle), 1)
-                    elif self.current_z > 0:
-                        z_left = z[:, :self.current_z]
-                        z_middle = z[:, self.current_z].contiguous().view(bsize, 1)
-                        z_right = z[:, self.current_z+1:]
-                        z_left = Variable(z_left.data)
-                        z_right = Variable(z_right.data)
-                        z = torch.cat((z_left, z_middle, z_right), 1)
-                    
-
-                if self.opt.z_sphere == 1:
-                    z = z / (1e-8 + torch.norm(z, 2, 1).view(-1, 1).expand(z.size()))
-                if save_z:
-                    self.save_z(z)
-            else:
-                # we are doing inference
-                if sampling == 'fp':
-                    z = self.sample_z(bsize)
-                elif sampling == 'pdf':
-                    n_sample=100
-                    n_z = bsize*1000
-                    if len(self.Z) == 0:
-                        self.Z = self.sample_z(n_z)
-                    mu, sigma = self.q_network(inputs)
-                    mu = mu.contiguous()
-                    sigma = sigma.contiguous()
-                    Z_exp = self.Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-                    mu_exp = mu.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-                    sigma_exp = sigma.view(bsize, 1, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-                    mu_exp = mu_exp.contiguous().view(-1, self.opt.nz)
-                    sigma_exp = sigma_exp.contiguous().view(-1, self.opt.nz)
-                    Z_exp = Z_exp.clone().view(-1, self.opt.nz)
-                    z_loss = utils.log_pdf(Z_exp, mu_exp, sigma_exp)
-                    z_loss = z_loss.view(bsize, -1)
-                    _, z_ind = torch.topk(z_loss, n_sample, dim=1, largest=False)
-                    z_top = Variable(self.Z.data.index(z_ind.data.view(-1))).view(bsize, n_sample, self.opt.nz)
-                    z_ind = random.choice(z_ind.t())
-                    z = Variable(self.Z.data.index(z_ind.data))
-                    self.z_top_list.append(z_top.data)
-
-                    if random.random() < 0.01 and False:
-                        # save
-                        print('[saving]')
-                        hsh = random.randint(0, 10000)
-                        Z = Z.data.cpu().numpy()
-                        z_top = z_top.data.cpu().numpy()
-                        embed = utils.embed(Z, z_top)
-                        os.system('mkdir -p z_viz/pdf_{}samples'.format(n_sample))
-                        torch.save(embed, 'z_viz/pdf_{}samples/{:05d}.pth'.format(n_sample, hsh))
-                    del mu, sigma, Z_exp, mu_exp, sigma_exp
-
-            z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            if self.opt.z_mult == 1:
-                h = h_x * z_exp.squeeze()
-            else:
-                h = h_x + z_exp.squeeze()
-            pred_ = F.sigmoid(self.decoder(h) + inputs[:, -1].unsqueeze(1).clone())
-            pred.append(pred_)
-            inputs = torch.cat((inputs[:, 1:], pred_), 1)
-
-        pred = torch.cat(pred, 1)
-        return pred, kld
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-            self.use_cuda = True
-        elif t == 'cpu':
-            self.cpu()
-            self.use_cuda = False
-
-
-
-
-
-
-
-
-
-
-
-
 class PolicyCNN(nn.Module):
     def __init__(self, opt):
         super(PolicyCNN, self).__init__()
         self.opt = opt
-        self.encoder = policy_encoder(opt)
+        self.encoder = encoder(opt)
+#        self.encoder = policy_encoder(opt)
         self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
         self.fc = nn.Sequential(
             nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
@@ -1093,6 +949,47 @@ class PolicyCNN(nn.Module):
             self.cuda()
         elif t == 'cpu':
             self.cpu()
+
+
+class PolicyMDN(nn.Module):
+    def __init__(self, opt):
+        super(PolicyMDN, self).__init__()
+        self.opt = opt
+        self.encoder = encoder(opt, 0, opt.ncond)
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.n_outputs = opt.npred*opt.n_actions
+        self.fc = nn.Sequential(
+            nn.Linear(self.hsize, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden)
+        )
+
+        self.pi_net = nn.Linear(opt.n_hidden, opt.n_mixture)
+        self.mu_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
+        self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
+
+
+    def forward(self, state_images, states):
+        bsize = state_images.size(0)
+        h = self.encoder(state_images, states).view(bsize, self.hsize)
+        h = self.fc(h)
+        pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
+        mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
+        sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
+        return pi, mu, sigma
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
+
 
 
 
@@ -1215,294 +1112,6 @@ class PolicyAE(nn.Module):
 
 
 
-
-
-
-class PolicyEEN(nn.Module):
-    def __init__(self, opt, mfile):
-        super(PolicyEEN, self).__init__()
-        self.opt = opt
-
-        if mfile == '':
-            self.encoder = policy_encoder(opt)
-            self.fc = nn.Sequential(
-                nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
-            )
-        else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
-            pretrained_model = torch.load(mfile)
-            self.encoder1 = pretrained_model.encoder
-            self.fc1 = pretrained_model.fc
-            self.encoder2 = copy.deepcopy(pretrained_model.encoder)
-            self.fc2 = copy.deepcopy(pretrained_model.fc)
-
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
-
-        self.z_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_actions*opt.npred),
-            nn.Linear(opt.n_actions*opt.npred, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.nz)
-            )
-
-        self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.n_hidden),
-            nn.ReLU(),
-            nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
-        )
-
-
-    def save_z(self, z):
-        if len(self.p_z) == 0:
-            self.p_z = z.data.cpu()
-        else:
-            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
-
-    def sample_z(self, bsize):
-        z = []
-        for b in range(bsize):
-            z.append(random.choice(self.p_z))
-        z = torch.stack(z)
-        if self.use_cuda: z = z.cuda()
-        return Variable(z)
-
-
-    def forward(self, state_images, states, actions, save_z=False):
-        bsize = state_images.size(0)
-        if actions is not None:
-            h1 = self.encoder1(state_images, states)
-            a1 = self.fc1(h1)
-            a1 = a1.view(bsize, self.opt.npred, self.opt.n_actions)
-            error = actions - a1
-            error = Variable(error.data)
-            z = self.z_network(error.view(bsize, -1))
-            z_exp = self.z_expander(z)
-            if save_z:
-                self.save_z(z)
-        else:
-            z = self.sample_z(bsize)
-            z_exp = self.z_expander(z)
-
-        h2 = self.encoder2(state_images, states)
-        h2 = h2 + z_exp
-        a2 = self.fc2(h2)
-        a2 = a2.view(bsize, self.opt.npred, self.opt.n_actions)
-        return a2, Variable(torch.zeros(1))
-
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-            self.use_cuda = True
-        elif t == 'cpu':
-            self.cpu()
-            self.use_cuda = False
-
-
-
-
-
-
-
-
-
-
-
-class PolicyEEN_LP(nn.Module):
-    def __init__(self, opt, mfile):
-        super(PolicyEEN, self).__init__()
-        self.opt = opt
-
-        if mfile == '':
-            self.encoder = policy_encoder(opt)
-            self.fc = nn.Sequential(
-                nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
-            )
-        else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
-            pretrained_model = torch.load(mfile)
-            self.encoder1 = pretrained_model.encoder
-            self.fc1 = pretrained_model.fc
-            self.encoder2 = copy.deepcopy(pretrained_model.encoder)
-            self.fc2 = copy.deepcopy(pretrained_model.fc)
-
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
-
-        self.z_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_actions*opt.npred),
-            nn.Linear(opt.n_actions*opt.npred, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.nz)
-            )
-
-        self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.n_hidden),
-            nn.ReLU(),
-            nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
-        )
-
-
-    def save_z(self, z):
-        if len(self.p_z) == 0:
-            self.p_z = z.data.cpu()
-        else:
-            self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
-
-    def sample_z(self, bsize):
-        z = []
-        for b in range(bsize):
-            z.append(random.choice(self.p_z))
-        z = torch.stack(z)
-        if self.use_cuda: z = z.cuda()
-        return Variable(z)
-
-
-    def forward(self, state_images, states, actions, save_z=False):
-        bsize = state_images.size(0)
-        if actions is not None:
-            h1 = self.encoder1(state_images, states)
-            a1 = self.fc1(h1)
-            a1 = a1.view(bsize, self.opt.npred, self.opt.n_actions)
-            error = actions - a1
-            error = Variable(error.data)
-            z = self.z_network(error.view(bsize, -1))
-            z_exp = self.z_expander(z)
-            if save_z:
-                self.save_z(z)
-        else:
-            z = self.sample_z(bsize)
-            z_exp = self.z_expander(z)
-
-        h2 = self.encoder2(state_images, states)
-        h2 = h2 + z_exp
-        a2 = self.fc2(h2)
-        a2 = a2.view(bsize, self.opt.npred, self.opt.n_actions)
-        return a2, Variable(torch.zeros(1))
-
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-            self.use_cuda = True
-        elif t == 'cpu':
-            self.cpu()
-            self.use_cuda = False
-
-
-
-
-
-
-
-
-
-
-
-
-class PolicyCNN_VAE(nn.Module):
-    def __init__(self, opt, mfile=''):
-        super(PolicyCNN_VAE, self).__init__()
-        self.opt = opt
-
-        if mfile == '':
-            self.encoder = policy_encoder(opt)
-            self.fc = nn.Sequential(
-                nn.Linear(self.hsize + opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.n_hidden),
-                nn.BatchNorm1d(opt.n_hidden),
-                nn.ReLU(),
-                nn.Linear(opt.n_hidden, opt.npred*opt.n_actions)
-            )
-
-        else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
-            pretrained_model = torch.load(mfile)
-            self.encoder = pretrained_model.encoder
-            self.fc = pretrained_model.fc
-
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
-
-
-        self.z_network = nn.Sequential(
-            nn.BatchNorm1d(opt.n_actions*opt.npred + self.hsize + opt.n_hidden),
-            nn.Linear(opt.n_actions*opt.npred + self.hsize + opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, opt.n_hidden),
-            nn.ReLU(),
-            nn.BatchNorm1d(opt.n_hidden),
-            nn.Linear(opt.n_hidden, 2*opt.nz)
-            )
-
-        self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.n_hidden),
-            nn.ReLU(),
-            nn.Linear(opt.n_hidden, self.hsize + opt.n_hidden)
-        )
-
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = Variable(std.data.new(std.size()).normal_())
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def encode(self, a):
-        bsize = a.size(0)
-        z_params = self.z_network(a.view(bsize, -1)).view(bsize, self.opt.nz, 2)
-        mu = z_params[:, :, 0]
-        logvar = z_params[:, :, 1]
-        return mu, logvar
-
-
-    def forward(self, state_images, states, actions):
-        bsize = state_images.size(0)
-        state_images = state_images.view(bsize, 3*self.opt.ncond, 97, 20)
-        states = states.view(bsize, -1)
-        actions = actions.view(bsize, -1)
-
-        h = self.encoder(state_images, states)
-
-        mu, logvar = self.encode(torch.cat((h, actions), 1))
-        z = self.reparameterize(mu, logvar)
-
-        h = h + self.z_expander(z)
-        a = self.fc(h)
-        a = a.view(bsize, self.opt.npred, self.opt.n_actions)
-        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        kld /= bsize
-        return a, kld
-
-
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-        elif t == 'cpu':
-            self.cpu()
 
 
 

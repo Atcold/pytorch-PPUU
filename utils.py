@@ -89,14 +89,6 @@ def gaussian_distribution(y, mu, sigma):
     result *= oneDivSqrtTwoPI
     return result
 
-def mdn_loss_fn_v0(pi, sigma, mu, y):
-    result = gaussian_distribution(y, mu, sigma)
-    result = result * pi
-    result = torch.sum(result, dim=1)
-    result = -torch.log(1e-6 + result)
-    result = torch.mean(result)
-    return result
-
 
 def log_sum_exp(value, dim=None, keepdim=False):
     """Numerically stable implementation of the operation

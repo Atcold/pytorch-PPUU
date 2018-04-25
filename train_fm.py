@@ -34,16 +34,16 @@ parser.add_argument('-tie_action', type=int, default=0)
 parser.add_argument('-beta', type=float, default=1.0)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-lrt', type=float, default=0.0001)
-parser.add_argument('-epoch_size', type=int, default=2000)
+parser.add_argument('-epoch_size', type=int, default=4000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-z_sphere', type=int, default=0)
-parser.add_argument('-combine', type=str, default='add')
+parser.add_argument('-combine', type=str, default='mult')
 parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
-opt.model_dir += f'/dataset_{opt.dataset}_costs2/models/'
+opt.model_dir += f'/dataset_{opt.dataset}_costs2/models2/'
 if opt.dataset == 'simulator':
     opt.model_dir += f'_{opt.nshards}-shards/'
     data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
@@ -227,8 +227,7 @@ def compute_pz(nbatches):
         targets = Variable(targets)
         pred, loss_kl = model(inputs, actions, targets, save_z = True)
         
-importlib.reload(models2)
-model = models.FwdCNN_MDN(opt, mfile='').cuda()
+
 optimizer = optim.Adam(model.parameters(), opt.lrt)
 print('[training]')
 best_total_valid_loss = 1e6
@@ -245,7 +244,7 @@ for i in range(100):
         model.intype('cpu')
         torch.save(model, opt.model_file + '.model')
         model.intype('gpu')
-    log_string = f'step {i*opt.epoch_size} | '
+    log_string = f'step {(i+1)*opt.epoch_size} | '
     log_string += utils.format_losses(*train_losses, 'train')
     log_string += utils.format_losses(*valid_losses, 'valid')
     print(log_string)
