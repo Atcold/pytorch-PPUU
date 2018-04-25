@@ -56,7 +56,7 @@ class RealCar(Car):
         self.states_image = list()
         self.look_ahead = look_ahead
         self.screen_w = screen_w
-        self._safe_factor = 1  # second, manually matching the data
+        self._safe_factor = 1.5  # second, manually matching the data
         self._text = self.get_text(self.id, font)
 
     def _get(self, what, k):
