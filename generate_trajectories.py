@@ -39,10 +39,7 @@ kwargs = {
         'fps': opt.fps,
     }
 
-#data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={opt.seed}.pkl'
-
 if opt.dataset == 'simulator':
- #   print(f'will save as {data_file}')
     register(
         id='Traffic-v0',
         entry_point='traffic_gym:StatefulEnv',
@@ -69,20 +66,6 @@ print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
 
-# parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
-# not used for images.
-def prepare_trajectory_state(states, actions):
-    # parse out the masks
-    T = len(states)
-    s, m = [], []
-    for t in range(T):
-        s.append(states[t][0])
-        m.append(states[t][1])
-
-    s = torch.stack(s)
-    m = torch.stack(m)
-    a = torch.stack(actions)
-    return s, m, a
 
 
 def run_episode():
@@ -91,29 +74,7 @@ def run_episode():
         state, reward, vehicles = env.step(None)
         env.render()
 
-        if env.collision:
-            print('collision, breaking')
-            break
-    runs = []
-    vehicles = env.vehicles
-    if opt.save_images == 1:
-        for v in vehicles:
-#            save_dir = f'videos/states/ex{vid:d}'
-            v.dump_state_image(save_dir)
-
-    for v in vehicles:
-        if len(v._states_image) > 1:
-            images = torch.stack(v._states_image).permute(0, 3, 2, 1)
-            states, masks, actions = prepare_trajectory_state(v._states, v._actions)
-            runs.append({'states': states, 'masks': masks, 'actions': actions, 'images': images})
-
-    return runs
-
-
 episodes = []
 for i in range(opt.n_episodes):
-#    print(f'[episode {i + 1}]')
     runs = run_episode()
     episodes += runs
-
-pickle.dump(episodes, open(data_file, 'wb'))
