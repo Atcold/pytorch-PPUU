@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import pdb
 import bisect
-import pdb, pickle, os
+import pdb, pickle, os, numpy
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -88,7 +88,12 @@ class RealCar(Car):
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
         new_direction = self._get('direction', self._frame)
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
-
+        if abs(b) > self._speed:
+            b = self._speed * numpy.sign(b)
+        b_abs = abs(b)
+        if b_abs > 5:
+            pdb.set_trace()
+            b_abs = 5
         return np.array((a, b))
 
     @property
@@ -124,8 +129,8 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        self.file_name = './data_i80/trajectories-0515-0530.txt'
-#        self.file_name = './data_i80/trajectories-0500-0515.txt'
+#        self.file_name = './data_i80/trajectories-0515-0530.txt'
+        self.file_name = './data_i80/trajectories-0500-0515.txt'
 #        self.file_name = './data_i80/trajectories-0400-0415.txt'
         self.df = self._get_data_frame(self.file_name, self.screen_size[0])
         self.vehicles_history = set()
