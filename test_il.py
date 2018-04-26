@@ -10,6 +10,7 @@ import torch
 from torch.autograd import Variable
 from gym.envs.registration import register
 
+# Run imitation learners in the environment
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', type=int, default=1)
@@ -21,16 +22,12 @@ parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-n_samples', type=int, default=1)
 parser.add_argument('-log_dir', type=str, default='logs/')
-parser.add_argument('-models_dir', type=str, default='./models_20-shards/')
+parser.add_argument('-models_dir', type=str, default='./models_il/')
 opt = parser.parse_args()
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
-
-a_mean = torch.Tensor([0.0003, 0.0018, -0.8936])
-a_std = torch.Tensor([0.0076, 0.1673, 6.2295])
-
 
 register(
     id='Traffic-v0',
@@ -38,31 +35,15 @@ register(
     tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
     kwargs={'display': opt.display,
             'nb_lanes': opt.lanes,
-            'store': False,
+            'store': True,
+            'policy_type': 'imitation',
             'traffic_rate': opt.traffic_rate},
 )
 
 env = gym.make('Traffic-v0')
-#mfile = f'model=policy-cnn-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64.model'
-mfile = f'model=policy-cnn-een-bsize=32-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature=64-nz=2.model'
-#policy = torch.load('models/model=policy-cnn-ncond=4-npred=50-lrt=0.0001-nhidden=100-nfeature=64.model')
+mfile = 'model=policy-cnn-mdn-bsize=32-ncond=10-npred=1-lrt=0.0001-nhidden=100-nfeature=128-nmixture=10.model'
 policy = torch.load(f'{opt.models_dir}/' + mfile)
 policy.intype('cpu')
-
-# parse out the mask and state. This is specific to using the (x, y, dx, dy) state,
-# not used for images.
-def prepare_trajectory(states, actions):
-    # parse out the masks
-    T = len(states)
-    s, m = [], []
-    for t in range(T):
-        s.append(states[t][0])
-        m.append(states[t][1])
-
-    s = torch.stack(s)
-    m = torch.stack(m)
-    a = torch.stack(actions)
-    return s, m, a
 
 
 def run_episode():
@@ -71,12 +52,13 @@ def run_episode():
     done = False
 
     state, objects = env.reset()
+    env.set_policy(policy)
     action = None
     cntr = 0
     time_until_crashed = -1
     t = 0
     while True:
-        if t > 20:
+        if t > 20000000:
             v = None
             for v_ in vehicles:
                 if v_._id == env.policy_car_id:
@@ -125,7 +107,7 @@ def run_episode():
         else:
             action_ = None
 
-        state, reward, done, vehicles = env.step(action_)
+        state, reward, vehicles = env.step(action_)
         env.render()
         t += 1
 
