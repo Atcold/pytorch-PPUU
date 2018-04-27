@@ -609,7 +609,7 @@ class FwdCNN_AE_FP(nn.Module):
                 target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
-                z = self.z_network((h_x + h_y).view(bsize, -1))                    
+                z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))                    
                 if save_z:
                     self.save_z(z)
 
@@ -986,8 +986,18 @@ class PolicyMDN(nn.Module):
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
+            if self.a_mean is not None:
+                self.a_mean = self.a_mean.cuda()
+                self.a_std = self.a_std.cuda()
+                self.s_mean = self.s_mean.cuda()
+                self.s_std = self.s_std.cuda()
         elif t == 'cpu':
             self.cpu()
+            if self.a_mean is not None:
+                self.a_mean = self.a_mean.cpu()
+                self.a_std = self.a_std.cpu()
+                self.s_mean = self.s_mean.cpu()
+                self.s_std = self.s_std.cpu()
 
 
 
