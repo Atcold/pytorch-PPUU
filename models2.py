@@ -114,45 +114,45 @@ class decoder(nn.Module):
             )
 
             self.c_predictor = nn.Sequential(
-                nn.Linear(2*opt.nfeature, opt.nfeature), 
+                nn.Linear(2*opt.nfeature, opt.nfeature),
                 #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2), 
-                nn.Linear(opt.nfeature, opt.nfeature), 
+                nn.LeakyReLU(0.2),
+                nn.Linear(opt.nfeature, opt.nfeature),
                 #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2), 
-                nn.Linear(opt.nfeature, self.n_out*2), 
+                nn.LeakyReLU(0.2),
+                nn.Linear(opt.nfeature, self.n_out*2),
                 nn.Sigmoid()
             )
 
             self.s_predictor = nn.Sequential(
-                nn.Linear(2*opt.nfeature, opt.nfeature), 
+                nn.Linear(2*opt.nfeature, opt.nfeature),
                 #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2), 
-                nn.Linear(opt.nfeature, opt.nfeature), 
+                nn.LeakyReLU(0.2),
+                nn.Linear(opt.nfeature, opt.nfeature),
                 #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2), 
+                nn.LeakyReLU(0.2),
                 nn.Linear(opt.nfeature, self.n_out*4)
             )
 
             if self.opt.decoder > 0:
                 self.u_encoder = nn.Sequential(
                     nn.Conv2d(opt.nfeature, 2*opt.nfeature, 4, 2, 1),
-                    #nn.BatchNorm2d(2*opt.nfeature), 
-                    nn.LeakyReLU(0.2), 
+                    #nn.BatchNorm2d(2*opt.nfeature),
+                    nn.LeakyReLU(0.2),
                     nn.Conv2d(2*opt.nfeature, 4*opt.nfeature, (4, 1), 2, (1, 0)),
-                    #nn.BatchNorm2d(4*opt.nfeature), 
-                    nn.LeakyReLU(0.2), 
+                    #nn.BatchNorm2d(4*opt.nfeature),
+                    nn.LeakyReLU(0.2),
                     nn.Conv2d(4*opt.nfeature, 8*opt.nfeature, (3, 1), 2, (0, 0)),
                     #nn.BatchNorm2d(8*opt.nfeature)
                 )
                 self.u_decoder = nn.Sequential(
                     nn.ConvTranspose2d(8*opt.nfeature, 4*opt.nfeature, (3, 2), 2, 0),
-                    #nn.BatchNorm2d(4*opt.nfeature), 
-                    nn.LeakyReLU(0.2), 
-                    nn.ConvTranspose2d(4*opt.nfeature, 2*opt.nfeature, (4, 1), 2, (1, 0)), 
-                    #nn.BatchNorm2d(2*opt.nfeature), 
-                    nn.LeakyReLU(0.2), 
-                    nn.ConvTranspose2d(2*opt.nfeature, opt.nfeature, (4, 1), 2, (0, 1)), 
+                    #nn.BatchNorm2d(4*opt.nfeature),
+                    nn.LeakyReLU(0.2),
+                    nn.ConvTranspose2d(4*opt.nfeature, 2*opt.nfeature, (4, 1), 2, (1, 0)),
+                    #nn.BatchNorm2d(2*opt.nfeature),
+                    nn.LeakyReLU(0.2),
+                    nn.ConvTranspose2d(2*opt.nfeature, opt.nfeature, (4, 1), 2, (0, 1)),
                     #nn.BatchNorm2d(opt.nfeature)
                 )
 
@@ -164,10 +164,10 @@ class decoder(nn.Module):
         elif self.opt.decoder == 1:
             h = self.u_decoder(self.u_encoder(h))
         elif self.opt.decoder == 2:
-            h = h + self.u_decoder(self.u_encoder(h))            
+            h = h + self.u_decoder(self.u_encoder(h))
         h = h.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         h_reduced = self.h_reducer(h).view(bsize, -1)
-        pred_cost = self.c_predictor(h_reduced) 
+        pred_cost = self.c_predictor(h_reduced)
         pred_state = self.s_predictor(h_reduced)
         pred_image = self.f_decoder(h)[:, :, :-1].clone().view(bsize, 1, 3*self.n_out, self.opt.height, self.opt.width)
         return pred_image, pred_state, pred_cost
@@ -214,7 +214,7 @@ class z_network_gaussian(nn.Module):
 
 
 
-# takes as input a sequence of frames, outputs the means and variances of a diagonal Gaussian. 
+# takes as input a sequence of frames, outputs the means and variances of a diagonal Gaussian.
 class u_network_gaussian(nn.Module):
     def __init__(self, opt, n_inputs):
         super(u_network_gaussian, self).__init__()
@@ -264,7 +264,7 @@ class u_network_mdn_fc(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nfeature), 
+            nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2)
         )
 
@@ -420,7 +420,7 @@ class FwdCNN_MDN(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
-            nn.Linear(opt.nfeature, opt.nfeature), 
+            nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2),
             nn.Linear(opt.nfeature, opt.n_mixture)
         )
@@ -470,7 +470,7 @@ class FwdCNN_MDN(nn.Module):
             pred_costs_sigma.append(pred_cost_sigma)
             latent_probs.append(pi)
 
-            
+
         pred_images_mu = torch.stack(pred_images_mu, 1)
         pred_states_mu = torch.stack(pred_states_mu, 1)
         pred_costs_mu = torch.stack(pred_costs_mu, 1)
@@ -621,8 +621,8 @@ class FwdCNN_AE_FP(nn.Module):
             else:
                 # we are doing inference
                 z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t])
-                
-                
+
+
 
             z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -653,7 +653,7 @@ class FwdCNN_AE_FP(nn.Module):
 
 
 
-        
+
 
 # forward VAE model with a learned prior
 class FwdCNN_VAE_FP(nn.Module):
@@ -973,14 +973,25 @@ class PolicyMDN(nn.Module):
         self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
 
 
-    def forward(self, state_images, states):
+    def forward(self, state_images, states, sample=False):
         bsize = state_images.size(0)
         h = self.encoder(state_images, states).view(bsize, self.hsize)
         h = self.fc(h)
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
         sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
-        return pi, mu, sigma
+        if sample:
+            k = torch.multinomial(pi, 1)
+            a = []
+            for b in range(bsize):
+                a.append(torch.randn(self.opt.n_actions)*sigma[b][k[b]].data + mu[b][k[b]].data)
+            a = torch.stack(a).squeeze()
+        else:
+            a = None
+        return pi, mu, sigma, a
+
+
+
 
 
     def intype(self, t):
@@ -1108,20 +1119,3 @@ class PolicyAE(nn.Module):
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
