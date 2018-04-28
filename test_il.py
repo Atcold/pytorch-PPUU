@@ -15,8 +15,8 @@ from gym.envs.registration import register
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-seed', type=int, default=9999)
-parser.add_argument('-lanes', type=int, default=3)
-parser.add_argument('-traffic_rate', type=int, default=15)
+parser.add_argument('-lanes', type=int, default=5)
+parser.add_argument('-traffic_rate', type=int, default=1)
 parser.add_argument('-n_episodes', type=int, default=10)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=10)
@@ -97,9 +97,9 @@ def run_episode():
                     '''
 
 #                    print('sampling new action sequence')
-                    action, _ = policy(images, states, None)
-                    action *= Variable(a_std.view(1, 1, 3))
-                    action += Variable(a_mean.view(1, 1, 3))
+#                    action, _ = policy(images, states, None, unnormalize=True)
+#                    action *= Variable(a_std.view(1, 1, 3))
+#                    action += Variable(a_mean.view(1, 1, 3))
                     cntr = 0
                 action_ = action.data[0][cntr].numpy()
 #                print(f'dv = {action_[2]:0.4f}, (dx, dy) = ({action_[0]:0.4f}, {action_[1]:0.4f})')

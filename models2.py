@@ -609,7 +609,7 @@ class FwdCNN_AE_FP(nn.Module):
                 target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
-                z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))                    
+                z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
                 if save_z:
                     self.save_z(z)
 
@@ -973,13 +973,14 @@ class PolicyMDN(nn.Module):
         self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
 
 
-    def forward(self, state_images, states, sample=False):
+    def forward(self, state_images, states, sample=False, unnormalize=False):
         bsize = state_images.size(0)
         h = self.encoder(state_images, states).view(bsize, self.hsize)
         h = self.fc(h)
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
         sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
+        print(pi)
         if sample:
             k = torch.multinomial(pi, 1)
             a = []
@@ -988,10 +989,13 @@ class PolicyMDN(nn.Module):
             a = torch.stack(a).squeeze()
         else:
             a = None
+
+        if unnormalize:
+            a *= self.a_std
+            a += self.a_mean
+
+
         return pi, mu, sigma, a
-
-
-
 
 
     def intype(self, t):
