@@ -239,7 +239,7 @@ class Car:
 
         # TODO: principled kinematics model
         if abs(b) > 0.1:
-            b = 0.05 * numpy.sign(b)
+            b = 0.1 * numpy.sign(b)
 
         # State integration
         self._position += self._speed * self._direction * self._dt
@@ -750,6 +750,7 @@ class StatefulEnv(core.Env):
             else:
                 action = np.array([0, 0])
             print(action)
+            action = np.array([0, 0])
             v.step(action)
             v.store('action', action)
             car_cntr += 1
