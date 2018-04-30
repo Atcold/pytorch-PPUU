@@ -41,7 +41,7 @@ register(
 )
 
 env = gym.make('Traffic-v0')
-mfile = 'model=policy-cnn-mdn-bsize=32-ncond=10-npred=1-lrt=0.0001-nhidden=100-nfeature=128-nmixture=10-gclip=10.model'
+mfile = 'model=policy-cnn-mdn-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-nmixture=10-gclip=10.model'
 policy = torch.load(f'{opt.models_dir}/' + mfile)
 policy.intype('cpu')
 
