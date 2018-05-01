@@ -555,7 +555,6 @@ class StatefulEnv(core.Env):
             for n in range(nb_lanes)
         )
 
-
     def set_policy(self, policy_network):
         self.policy_network = policy_network
 
@@ -749,9 +748,13 @@ class StatefulEnv(core.Env):
                 action = self.actions_buffer[car_cntr][self.time_cntr].numpy()
             else:
                 action = np.array([0, 0])
-            print(action)
-            action = np.array([0, 0])
+            # print(action)
+            # action = np.array([0, 0])
+            b = action[1]
+            action[1] = min(abs(b), v._speed / MAX_SPEED / SCALE * .01) * np.sign(b)
             v.step(action)
+            # if v.id == 2:
+            # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
             v.store('action', action)
             car_cntr += 1
         self.time_cntr += 1
