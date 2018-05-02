@@ -1,0 +1,297 @@
+\documentclass{article}
+
+% if you need to pass options to natbib, use, e.g.:
+% \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading nips_2018
+
+% ready for submission
+\usepackage{nips_2018}
+
+% to compile a preprint version, e.g., for submission to arXiv, add
+% add the [preprint] option:
+% \usepackage[preprint]{nips_2018}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+% \usepackage[final]{nips_2018}
+
+% to avoid loading the natbib package, add option nonatbib:
+% \usepackage[nonatbib]{nips_2018}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{amsmath}
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{algorithm}
+
+\usepackage{amsmath}
+\usepackage[noend]{algpseudocode}
+
+\title{Prediction Under Uncertainty for Autonomous Driving}
+
+% The \author macro works with any number of authors. There are two
+% commands used to separate the names and addresses of multiple
+% authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to
+% break the lines. Using \AND forces a line break at that point. So,
+% if LaTeX puts 3 of 4 authors names on the first line, and the last
+% on the second line, try using \AND instead of \And before the third
+% author name.
+
+\author{
+  David S.~Hippocampus\thanks{Use footnote for providing further
+    information about author (webpage, alternative
+    address)---\emph{not} for acknowledging funding agencies.} \\
+  Department of Computer Science\\
+  Cranberry-Lemon University\\
+  Pittsburgh, PA 15213 \\
+  \texttt{hippo@cs.cranberry-lemon.edu} \\
+  %% examples of more authors
+  %% \And
+  %% Coauthor \\
+  %% Affiliation \\
+  %% Address \\
+  %% \texttt{email} \\
+  %% \AND
+  %% Coauthor \\
+  %% Affiliation \\
+  %% Address \\
+  %% \texttt{email} \\
+  %% \And
+  %% Coauthor \\
+  %% Affiliation \\
+  %% Address \\
+  %% \texttt{email} \\
+  %% \And
+  %% Coauthor \\
+  %% Affiliation \\
+  %% Address \\
+  %% \texttt{email} \\
+}
+
+\begin{document}
+% \nipsfinalcopy is no longer used
+
+\maketitle
+
+\begin{abstract}
+  We consider the problem of prediction in a highly uncertain environment.
+\end{abstract}
+
+\section{Introduction}
+
+The contributions of this work are the following:
+\begin{itemize}
+\item We introduce a new open-source environment to test methods for autonomous driving, based on a large dataset of real-world driving data.
+\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for hundreds of timesteps into the future.
+\end{itemize}
+
+
+\section{Prediction Model}
+
+Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric sampling procedure.
+The architecture consists of three neural networks: an encoder $f_1$, a decoder $f_2$ and a latent variable network $\phi$.
+For each sample, the update equations are given by:
+
+\begin{align*}
+z_i &= \phi(x_i, y_i) \\
+\tilde{y}_i &= f_2(f_1(x_i), z_i)
+\end{align*}
+
+and all networks are trained by gradient descent to optimize the following objective:
+
+\begin{align}
+  \mathcal{L} &= \sum_i \|y_i - \tilde{y_i} \|_2^2 \\
+  &= \sum_i \|y_i - f(x_i, \phi(x_i, y_i)) \|_2^2
+\end{align}
+
+Note in particular that no sampling or reparamaterization is done at training time.
+After training, we extract all vectors $z_i$ from the training set and use these as inputs to new inputs.
+
+
+
+\begin{algorithm}
+  \caption{My algorithm}\label{euclid}
+  \begin{algorithmic}[1]
+    \State \textbf{Input}: Time series $\{s_1...s_T\}$.
+    \State Train latent model:
+    \While{not converged}
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+    \State $\ell(\theta, \phi) = \|s_{t+1} - \tilde{s}_{t+1} \|_2^2$
+    \State $\theta \leftarrow \theta - \eta \nabla \theta$
+    \State $\phi \leftarrow \phi - \eta \nabla \phi$
+    \EndWhile
+    \Procedure{EstimateLatentManifold}{}
+    \State $V \leftarrow \{ \}$
+    \State $E \leftarrow \{ \}$
+    \For{$t = 1:T$}
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State $V[t] = z_t$
+    \EndFor
+    \For{$t = 1:T$}
+    \State $E[t] \leftarrow $ list of $k$ nearest neighbors of $V[t] = z_t$ in $V$
+    \EndFor
+    \Return $G = (V, E)$
+    \EndProcedure
+    \Procedure{Generate}{$s_0, s_1$}
+    \State Initialize $z_1 = f_{\phi}(s_0, s_1)$
+    \For{$t = 1:T$}
+    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+    \EndFor
+    \EndProcedure
+
+  \end{algorithmic}
+  \end{algorithm}
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Related Work}
+
+In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016}. These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}. Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}. In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior. Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
+
+Our method is closely related to Gated and Relational Autoencoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
+The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation for use in planning.
+\begin{itemize}
+\item Video Prediction \citep{mathieu-iclr-2016}, stochastic:  using the framework of Variational Autoencoders \citep{VAE}.
+\item Mixture Density Networks \citep{mixture-density-networks}.
+\item VQ-VAE, GLO, Gated Autoencoders
+\end{itemize}
+
+
+\section{Dataset}
+
+\section{Experiments}
+
+\begin{itemize}
+\item Histogram of distances between consecutive $z$ vs random pairs.
+\end{itemize}
+
+\subsection{Figures}
+
+\begin{figure}
+  \centering
+  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
+  \caption{Sample figure caption.}
+\end{figure}
+
+
+\subsection{Tables}
+
+
+\begin{table}
+  \caption{Sample table title}
+  \label{sample-table}
+  \centering
+  \begin{tabular}{lll}
+    \toprule
+    \multicolumn{2}{c}{Part}                   \\
+    \cmidrule(r){1-2}
+    Name     & Description     & Size ($\mu$m) \\
+    \midrule
+    Dendrite & Input terminal  & $\sim$100     \\
+    Axon     & Output terminal & $\sim$10      \\
+    Soma     & Cell body       & up to $10^6$  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Final instructions}
+
+
+
+
+
+\section{Appendix}
+
+Our model can also be viewed through the lens of Variational Autoencoders, as a type of conditional VAE with a zero-variance posterior network and a uniform categorical prior.
+In this case, the KL term reduces to a constant which can be ignored during training; details can be found in the Appendix.
+%\begin{equation}
+%\mathcal{L} = \|y_i - f(x_i, \phi(x_i, y_i)) \|_2^2 + \beta \cdot \mbox{KL}(p_\phi(z | x_i) || p_\psi(z | x_i, y_i))
+%\end{equation}
+
+\textbf{Fixed Prior}
+
+\begin{align}
+  &p_\psi(z_j | x_i, y_i) =
+  \begin{cases}
+    1 & \mbox{ if } i = j \\
+    0 & \mbox{ else } \\
+  \end{cases} \\
+  &p_\phi(z_j | x_i) = \frac{1}{M}
+  \\
+\end{align}
+
+
+The KL divergence is therefore:
+
+\begin{align}
+\mbox{KL}(p_\phi(z | x_i) || p_\psi(z | x_i, y_i)) &= \sum_j p_\psi(z_j | x_i, y_i) \log \frac{p_\psi(z_j | x_i, y_i)}{p_\phi(z_j | x_i)} \\
+&= 1 \cdot \log \frac{1}{\frac{1}{M}} \\
+&= \log M
+\end{align}
+
+
+\textbf{Learned Prior}
+
+\begin{align}
+  &p_\psi(z_j | x_i, y_i) =
+  \begin{cases}
+    1 & \mbox{ if } i = j \\
+    0 & \mbox{ else } \\
+  \end{cases} \\
+  &p_\phi(z_j | x_i) = \frac{h(z_j; x_j, \theta)}{\sum_{k=1}^M h(z_k; x_j, \theta)}
+\end{align}
+
+
+The KL divergence is therefore:
+
+\begin{align}
+\mbox{KL}(p_\phi(z | x_i) || p_\psi(z | x_i, y_i)) &= \sum_j p_\psi(z_j | x_i, y_i) \log \frac{p_\psi(z_j | x_i, y_i)}{p_\phi(z_j | x_i)} \\
+&= 1 \cdot \log \frac{1}{\frac{h(z_j; x_j, \theta)}{\sum_{k=1}^M h(z_k; x_j, \theta)}} \\
+&= - \log \frac{h(z_j; x_j, \theta)}{\sum_{k=1}^M h(z_k; x_j, \theta)} \\
+&= - \log h(z_j; x_j, \theta) + \log \sum_{k=1}^M h(z_k; x_j, \theta)
+\end{align}
+
+The last term is a constant and can be ignored.
+
+
+
+\subsubsection*{Acknowledgments}
+
+Use unnumbered third level headings for the acknowledgments. All
+acknowledgments go at the end of the paper. Do not include
+acknowledgments in the anonymized submission, only in the final paper.
+
+\bibliographystyle{unsrt}
+\bibliography{nips_2018}
+
+\section*{References}
+
+References follow the acknowledgments. Use unnumbered first-level
+heading for the references. Any choice of citation style is acceptable
+as long as you are consistent. It is permissible to reduce the font
+size to \verb+small+ (9 point) when listing the references. {\bf
+  Remember that you can use more than eight pages as long as the
+  additional pages contain \emph{only} cited references.}
+\medskip
+
+\small
+
+
+\end{document}

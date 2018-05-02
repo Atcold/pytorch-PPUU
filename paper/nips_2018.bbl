@@ -1,0 +1,67 @@
+\begin{thebibliography}{10}
+
+\bibitem{mathieu-iclr-2016}
+Micha{\"{e}}l Mathieu, Camille Couprie, and Yann LeCun.
+\newblock Deep multi-scale video prediction beyond mean square error.
+\newblock {\em CoRR}, abs/1511.05440, 2015.
+
+\bibitem{Srivastava15}
+Nitish Srivastava, Elman Mansimov, and Ruslan Salakhutdinov.
+\newblock Unsupervised learning of video representations using lstms.
+\newblock {\em CoRR}, abs/1502.04681, 2015.
+
+\bibitem{DentonB17}
+Emily Denton and Vighnesh Birodkar.
+\newblock Unsupervised learning of disentangled representations from video.
+\newblock {\em CoRR}, abs/1705.10915, 2017.
+
+\bibitem{Oh15}
+Junhyuk Oh, Xiaoxiao Guo, Honglak Lee, Richard~L. Lewis, and Satinder~P. Singh.
+\newblock Action-conditional video prediction using deep networks in atari
+  games.
+\newblock {\em CoRR}, abs/1507.08750, 2015.
+
+\bibitem{FinnGL16}
+Chelsea Finn, Ian~J. Goodfellow, and Sergey Levine.
+\newblock Unsupervised learning for physical interaction through video
+  prediction.
+\newblock {\em CoRR}, abs/1605.07157, 2016.
+
+\bibitem{Poke}
+Pulkit Agrawal, Ashvin Nair, Pieter Abbeel, Jitendra Malik, and Sergey Levine.
+\newblock Learning to poke by poking: Experiential learning of intuitive
+  physics.
+\newblock {\em CoRR}, abs/1606.07419, 2016.
+
+\bibitem{Babaeizadeh2018}
+Mohammad Babaeizadeh, Chelsea Finn, Dumitru Erhan, Roy~H. Campbell, and Sergey
+  Levine.
+\newblock Stochastic variational video prediction.
+\newblock {\em CoRR}, abs/1710.11252, 2017.
+
+\bibitem{Denton2018}
+Emily Denton and Rob Fergus.
+\newblock Stochastic video generation with a learned prior.
+\newblock {\em CoRR}, abs/1802.07687, 2018.
+
+\bibitem{RelationalAE}
+Roland Memisevic and Geoffrey Hinton.
+\newblock Unsupervised learning of image transformations, 07 2007.
+
+\bibitem{GAE}
+R.~Memisevic.
+\newblock Learning to relate images.
+\newblock {\em IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  35(8):1829--1846, Aug 2013.
+
+\bibitem{VAE}
+Diederik P~Kingma and Max Welling.
+\newblock Auto-encoding variational bayes.
+\newblock 12 2013.
+
+\bibitem{mixture-density-networks}
+Christopher Bishop.
+\newblock Mixture density networks.
+\newblock Technical report, January 1994.
+
+\end{thebibliography}
