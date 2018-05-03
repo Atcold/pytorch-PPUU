@@ -150,10 +150,15 @@ After training, we extract all vectors $z_i$ from the training set and use these
 
 \section{Related Work}
 
-In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016}. These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}. Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}. In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior. Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
+In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016}.
+These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}.
+Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}.
+In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
+Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
 
 Our method is closely related to Gated and Relational Autoencoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
 The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation for use in planning.
+
 \begin{itemize}
 \item Video Prediction \citep{mathieu-iclr-2016}, stochastic:  using the framework of Variational Autoencoders \citep{VAE}.
 \item Mixture Density Networks \citep{mixture-density-networks}.
