@@ -83,6 +83,7 @@
   We consider the problem of prediction in a highly uncertain environment.
 \end{abstract}
 
+
 \section{Introduction}
 
 The contributions of this work are the following:
@@ -112,8 +113,6 @@ and all networks are trained by gradient descent to optimize the following objec
 
 Note in particular that no sampling or reparamaterization is done at training time.
 After training, we extract all vectors $z_i$ from the training set and use these as inputs to new inputs.
-
-
 
 \begin{algorithm}
   \caption{My algorithm}\label{euclid}
@@ -145,20 +144,8 @@ After training, we extract all vectors $z_i$ from the training set and use these
     \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
     \EndFor
     \EndProcedure
-
   \end{algorithmic}
-  \end{algorithm}
-
-
-
-
-
-
-
-
-
-
-
+\end{algorithm}
 
 
 \section{Related Work}
@@ -174,7 +161,23 @@ The general architecture and loss is similar in both our works, however their fo
 \end{itemize}
 
 
-\section{Dataset}
+\section{Data sets}
+We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
+
+\subsection{Synthetic data set}
+Variable number of lanes, vehicles, and so on.  % Add some details
+
+\subsection{NGSIM I-80}
+The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segmets of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville, CA, in 2005.
+Some numbers:
+\begin{itemize}
+  \item 4.5M distinct data points
+  \item data point: 'Vehicle ID', 'Frame ID', 'Total Frames', 'Global Time', 'Local X', 'Local Y', 'Global X', 'Global Y', 'Vehicle Length', 'Vehicle Width', 'Vehicle Class', 'Vehicle Velocity', 'Vehicle Acceleration', 'Lane Identification', 'Preceding Vehicle', 'Following Vehicle', 'Spacing', 'Headway'
+  \item 3 sections of 15 minutes each
+  \item 2052, 1836, 1790 individual vehicles per section, for a total of 5.5k vehicles, including
+
+\end{itemize}
+
 
 \section{Experiments}
 
@@ -182,39 +185,36 @@ The general architecture and loss is similar in both our works, however their fo
 \item Histogram of distances between consecutive $z$ vs random pairs.
 \end{itemize}
 
-\subsection{Figures}
-
-\begin{figure}
-  \centering
-  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-  \caption{Sample figure caption.}
-\end{figure}
-
-
-\subsection{Tables}
-
-
-\begin{table}
-  \caption{Sample table title}
-  \label{sample-table}
-  \centering
-  \begin{tabular}{lll}
-    \toprule
-    \multicolumn{2}{c}{Part}                   \\
-    \cmidrule(r){1-2}
-    Name     & Description     & Size ($\mu$m) \\
-    \midrule
-    Dendrite & Input terminal  & $\sim$100     \\
-    Axon     & Output terminal & $\sim$10      \\
-    Soma     & Cell body       & up to $10^6$  \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\section{Final instructions}
-
-
-
+%\subsection{Figures}
+%
+%\begin{figure}
+%  \centering
+%  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
+%  \caption{Sample figure caption.}
+%\end{figure}
+%
+%
+%\subsection{Tables}
+%
+%
+%\begin{table}
+%  \caption{Sample table title}
+%  \label{sample-table}
+%  \centering
+%  \begin{tabular}{lll}
+%    \toprule
+%    \multicolumn{2}{c}{Part}                   \\
+%    \cmidrule(r){1-2}
+%    Name     & Description     & Size ($\mu$m) \\
+%    \midrule
+%    Dendrite & Input terminal  & $\sim$100     \\
+%    Axon     & Output terminal & $\sim$10      \\
+%    Soma     & Cell body       & up to $10^6$  \\
+%    \bottomrule
+%  \end{tabular}
+%\end{table}
+%
+%\section{Final instructions}
 
 
 \section{Appendix}
@@ -237,7 +237,6 @@ In this case, the KL term reduces to a constant which can be ignored during trai
   \\
 \end{align}
 
-
 The KL divergence is therefore:
 
 \begin{align}
@@ -245,7 +244,6 @@ The KL divergence is therefore:
 &= 1 \cdot \log \frac{1}{\frac{1}{M}} \\
 &= \log M
 \end{align}
-
 
 \textbf{Learned Prior}
 
@@ -258,7 +256,6 @@ The KL divergence is therefore:
   &p_\phi(z_j | x_i) = \frac{h(z_j; x_j, \theta)}{\sum_{k=1}^M h(z_k; x_j, \theta)}
 \end{align}
 
-
 The KL divergence is therefore:
 
 \begin{align}
@@ -270,28 +267,26 @@ The KL divergence is therefore:
 
 The last term is a constant and can be ignored.
 
-
-
-\subsubsection*{Acknowledgments}
-
-Use unnumbered third level headings for the acknowledgments. All
-acknowledgments go at the end of the paper. Do not include
-acknowledgments in the anonymized submission, only in the final paper.
+% \subsubsection*{Acknowledgments}
+%
+% Use unnumbered third level headings for the acknowledgments. All
+% acknowledgments go at the end of the paper. Do not include
+% acknowledgments in the anonymized submission, only in the final paper.
 
 \bibliographystyle{unsrt}
 \bibliography{nips_2018}
 
-\section*{References}
-
-References follow the acknowledgments. Use unnumbered first-level
-heading for the references. Any choice of citation style is acceptable
-as long as you are consistent. It is permissible to reduce the font
-size to \verb+small+ (9 point) when listing the references. {\bf
-  Remember that you can use more than eight pages as long as the
-  additional pages contain \emph{only} cited references.}
-\medskip
-
-\small
+% \section*{References}
+%
+% References follow the acknowledgments. Use unnumbered first-level
+% heading for the references. Any choice of citation style is acceptable
+% as long as you are consistent. It is permissible to reduce the font
+% size to \verb+small+ (9 point) when listing the references. {\bf
+%   Remember that you can use more than eight pages as long as the
+%   additional pages contain \emph{only} cited references.}
+% \medskip
+%
+% \small
 
 
 \end{document}
