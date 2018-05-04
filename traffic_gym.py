@@ -489,7 +489,7 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite('{}/im{t:05d}.png'.format(save_dir), im[t].numpy())
+                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
     @property
     def valid(self):
@@ -532,6 +532,7 @@ class StatefulEnv(core.Env):
         self.actions_buffer = []
         self.policy_network = None
         self._lane_surfaces = dict()
+        self.time_cntr = None
 
         print(self.delta_t)
 
@@ -568,6 +569,7 @@ class StatefulEnv(core.Env):
         self.policy_car_id = -1
         self.next_car_id = 0
         self.mean_fps = None
+        self.time_cntr = 0
         pygame.display.set_caption('Traffic simulator, episode {}'.format(self.episode))
         state = list()
         objects = list()
@@ -577,7 +579,7 @@ class StatefulEnv(core.Env):
         self.s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
         self.s_std = torch.Tensor([391.5376, 43.8825, 25.1841, 1.0992])
 
-        # observation is a tupe (images, states)
+        # observation is a tuple (images, states)
         images = observation[0].contiguous()
         states = observation[1].contiguous()
         images.div_(255.0)
@@ -687,72 +689,60 @@ class StatefulEnv(core.Env):
             states_raw.append(state_raw.float())
             v.store('state', state)
 
-            # Compute the action
-            if v.id == self.policy_car_id and policy_action is not None:
-                action = policy_action
-            else:
-                if len(v._states_image) >= 10 and self.policy_type == 'imitation':  # and v.id == self.policy_car_id:
-                    state_ = v.get_last_state_image(10)
-                    action = v.policy(state_, 'imitation')
-                    # print('here')
+            if self.policy_type == 'hardcoded':
+                # Compute the action
+                if v.id == self.policy_car_id and policy_action is not None:
+                    action = policy_action
                 else:
-                    # if len(v._states_image) > 15:
-                    #     pdb.set_trace()
+                    # if len(v._states_image) >= 10 and self.policy_type == 'imitation':
+                    #     state_ = v.get_last_state_image(10)
+                    #     action = v.policy(state_, 'imitation')
+                    #     # print('here')
+                    # else:
+                    #     # if len(v._states_image) > 15:
+                    #     #     pdb.set_trace()
                     action = v.policy(state, 'hardcoded')
 
-            # print(action)
-            for place in state:
-                if place is not None:
-                    for car in place:
-                        if car is not None:
-                            s1 = car.get_state()
-                            s2 = v.get_state()
-                            if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
-                                v.crashed = True
+                # Check for accident
+                if v.crashed: self.collision = v
 
-            # Check for accident
-            if v.crashed: self.collision = v
+                if self.store and v.valid or v.id == self.policy_car_id:
+                    v.store('state', state)
+                    v.store('action', action)
 
-            if self.store and v.valid or v.id == self.policy_car_id:
-                v.store('state', state)
-                v.store('action', action)
+                # update the cars
+                v.step(action)
 
+        if self.policy_type == 'imitation' and len(self.vehicles) > 0:
             # update the cars
-            v.step(action)
-
-        # print(len(self.vehicles))
-
-        # # update the cars
-        # npred = 20
-        # if self.frame == 0:
-        #     self.time_cntr = 0
-        # if self.time_cntr == 0 or len(self.vehicles) != self.actions_buffer.size(0):
-        #     print('new actions')
-        #     states_images = torch.stack(states_images)
-        #     states_raw = torch.stack(states_raw)
-        #     self.actions_buffer = self.policy_imitation([states_images, states_raw])
-        #     self.time_cntr = 0
-        # car_cntr = 0
-        # for v in self.vehicles:
-        #     if v.update == 1:
-        #         #                print(car_cntr, self.time_cntr)
-        #         if car_cntr >= self.actions_buffer.size(0):
-        #             pdb.set_trace()
-        #         action = self.actions_buffer[car_cntr][self.time_cntr].numpy()
-        #     else:
-        #         action = np.array([0, 0])
-        #     # print(action)
-        #     # action = np.array([0, 0])
-        #     b = action[1]
-        #     action[1] = min(abs(b), v._speed / MAX_SPEED / SCALE * .01) * np.sign(b)
-        #     v.step(action)
-        #     # if v.id == 2:
-        #     # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
-        #     v.store('action', action)
-        #     car_cntr += 1
-        # self.time_cntr += 1
-        # if self.time_cntr >= npred:
-        #     self.time_cntr = 0
+            predictions_nb = 20
+            if self.time_cntr == 0 or len(self.vehicles) != self.actions_buffer.size(0):
+                print('new actions')
+                states_images = torch.stack(states_images)
+                states_raw = torch.stack(states_raw)
+                self.actions_buffer = self.policy_imitation([states_images, states_raw])
+                self.time_cntr = 0
+            car_cntr = 0
+            for v in self.vehicles:
+                if v.update == 1:
+                    #                print(car_cntr, self.time_cntr)
+                    if car_cntr >= self.actions_buffer.size(0):
+                        pdb.set_trace()
+                    action = self.actions_buffer[car_cntr][self.time_cntr].numpy()
+                else:
+                    action = np.array([0, 0])
+                # print(action)
+                # action = np.array([0, 0])
+                b = action[1]
+                action[1] = min(abs(b), v._speed / MAX_SPEED / SCALE * .01) * np.sign(b)
+                v.step(action)
+                # if v.id == 2:
+                # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
+                v.store('action', action)
+                car_cntr += 1
+            self.time_cntr += 1
+            if self.time_cntr >= predictions_nb:
+                self.time_cntr = 0
 
         self.frame += 1
 
@@ -810,7 +800,7 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
-            # if self.collision: self._pause()
+            if self.collision: self._pause()
 
         if mode == 'machine':
             max_extension = np.linalg.norm(width_height)
