@@ -47,7 +47,7 @@ register(
 
 register(
     id='Traffic-v2',
-    entry_point='traffic_gym_v2:StatefulEnv',
+    entry_point='traffic_gym_v2:MergingMap',
     kwargs=kwargs,
 )
 
