@@ -92,7 +92,7 @@ class Car:
         self._actions = list()
         self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
-        self.pid_k2 = np.random.normal(3e-3, 1e-4)
+        self.pid_k2 = np.random.normal(1e-3, 1e-4)
         self.look_ahead = look_ahead
         self.screen_w = screen_w
         self._text = self.get_text(self.id, font)
