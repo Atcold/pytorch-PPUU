@@ -16,6 +16,9 @@ class MergingMap(StatefulEnv):
     SCALE = SCALE
     LANE_W = LANE_W
 
+    # Import map from RealTraffic
+    _draw_lanes = RealTraffic._draw_lanes
+
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6
         kwargs['delta_t'] = 1/10
@@ -23,6 +26,3 @@ class MergingMap(StatefulEnv):
         self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
-
-    def _draw_lanes(self, *args, **kwargs):
-        RealTraffic._draw_lanes(self, *args, **kwargs)
