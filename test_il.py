@@ -34,8 +34,10 @@ kwargs = {
     'display': opt.display,
     'nb_lanes': opt.lanes,
     'delta_t': 0.1,
-    'store': True,
-    'policy_type': 'imitation',
+    'fps': 60,
+    'store': False,
+    'state_image': True,
+    # 'policy_type': 'imitation',
     'traffic_rate': opt.traffic_rate,
 }
 

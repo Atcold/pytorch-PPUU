@@ -1,5 +1,6 @@
 from traffic_gym import StatefulEnv, Car
 from traffic_gym_v1 import RealTraffic
+import pygame
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -20,4 +21,8 @@ class MergingMap(StatefulEnv):
         kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
         self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
-        self._draw_lanes = RealTraffic._draw_lanes
+        if self.display:  # if display is required
+            self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
+
+    def _draw_lanes(self, *args, **kwargs):
+        RealTraffic._draw_lanes(self, *args, **kwargs)
