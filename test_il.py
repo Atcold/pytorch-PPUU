@@ -23,25 +23,39 @@ parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-n_samples', type=int, default=1)
 parser.add_argument('-log_dir', type=str, default='logs/')
 parser.add_argument('-models_dir', type=str, default='./models_il/')
+parser.add_argument('-v', type=str, default='0')
 opt = parser.parse_args()
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
+kwargs = {
+    'display': opt.display,
+    'nb_lanes': opt.lanes,
+    'delta_t': 0.1,
+    'fps': 60,
+    'store': False,
+    'state_image': True,
+    # 'policy_type': 'imitation',
+    'traffic_rate': opt.traffic_rate,
+}
+
 register(
     id='Traffic-v0',
     entry_point='traffic_gym:StatefulEnv',
-    tags={'wrapper_config.TimeLimit.max_episodesteps': 100},
-    kwargs={'display': opt.display,
-            'nb_lanes': opt.lanes,
-            'store': True,
-            'policy_type': 'imitation',
-            'traffic_rate': opt.traffic_rate},
+    kwargs=kwargs,
 )
 
-env = gym.make('Traffic-v0')
-mfile = 'model=policy-cnn-mdn-bsize=32-ncond=10-npred=1-lrt=0.0001-nhidden=100-nfeature=128-nmixture=10-gclip=10.model'
+register(
+    id='Traffic-v2',
+    entry_point='traffic_gym_v2:MergingMap',
+    kwargs=kwargs,
+)
+
+env = gym.make('Traffic-v' + opt.v)
+
+mfile = 'model=policy-cnn-mdn-bsize=32-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-nmixture=10-gclip=10.model'
 policy = torch.load(f'{opt.models_dir}/' + mfile)
 policy.intype('cpu')
 

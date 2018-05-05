@@ -32,40 +32,33 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
+
 kwargs = {
-        'display': opt.display,
-        'state_image': opt.state_image,
-        'store': opt.store,
-        'fps': opt.fps,
-    }
+    'display': opt.display,
+    'state_image': opt.state_image,
+    'store': opt.store,
+    'fps': opt.fps,
+    'nb_lanes': opt.lanes,
+    'traffic_rate': opt.traffic_rate,
+}
 
-if opt.dataset == 'simulator':
-    register(
-        id='Traffic-v0',
-        entry_point='traffic_gym:StatefulEnv',
-        kwargs=kwargs
-    )
-    kwargs = {
-        'display': opt.display,
-        'nb_lanes': opt.lanes,
-        'traffic_rate': opt.traffic_rate,
-        'state_image': opt.state_image,
-        'store': opt.store,
-    }
+register(
+    id='Traffic-v0',
+    entry_point='traffic_gym:StatefulEnv',
+    kwargs=kwargs
+)
 
-elif opt.dataset == 'i80':
+register(
+    id='Traffic-v1',
+    entry_point='traffic_gym_v1:RealTraffic',
+    kwargs=kwargs
+)
+
+if opt.dataset == 'i80':
     opt.steps = 10000000000
-
-    register(
-        id='Traffic-v1',
-        entry_point='traffic_gym_v1:RealTraffic',
-        kwargs=kwargs
-    )
 
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
-
-
 
 
 def run_episode():
@@ -73,6 +66,7 @@ def run_episode():
     for t in range(opt.steps):
         state, reward, vehicles = env.step(None)
         env.render()
+
 
 episodes = []
 for i in range(opt.n_episodes):

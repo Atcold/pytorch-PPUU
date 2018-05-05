@@ -1,7 +1,7 @@
 import bisect
 
 import pygame, pdb, torch
-import math
+import math, numpy
 import random
 import numpy as np
 import scipy.misc
@@ -11,6 +11,7 @@ from gym import core
 import os
 from imageio import imwrite
 from torch.autograd import Variable
+
 # from skimage.transform import rescale
 
 
@@ -54,7 +55,6 @@ MAX_SPEED = 130  # km/h
 
 
 class Car:
-
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
@@ -74,7 +74,10 @@ class Car:
             -self._length,
             lanes[lane]['mid']
         ), np.float)
-        self._target_speed = max(30, (MAX_SPEED - random.randrange(0, 30) - 10 * lane)) * 1000 / 3600 * self.SCALE  # m / s
+        self._target_speed = max(
+            30,
+            (MAX_SPEED - random.randrange(0, 30) - 10 * lane)
+        ) * 1000 / 3600 * self.SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
         self._colour = colours['c']
@@ -89,7 +92,7 @@ class Car:
         self._actions = list()
         self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
-        self.pid_k2 = np.random.normal(3e-3, 1e-4)
+        self.pid_k2 = np.random.normal(1e-3, 1e-4)
         self.look_ahead = look_ahead
         self.screen_w = screen_w
         self._text = self.get_text(self.id, font)
@@ -237,6 +240,10 @@ class Car:
         # Actions: acceleration (a), steering (b)
         a, b = action
 
+        # TODO: principled kinematics model
+        if abs(b) > 0.1:
+            b = 0.1 * numpy.sign(b)
+
         # State integration
         self._position += self._speed * self._direction * self._dt
 
@@ -319,39 +326,11 @@ class Car:
         """
         return self.back - other.front
 
-
-
     def policy(self, observation, policy_type):
         if policy_type == 'hardcoded':
             return self.policy_hardcoded(observation)
         elif policy_type == 'imitation':
             return self.policy_imitation(observation)
-
-
-
-    def policy_imitation(self, observation):
-
-        self.s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
-        self.s_std = torch.Tensor([391.5376, 43.8825, 25.1841, 1.0992])
-        self.a_mean = torch.Tensor([0.2084, -1.3331])
-        self.a_std = torch.Tensor([5.4692, 1746.8927])
-
-        # observation is a tupe (images, states)
-        images = observation[0].contiguous().unsqueeze(0).float()
-        states = observation[1].contiguous().unsqueeze(0)
-        images.div_(255.0)
-
-        states -= self.s_mean.view(1, 1, 4).expand(states.size())
-        states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size()))
-
-        images = Variable(images.float())
-        states = Variable(states.float())
-        _, _, _, actions = self.policy_network(images, states, sample=True)
-
-        actions *= self.a_std
-        actions += self.a_mean
-        return actions
-
 
     def policy_hardcoded(self, observation):
         """
@@ -467,26 +446,25 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-
-
     def get_last_state_image(self, ncond):
+        #        self._states_image = self._states_image[-10:]
+        #        self._states = self._states[-10:]
         transpose = list(zip(*self._states_image))
         im = transpose[0]
         im = torch.stack(im).permute(0, 3, 1, 2)
         zip_ = list(zip(*self._states))
-        proximity_cost = torch.Tensor(zip_[2])
+        #        proximity_cost = torch.Tensor(zip_[2])
         states = torch.stack(zip_[0])[:, 0]
         out = [im[-10:], states[-10:]]
         return out
 
-
-    def dump_state_image(self, save_dir='/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', mode='img'):
+    def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         print('dumping')
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
             print('failure, {}'.format(save_dir))
-            print(transpose)
+            # print(transpose)
             return
         im = transpose[0]
         os.system('mkdir -p ' + save_dir)
@@ -511,7 +489,7 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite('{}/im{t:05d}.png'.format(save_dir), im[t].numpy())
+                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
     @property
     def valid(self):
@@ -519,7 +497,6 @@ class Car:
 
 
 class StatefulEnv(core.Env):
-
     # Environment's car class
     EnvCar = Car
 
@@ -527,7 +504,8 @@ class StatefulEnv(core.Env):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=True, store=True, policy_type='hardcoded'):
+    def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
+                 policy_type='hardcoded'):
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -551,6 +529,12 @@ class StatefulEnv(core.Env):
         self.look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
         self.look_sideways = 2 * self.LANE_W
         self.policy_type = policy_type
+        self.actions_buffer = []
+        self.policy_network = None
+        self._lane_surfaces = dict()
+        self.time_cntr = None
+
+        print(self.delta_t)
 
         self.display = display
         if self.display:  # if display is required
@@ -562,7 +546,6 @@ class StatefulEnv(core.Env):
                 30: pygame.font.SysFont(None, 30),
             }
 
-
         print('Frame rate: {} fps'.format(fps))
 
     def build_lanes(self, nb_lanes):
@@ -572,7 +555,6 @@ class StatefulEnv(core.Env):
              'max': self.offset + (n + 1) * self.LANE_W}
             for n in range(nb_lanes)
         )
-
 
     def set_policy(self, policy_network):
         self.policy_network = policy_network
@@ -587,10 +569,30 @@ class StatefulEnv(core.Env):
         self.policy_car_id = -1
         self.next_car_id = 0
         self.mean_fps = None
+        self.time_cntr = 0
         pygame.display.set_caption('Traffic simulator, episode {}'.format(self.episode))
         state = list()
         objects = list()
         return state, objects
+
+    def policy_imitation(self, observation):
+        self.s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
+        self.s_std = torch.Tensor([391.5376, 43.8825, 25.1841, 1.0992])
+
+        # observation is a tuple (images, states)
+        images = observation[0].contiguous()
+        states = observation[1].contiguous()
+        images.div_(255.0)
+        bsize = images.size(0)
+
+        states -= self.s_mean.view(1, 1, 4).expand(states.size())
+        states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size()))
+
+        images = Variable(images.float())
+        states = Variable(states.float())
+        _, _, _, actions = self.policy_network(images, states, sample=True, unnormalize=True)
+        actions = actions.view(bsize, -1, 2)
+        return actions
 
     def step(self, policy_action=None):
 
@@ -627,11 +629,11 @@ class StatefulEnv(core.Env):
                 free_lanes -= lanes_occupied
 
         # Randomly add vehicles, up to 1 / dt per second
-        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t or len(
-                self.vehicles) == 0:
+        if random.random() < self.traffic_rate * np.sin(2 * np.pi * self.frame * self.delta_t) * self.delta_t:
             if free_lanes:
                 car = self.EnvCar(self.lanes, free_lanes, self.delta_t, self.next_car_id,
-                                  self.look_ahead, self.screen_size[0], self.font[20], policy_type=self.policy_type, policy_network = self.policy_network)
+                                  self.look_ahead, self.screen_size[0], self.font[20], policy_type=self.policy_type,
+                                  policy_network=self.policy_network)
                 self.next_car_id += 1
                 self.vehicles.append(car)
                 for l in car.get_lane_set(self.lanes):
@@ -645,6 +647,17 @@ class StatefulEnv(core.Env):
             self.render(mode='machine', width_height=(2 * self.look_ahead, 2 * self.look_sideways), scale=0.25)
 
         # Generate state representation for each vehicle
+
+        # remove vehicles that need to be removed first
+        for v in self.vehicles:
+            lane_set = v.get_lane_set(self.lanes)
+            if len(lane_set) == 0:
+                lanes_occupied = v.get_lane_set(self.lanes)
+                for l in lanes_occupied: self.lane_occupancy[l].remove(v)
+                self.vehicles.remove(v)
+
+        states_images, states_raw, update = [], [], []
+        # print(len(self.vehicles))
         for v in self.vehicles:
             lane_set = v.get_lane_set(self.lanes)
             # If v is in one lane only
@@ -665,48 +678,71 @@ class StatefulEnv(core.Env):
 
             state = left_vehicles, mid_vehicles, right_vehicles
 
-            # Compute the action
-            if v.id == self.policy_car_id and policy_action is not None:
-                action = policy_action
+            if len(v._states_image) > 10 and self.policy_type == 'imitation':  # and v.id == self.policy_car_id:
+                state_image, state_raw = v.get_last_state_image(10)
+                v.update = 1
             else:
-                if len(v._states_image) > 15 and self.policy_type == 'imitation':
-                    state_ = v.get_last_state_image(10)
-                    action = v.policy(state_, 'imitation')
+                state_image, state_raw = [torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)]
+                v.update = 0
+
+            states_images.append(state_image.float())
+            states_raw.append(state_raw.float())
+            v.store('state', state)
+
+            if self.policy_type == 'hardcoded':
+                # Compute the action
+                if v.id == self.policy_car_id and policy_action is not None:
+                    action = policy_action
                 else:
+                    # if len(v._states_image) >= 10 and self.policy_type == 'imitation':
+                    #     state_ = v.get_last_state_image(10)
+                    #     action = v.policy(state_, 'imitation')
+                    #     # print('here')
+                    # else:
+                    #     # if len(v._states_image) > 15:
+                    #     #     pdb.set_trace()
                     action = v.policy(state, 'hardcoded')
 
-            print(action)
-            for place in state:
-                if place is not None:
-                    for car in place:
-                        if car is not None:
-                            s1 = car.get_state()
-                            s2 = v.get_state()
-                            if abs(s1[0] - s2[0]) < v._length and abs(s1[1] - s2[1]) < v._width:
-                                v.crashed = True
+                # Check for accident
+                if v.crashed: self.collision = v
 
-            # Check for accident
-            if v.crashed: self.collision = v
+                if self.store and v.valid or v.id == self.policy_car_id:
+                    v.store('state', state)
+                    v.store('action', action)
 
-            if self.store and v.valid or v.id == self.policy_car_id:
-                v.store('state', state)
-                v.store('action', action)
+                # update the cars
+                v.step(action)
 
+        if self.policy_type == 'imitation' and len(self.vehicles) > 0:
             # update the cars
-            v.step(action)
-
-        '''
-        for v in self.vehicles:
-            cost = v._states[-1][2]
-            if cost > 0.2:
-                img = v._states_image[-1]
-                hsh = random.random()
-                imwrite(f'cost_images/high/im{hsh:.5f}_cost{cost}.png', img.numpy())
-            elif cost < 0.01 and random.random() < 0.01:
-                img = v._states_image[-1]
-                hsh = random.random()
-                imwrite(f'cost_images/low/im{hsh:.5f}_cost{cost}.png', img.numpy())
-        '''
+            predictions_nb = 20
+            if self.time_cntr == 0 or len(self.vehicles) != self.actions_buffer.size(0):
+                print('new actions')
+                states_images = torch.stack(states_images)
+                states_raw = torch.stack(states_raw)
+                self.actions_buffer = self.policy_imitation([states_images, states_raw])
+                self.time_cntr = 0
+            car_cntr = 0
+            for v in self.vehicles:
+                if v.update == 1:
+                    #                print(car_cntr, self.time_cntr)
+                    if car_cntr >= self.actions_buffer.size(0):
+                        pdb.set_trace()
+                    action = self.actions_buffer[car_cntr][self.time_cntr].numpy()
+                else:
+                    action = np.array([0, 0])
+                # print(action)
+                # action = np.array([0, 0])
+                b = action[1]
+                action[1] = min(abs(b), v._speed / MAX_SPEED / SCALE * .01) * np.sign(b)
+                v.step(action)
+                # if v.id == 2:
+                # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
+                v.store('action', action)
+                car_cntr += 1
+            self.time_cntr += 1
+            if self.time_cntr >= predictions_nb:
+                self.time_cntr = 0
 
         self.frame += 1
 
@@ -764,7 +800,7 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
-            # if self.collision: self._pause()
+            if self.collision: self._pause()
 
         if mode == 'machine':
             max_extension = np.linalg.norm(width_height)
@@ -773,15 +809,10 @@ class StatefulEnv(core.Env):
             # draw lanes
             try:
                 screen_surface = self._lane_surfaces[mode]
-            except:
-                screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
-                self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
 
-            '''
             except KeyError:
                 screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
                 self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
-            '''
 
             # draw vehicles
             for v in self.vehicles:

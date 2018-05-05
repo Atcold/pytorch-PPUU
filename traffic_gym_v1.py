@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import pdb
 import bisect
-import pdb, pickle, os, numpy
+import pdb, pickle, os
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -89,7 +89,7 @@ class RealCar(Car):
         new_direction = self._get('direction', self._frame)
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
-            b = self._speed * numpy.sign(b)
+            b = self._speed * np.sign(b)
         b_abs = abs(b)
         if b_abs > 5:
             pdb.set_trace()

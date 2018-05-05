@@ -1054,13 +1054,15 @@ class PolicyMDN(nn.Module):
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
         sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
-        print(pi)
         if sample:
             k = torch.multinomial(pi, 1)
             a = []
             for b in range(bsize):
-                a.append(torch.randn(self.opt.n_actions)*sigma[b][k[b]].data + mu[b][k[b]].data)
+                a.append(torch.randn(self.opt.npred, self.opt.n_actions)*sigma[b][k[b]].data + mu[b][k[b]].data)
             a = torch.stack(a).squeeze()
+            a[:, 1].copy_(torch.clamp(a[:, 1], min=-1, max=1))
+#            a[:, 0].copy_(torch.clamp(a[:, 0], min=-0.1, max=0.1))
+            print(print('a:{}, {}'.format(a.min(), a.max())))
         else:
             a = None
 
