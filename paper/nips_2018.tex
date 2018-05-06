@@ -211,7 +211,6 @@ We evaluate our prediction model using two quantitative metrics in addition to v
 \begin{itemize}
 \item We follow the protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
   This method provides some measure of how well the stochastic model covers the space of possible futures, although it does not necessarily reflect the realism of all the generated samples.
-\item We also provide a complementary measure where we train an separate model to distinguish between real and generated images after the stochastic model has been trained. This has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however the approach is applicable to generative models more broadly. In this work we use the Least-Squares GAN Criterion \citep{Mao16}, as this was found to be both stable and sensitive in \citep{GANeval}.
 \end{itemize}
 
 
@@ -220,11 +219,13 @@ We evaluate our prediction model using two quantitative metrics in addition to v
 We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
 Here we argue that the metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} is only meaningful when the number of samples generated is of similar magnitude to the number of possible futures.
 Consider the task of modeling a distribution of one-hot vectors, where each sample is a binary vector with all zeros except for a single $1$, whose index is chosen uniformly between $1$ and $n$.
-A baseline model which always predicts the average $\tilde{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$. A stochastic model which exactly captures the true distribution will have an expected loss of $(1-F(k, k, (n-1)/n))\sqrt{2}$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
+A baseline model which always predicts the average $\tilde{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$. A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
 Curves of both of these loss functions for different $n$ are shown in Figure \ref{expected-loss}.
-These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the baseline according to this metric.
+These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the deterministic baseline according to this metric.
 
-
+The number of possible futures of a stochastic process can grow exponentially with the number of time steps.
+We therefore use this metric to evaluate model predictions over a limited time horizon in order to give models a chance to capture the true future with a number of samples which is computationally tractable.
+Since we are also interested in the the performance of models to generate predictions over long time horizons, we also provide a complementary measure where we train an separate model to distinguish between real and generated images after the stochastic model has been trained. This has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however the approach is applicable to generative models more broadly. In this work we use the Least-Squares GAN Criterion \citep{Mao16}, as this was found to be both stable and sensitive in \citep{GANeval}.
 
 \begin{figure}
   \centering
@@ -247,13 +248,12 @@ These illustrate that as $n$ becomes large, an increasingly high number of sampl
     \caption{$n=1000$}
     \label{fig:mouse}
   \end{subfigure}
-  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{fig:animals}
+  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
   \end{figure}
 
 
 
 \begin{itemize}
-\item Histogram of distances between consecutive $z$ vs random pairs - checks smoothness assumption on trajectories
 \item Gradient of $z$ vectors for single timestep
 \end{itemize}
 
@@ -301,6 +301,32 @@ These illustrate that as $n$ becomes large, an increasingly high number of sampl
 
 
 \section{Appendix}
+
+
+\subsection{Proof of Expected Loss}
+
+The baseline model always produces the same prediction $\tilde{y} = (\frac{1}{n}, ..., \frac{1}{n})$. Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
+\begin{align*}
+  \mathbb{E}[\mathcal{L}_{\mbox{baseline}}] &= \sqrt{\sum_{i=1}^n (\tilde{y}_i - y_i)^2} \\
+  &= \sqrt{(1-\frac{1}{n})^2 + (n-1)\Big ( \frac{1}{n} \Big )^2} \\
+  &= \sqrt{\frac{(n-1)^2 + (n-1)}{n^2}} \\
+  &= \sqrt{\frac{n-1}{n}}
+\end{align*}
+
+To compute the best-of-$k$ loss, the true stochastic model produces $k$ samples of the same form as the one drawn from the true distribution, i.e. $\tilde{y}_k = (0, ..., 0, 1, 0, ..., 0)$, where the non-zero index is chosen uniformly from $1$ to $n$.
+Let $j$ denote the non-zero index of the sample drawn from the true distribution and $i_1, i_2, ..., i_k$ non-zero indices of the samples output by the stochastic model.
+The probability of each sample \textit{not} matching $y_j$ is equal to $p=\frac{n-1}{n}$.
+Therefore, the probability of none of the generated samples matching $y_j$ is equal to the cumulative distribution function of a binomial random variable $B(k, p)$, denoted $F(k, k, p)$.
+In the case of a generated sample matching $y_j$, the best-of-$k$ loss will equal 0, otherwise it will equal $\sqrt{2}$.
+
+Putting this together, the expected best-of-$k$ loss is given by:
+
+\begin{align*}
+  \mathbb{E}[\mathcal{L}_{\mbox{best-of-$k$}}] &= \mbox{P(at least one sample matches)}\cdot 0 + \mbox{P(none of the samples match)} \cdot \sqrt{2} \\
+  &= \sqrt{2} \cdot F\Big (k, k, \frac{n-1}{n} \Big) \\
+\end{align*}
+
+\subsection{Relationship to VAEs}
 
 Our model can also be viewed through the lens of Variational Autoencoders, as a type of conditional VAE with a zero-variance posterior network and a uniform categorical prior.
 In this case, the KL term reduces to a constant which can be ignored during training; details can be found in the Appendix.
