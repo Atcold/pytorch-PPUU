@@ -94,9 +94,6 @@ The contributions of this work are the following:
 \item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for hundreds of timesteps into the future.
 \end{itemize}
 
-
-\section{Prediction Model}
-
 Most methods for stochastic prediction rely on the framework of conditional Variational Autoencoders (cVAEs).
 VAEs assume a prior over latent variables and include a loss term measuring the KL divergence between this prior and the distribution output by the posterior network.
 This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
@@ -109,6 +106,11 @@ Through this non-parametric sampling procedure, we naturally obtain samples whic
 If the prior distribution over latent variables is dependent on the input, it may additionally be necessary to restrict our sampling to a limited region of the manifold.
 We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
+
+
+\section{Prediction Model}
+
+\subsection{Architecture}
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
 The architecture consists of three neural networks: an encoder $f_1$, a decoder $f_2$ and a latent variable network $\phi$.
@@ -130,10 +132,31 @@ Note in particular that no sampling or reparamaterization is done at training ti
 In standard autoencoders, some mechanism is used to limit the information content of the latent representation to avoid learning trivial mappings and thus encourage the model to learn good representations.
 In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $y_i$ while ignoring the input $x_i$.
 In our experiments we found setting the dimension of $z_i$ to be of much lower dimension than $y_i$ to work well, however other methods such as adding a sparsity or contractive penalty term could also be used.
-After training, we extract all vectors $z_i$ from the training set and use these as inputs to new inputs.
+
+
+\subsection{Sampling}
+
+After training, we extract all vectors $z_i$ from the training set and use these as inputs to the stochastic prediction model.
+We refer to this set of vectors as $\mathcal{Z}$.
+We explore three sampling methods:
+
+\textbf{No Prior} For a given input $x$, we sample some $z$ from $\mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
+
+\textbf{KNN Prior} Here we make a smoothness assumption on the trajectories followed along the latent manifold. In particular, we assume that $z_{t+1}$ tends to be closer (on average) to $z_t$ than a random other vector in $\mathcal{Z}$. This assumption is motivated by a smoothness assumption on the inputs: if $s_t$ and $s_{t+1}$ are close and $\phi$ is a smooth function, then $z_t$ and $z_{t+1}$ will be close as well. This smoothness assumption can be reflected by restricting the choice of $z_{t+1}$ we sample from $\mathcal{Z}$ to the $k$ nearest neighbors of $z_t$.
+This approach can be implemented by construcing a $k$ nearest neighbor graph and performing a random walk along this graph (see algorithm \ref{algo}).
+
+\textbf{Learned Prior} We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $x$. Specifically, we train a Mixture Density network \citep{mixture-density-networks} $\psi(x)$ which outputs the parameters $(\{\pi_j\}, \{\mu_j\}, \{\sigma_j\})$ of a Gaussian mixture model and is trained to maximize the likelihood of $z_t$ under this model. Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions which can be represented with our approach.
+
+A tradeoff in modeling distributions using non-parametric approaches is that they trade flexibility for increased memory and computational cost.
+All the approaches above have a memory footprint which grows with the size of the dataset.
+In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
+The second approach allows us to construct the graph offline since it is input-independent, hence sampling is also $\mathcal{O}(1)$.
+The third approach is input-dependent, however we note that is can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$. Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as kd-trees or locally sensitive hashing. In our experiments, we found that a simple linear exact search using a subset of the training data was sufficiently fast using a GPU and achieved good results.
+
+
 
 \begin{algorithm}
-  \caption{My algorithm}\label{euclid}
+  \caption{My algorithm}\label{algo}
   \begin{algorithmic}[1]
     \State \textbf{Input}: Time series $\{s_1...s_T\}$.
     \State Train latent model:
