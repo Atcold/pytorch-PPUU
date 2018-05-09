@@ -1043,25 +1043,24 @@ class PolicyMDN(nn.Module):
         )
 
         self.pi_net = nn.Linear(opt.n_hidden, opt.n_mixture)
-        self.mu_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
-        self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*self.n_outputs)
-
+        self.mu_net = nn.Linear(opt.n_hidden, opt.n_mixture * self.n_outputs)
+        self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture * self.n_outputs)
 
     def forward(self, state_images, states, sample=False, unnormalize=False):
         bsize = state_images.size(0)
         h = self.encoder(state_images, states).view(bsize, self.hsize)
         h = self.fc(h)
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
-        mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
-        sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
+        mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.opt.npred, self.opt.n_actions)
+        sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.opt.npred, self.opt.n_actions)
         if sample:
             k = torch.multinomial(pi, 1)
             a = []
             for b in range(bsize):
-                a.append(torch.randn(self.opt.npred, self.opt.n_actions)*sigma[b][k[b]].data + mu[b][k[b]].data)
+                a.append(torch.randn(self.opt.npred, self.opt.n_actions) * sigma[b][k[b]].data + mu[b][k[b]].data)
             a = torch.stack(a).squeeze()
             a[:, 1].copy_(torch.clamp(a[:, 1], min=-1, max=1))
-#            a[:, 0].copy_(torch.clamp(a[:, 0], min=-0.1, max=0.1))
+            #            a[:, 0].copy_(torch.clamp(a[:, 0], min=-0.1, max=0.1))
             print(print('a:{}, {}'.format(a.min(), a.max())))
         else:
             a = None

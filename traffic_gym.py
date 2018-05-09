@@ -71,7 +71,7 @@ class Car:
         lane = random.choice(tuple(free_lanes))
         if lane == 6 and type(self).__name__ == 'PatchedCar':
             self._position = np.array((0, lanes[-1]['max'] + 42), np.float)
-            self._direction = np.array((1, 0.035), np.float) / np.sqrt(1 + 0.035 ** 2)
+            self._direction = np.array((1, -0.035), np.float) / np.sqrt(1 + 0.035 ** 2)
         else:
             self._position = np.array((
                 -self._length,
@@ -113,8 +113,8 @@ class Car:
         state = torch.zeros(4)
         state[0] = self._position[0]  # x
         state[1] = self._position[1]  # y
-        state[2] = self._direction[0] * self._speed  # dx
-        state[3] = self._direction[1] * self._speed  # dy
+        state[2] = self._direction[0] * self._speed  # dx/dt
+        state[3] = self._direction[1] * self._speed  # dy/dt
         return state
 
     def compute_cost(self, other):
@@ -438,13 +438,13 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last_state_image(self, ncond):
+    def get_last_state_image(self, n):
         transpose = list(zip(*self._states_image))
         im = transpose[0]
         im = torch.stack(im).permute(0, 3, 1, 2)
-        zip_ = list(zip(*self._states))
-        states = torch.stack(zip_[0])[:, 0]
-        out = [im[-10:], states[-10:]]
+        zip_ = list(zip(*self._states))  # n x (obs, mask, cost) -> (n x obs, n x mask, n x cost)
+        states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
+        out = [im[-n:], states[-n:]]
         return out
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
@@ -509,9 +509,9 @@ class StatefulEnv(core.Env):
         self.collision = None  # an accident happened
         self.episode = 0  # episode counter
         self.car_id = None  # car counter init
-        self.state_image = state_image
+        self.state_image = state_image or policy_type == 'imitation'
         self.mean_fps = None
-        self.store = store
+        self.store = store or policy_type == 'imitation'
         self.policy_car_id = None
         self.next_car_id = None
         self.photos = None
@@ -671,7 +671,7 @@ class StatefulEnv(core.Env):
                     state_image, state_raw = v.get_last_state_image(10)
                     v.update = 1
                 else:
-                    state_image, state_raw = [torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)]
+                    state_image, state_raw = torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)
                     v.update = 0
 
                 states_images.append(state_image.float())
@@ -727,7 +727,7 @@ class StatefulEnv(core.Env):
                 v.step(action)
                 # if v.id == 2:
                 # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
-                v.store('action', action)
+                # v.store('action', action)
                 car_cntr += 1
             self.time_cntr += 1
             if self.time_cntr >= predictions_nb:
