@@ -79,8 +79,8 @@ class Car:
             ), np.float)
             self._direction = np.array((1, 0), np.float)
         self._target_speed = max(
-            30,
-            (MAX_SPEED - random.randrange(0, 30) - 10 * lane)
+            0,
+            (MAX_SPEED - random.randrange(0, 15) - 10 * lane)
         ) * 1000 / 3600 * self.SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
@@ -94,7 +94,7 @@ class Car:
         self._states = list()
         self._states_image = list()
         self._actions = list()
-        self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
+        self._safe_factor = random.gauss(1.5, 0)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
         self.pid_k2 = np.random.normal(1e-3, 1e-4)
         self.look_ahead = look_ahead
@@ -366,13 +366,14 @@ class Car:
         if a == 0:
             a = 1 * (self._target_speed - self._speed)
 
-        if random.random() < 0.1:
-            self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+        # if random.random() < 0.1:
+        #     self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+        # error = -(self._noisy_target_lane - self._position[1])
 
-        if random.random() < 0.05 and not self._passing:
-            self._target_speed *= (1 + np.random.normal(0, 0.05))
+        # if random.random() < 0.05 and not self._passing:
+        #     self._target_speed *= (1 + np.random.normal(0, 0.05))
 
-        error = -(self._noisy_target_lane - self._position[1])
+        error = -(self._target_lane - self._position[1])
         d_error = error - self._error
         d_clip = 2
         if abs(d_error) > d_clip:
