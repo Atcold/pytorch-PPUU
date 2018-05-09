@@ -67,13 +67,17 @@ class Car:
         """
         self._length = round(4.8 * self.SCALE)
         self._width = round(1.8 * self.SCALE)
-        self._direction = np.array((1, 0), np.float)
         self.id = car_id
         lane = random.choice(tuple(free_lanes))
-        self._position = np.array((
-            -self._length,
-            lanes[lane]['mid']
-        ), np.float)
+        if lane == 6 and type(self).__name__ == 'PatchedCar':
+            self._position = np.array((0, lanes[-1]['max'] + 42), np.float)
+            self._direction = np.array((1, 0.035), np.float) / np.sqrt(1 + 0.035 ** 2)
+        else:
+            self._position = np.array((
+                -self._length,
+                lanes[lane]['mid']
+            ), np.float)
+            self._direction = np.array((1, 0), np.float)
         self._target_speed = max(
             30,
             (MAX_SPEED - random.randrange(0, 30) - 10 * lane)
@@ -212,10 +216,7 @@ class Car:
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
 
-        # Hack... clip direction between -10 and +10
         d = self._direction
-        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         if mode == 'human':
             if c:
@@ -224,7 +225,6 @@ class Car:
             draw_rect(surface, self._colour, rectangle, d, 3)
 
             # Drawing vehicle number
-            # draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
             self._text[1].left = x
             self._text[1].top = y - self._width // 2
             surface.blit(self._text[0], self._text[1])
@@ -239,10 +239,6 @@ class Car:
         """
         # Actions: acceleration (a), steering (b)
         a, b = action
-
-        # TODO: principled kinematics model
-        if abs(b) > 0.1:
-            b = 0.1 * numpy.sign(b)
 
         # State integration
         self._position += self._speed * self._direction * self._dt
@@ -405,10 +401,6 @@ class Car:
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
 
-        # Hack... clip direction between -10 and +10
-        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        # d = np.array((np.cos(alpha), np.sin(alpha)))
-
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
@@ -447,13 +439,10 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
 
     def get_last_state_image(self, ncond):
-        #        self._states_image = self._states_image[-10:]
-        #        self._states = self._states[-10:]
         transpose = list(zip(*self._states_image))
         im = transpose[0]
         im = torch.stack(im).permute(0, 3, 1, 2)
         zip_ = list(zip(*self._states))
-        #        proximity_cost = torch.Tensor(zip_[2])
         states = torch.stack(zip_[0])[:, 0]
         out = [im[-10:], states[-10:]]
         return out
@@ -546,8 +535,6 @@ class StatefulEnv(core.Env):
                 30: pygame.font.SysFont(None, 30),
             }
 
-        print('Frame rate: {} fps'.format(fps))
-
     def build_lanes(self, nb_lanes):
         return tuple(
             {'min': self.offset + n * self.LANE_W,
@@ -563,7 +550,7 @@ class StatefulEnv(core.Env):
         # Initialise environment state
         self.frame = 0
         self.vehicles = list()
-        self.lane_occupancy = [[] for _ in self.lanes]
+        self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
         # keep track of the car we are controlling
         self.policy_car_id = -1
@@ -669,6 +656,7 @@ class StatefulEnv(core.Env):
                 continue
 
             current_lane_idx = lane_set.pop()
+
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
                 if current_lane_idx > 0 and len(lane_set) == 0 else None
@@ -678,16 +666,17 @@ class StatefulEnv(core.Env):
 
             state = left_vehicles, mid_vehicles, right_vehicles
 
-            if len(v._states_image) > 10 and self.policy_type == 'imitation':  # and v.id == self.policy_car_id:
-                state_image, state_raw = v.get_last_state_image(10)
-                v.update = 1
-            else:
-                state_image, state_raw = [torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)]
-                v.update = 0
+            if self.policy_type == 'imitation':
+                if len(v._states_image) > 10:  # and v.id == self.policy_car_id:
+                    state_image, state_raw = v.get_last_state_image(10)
+                    v.update = 1
+                else:
+                    state_image, state_raw = [torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)]
+                    v.update = 0
 
-            states_images.append(state_image.float())
-            states_raw.append(state_raw.float())
-            v.store('state', state)
+                states_images.append(state_image.float())
+                states_raw.append(state_raw.float())
+                v.store('state', state)
 
             if self.policy_type == 'hardcoded':
                 # Compute the action

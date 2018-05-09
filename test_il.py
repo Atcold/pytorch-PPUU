@@ -36,7 +36,7 @@ kwargs = {
     'delta_t': 0.1,
     'fps': 60,
     'store': False,
-    'state_image': True,
+    'state_image': False,
     # 'policy_type': 'imitation',
     'traffic_rate': opt.traffic_rate,
 }
