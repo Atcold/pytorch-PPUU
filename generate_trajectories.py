@@ -54,21 +54,18 @@ register(
     kwargs=kwargs
 )
 
-if opt.dataset == 'i80':
-    opt.steps = 10000000000
-
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
 
 def run_episode():
     env.reset()
-    for t in range(opt.steps):
-        state, reward, vehicles = env.step(None)
+    while True:
+        env.step(None)
         env.render()
 
 
 episodes = []
 for i in range(opt.n_episodes):
-    runs = run_episode()
+    run_episode()
     episodes += runs
