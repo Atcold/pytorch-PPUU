@@ -135,14 +135,11 @@ In our experiments we found setting the dimension of $z_i$ to be of much lower d
 
 \subsection{Sampling}
 
-
 Our sampling sheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
 These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
 Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
 
-
 Our sampling scheme is based on such ideas, in particular, we can treat the vectors $z_t$ extracted from the training set as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
-
 
 After training, we extract all vectors $z_i$ from the training set and use these as inputs to the stochastic prediction model.
 We refer to this set of vectors as $\mathcal{Z}$.
@@ -160,8 +157,6 @@ All the approaches above have a memory footprint which grows with the size of th
 In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
 The second approach allows us to construct the graph offline since it is input-independent, hence sampling is also $\mathcal{O}(1)$.
 The third approach is input-dependent, however we note that is can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$. Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as kd-trees or locally sensitive hashing. In our experiments, we found that a simple linear exact search using a subset of the training data was sufficiently fast using a GPU and achieved good results.
-
-
 
 \begin{algorithm}
   \caption{My algorithm}\label{algo}
@@ -199,7 +194,7 @@ The third approach is input-dependent, however we note that is can be cast as a 
 
 \section{Related Work}
 
-In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016}.
+In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016,canziani2017cortexnet}.
 These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}.
 Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}.
 In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
@@ -219,19 +214,22 @@ The general architecture and loss is similar in both our works, however their fo
 We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
 
 \subsection{Synthetic data set}
-Variable number of lanes, vehicles, and so on.  % Add some details
+The controlled environment consists of a traffic simulator where cars are moving on straight lanes and behave following a rule based policy.
+Vehicles can safely pass each other both to the left and to the right side, with well defined probabilities and using a PID controller.
+If a car is getting closer than a driver specific safe-distance ($t\text{-second} \times \text{speed}$), then delayed braking is applied ($\sim \sqrt[5]{\text{distance}}$).
+If vehicles are not blocked and free to drive, they will match their specific target-velocity, follow a Gaussian process offset by the lane centre coordinate, and may sporadically change lane.
+Everything is rendered using 24 pixels per $3.7\,\text{m}$, which corresponds to the US standard freeway lane width.
 
-\subsection{NGSIM I-80}
-The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segmets of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville, CA, in 2005.
-Some numbers:
-\begin{itemize}
-  \item 4.5M distinct data points
-  \item data point: 'Vehicle ID', 'Frame ID', 'Total Frames', 'Global Time', 'Local X', 'Local Y', 'Global X', 'Global Y', 'Vehicle Length', 'Vehicle Width', 'Vehicle Class', 'Vehicle Velocity', 'Vehicle Acceleration', 'Lane Identification', 'Preceding Vehicle', 'Following Vehicle', 'Spacing', 'Headway'
-  \item 3 sections of 15 minutes each
-  \item 2052, 1836, 1790 individual vehicles per section, for a total of 5.5k vehicles, including
+\subsection{NGSIM I-80 freeway data set}
+The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville in 2005.
+Seven cameras, mounted on the top of a 30-story building, recorded the 6 lanes and the onramp, with a frame rate of $10\,\text{Hz}$.
+A viewpoint transformation is then applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
 
-\end{itemize}
-
+% \begin{figure}
+%   \centering
+%   \includegraphics[width=4cm]{figures/I-80.png}
+%   \caption{I-80 section schematic.}
+% \end{figure}
 
 
 
@@ -323,11 +321,6 @@ Examples of video generations can be found at \url{url}.
 
 %\subsection{Figures}
 %
-%\begin{figure}
-%  \centering
-%  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-%  \caption{Sample figure caption.}
-%\end{figure}
 %
 %
 %\subsection{Tables}
