@@ -23,7 +23,6 @@ class RealCar(Car):
 
     def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
         self._k = 15  # running window size
-        # self._k = 0
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
@@ -67,7 +66,7 @@ class RealCar(Car):
         if what == 'speed':
             return np.linalg.norm(direction_vector) / self._dt
 
-    # This was trajectories reply (to be used as ground truth, without any policy and action generation)
+    # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
     #     self._frame += 1
     #     position = self._position
@@ -90,10 +89,6 @@ class RealCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
             b = self._speed * np.sign(b)
-        b_abs = abs(b)
-        if b_abs > 5:
-            pdb.set_trace()
-            b_abs = 5
         return np.array((a, b))
 
     @property
@@ -135,10 +130,6 @@ class RealTraffic(StatefulEnv):
         self.df = self._get_data_frame(self.file_name, self.screen_size[0])
         self.vehicles_history = set()
         self.lane_occupancy = None
-        # self._kf = KalmanFilter(
-        #     transition_matrices=np.array([[1, 1], [0, 1]]),
-        #     transition_covariance=0.00001 * np.eye(2)
-        # ).em(self.df[self.df['Vehicle ID'] == self.df.at[self.df.index[0], 'Vehicle ID']].loc[:, ['Local X']].values)
         self._lane_surfaces = dict()
 
     @staticmethod
