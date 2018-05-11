@@ -522,7 +522,7 @@ class StatefulEnv(core.Env):
         self.actions_buffer = []
         self.policy_network = None
         self._lane_surfaces = dict()
-        self.time_cntr = None
+        self.time_counter = None
 
         print(self.delta_t)
 
@@ -557,15 +557,15 @@ class StatefulEnv(core.Env):
         self.policy_car_id = -1
         self.next_car_id = 0
         self.mean_fps = None
-        self.time_cntr = 0
+        self.time_counter = 0
         pygame.display.set_caption('Traffic simulator, episode {}'.format(self.episode))
         state = list()
         objects = list()
         return state, objects
 
     def policy_imitation(self, observation):
-        self.s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
-        self.s_std = torch.Tensor([391.5376, 43.8825, 25.1841, 1.0992])
+        s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
+        s_std = torch.Tensor([391.5376, 43.8825, 25.1841, 1.0992])
 
         # observation is a tuple (images, states)
         images = observation[0].contiguous()
@@ -573,8 +573,8 @@ class StatefulEnv(core.Env):
         images.div_(255.0)
         bsize = images.size(0)
 
-        states -= self.s_mean.view(1, 1, 4).expand(states.size())
-        states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size()))
+        states -= s_mean.view(1, 1, 4).expand(states.size())
+        states /= (1e-8 + s_std.view(1, 1, 4).expand(states.size()))
 
         images = Variable(images.float())
         states = Variable(states.float())
@@ -706,19 +706,19 @@ class StatefulEnv(core.Env):
         if self.policy_type == 'imitation' and len(self.vehicles) > 0:
             # update the cars
             predictions_nb = 20
-            if self.time_cntr == 0 or len(self.vehicles) != self.actions_buffer.size(0):
+            if self.time_counter == 0 or len(self.vehicles) != self.actions_buffer.size(0):
                 print('new actions')
                 states_images = torch.stack(states_images)
                 states_raw = torch.stack(states_raw)
                 self.actions_buffer = self.policy_imitation([states_images, states_raw])
-                self.time_cntr = 0
-            car_cntr = 0
+                self.time_counter = 0
+            car_counter = 0
             for v in self.vehicles:
                 if v.update == 1:
-                    #                print(car_cntr, self.time_cntr)
-                    if car_cntr >= self.actions_buffer.size(0):
+                    #                print(car_counter, self.time_cntr)
+                    if car_counter >= self.actions_buffer.size(0):
                         pdb.set_trace()
-                    action = self.actions_buffer[car_cntr][self.time_cntr].numpy()
+                    action = self.actions_buffer[car_counter][self.time_counter].numpy()
                 else:
                     action = np.array([0, 0])
                 # print(action)
@@ -729,10 +729,10 @@ class StatefulEnv(core.Env):
                 # if v.id == 2:
                 # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
                 # v.store('action', action)
-                car_cntr += 1
-            self.time_cntr += 1
-            if self.time_cntr >= predictions_nb:
-                self.time_cntr = 0
+                car_counter += 1
+            self.time_counter += 1
+            if self.time_counter >= predictions_nb:
+                self.time_counter = 0
 
         self.frame += 1
 
@@ -755,15 +755,12 @@ class StatefulEnv(core.Env):
     def render(self, mode='human', width_height=None, scale=1.):
         if mode == 'human' and self.display:
 
-            # self._pause()
-
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
-                    # pdb.set_trace()
 
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
@@ -793,7 +790,7 @@ class StatefulEnv(core.Env):
             if self.collision: self._pause()
 
         if mode == 'machine':
-            max_extension = np.linalg.norm(width_height)
+            max_extension = int(np.linalg.norm(width_height))
             vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
@@ -819,8 +816,8 @@ class StatefulEnv(core.Env):
         draw_line = pygame.draw.line
         if mode == 'human':
             lanes = self.lanes
+            sw = self.screen_size[0]  # screen width
             for lane in lanes:
-                sw = self.screen_size[0]  # screen width
                 draw_dashed_line(surface, colours['w'], (0, lane['min']), (sw, lane['min']), 3)
                 draw_dashed_line(surface, colours['r'], (0, lane['mid']), (sw, lane['mid']))
             draw_line(surface, colours['w'], (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
@@ -833,8 +830,8 @@ class StatefulEnv(core.Env):
             draw_line(surface, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
             draw_line(surface, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
         if mode == 'machine':
+            sw = self.screen_size[0] + 2 * offset  # screen width
             for lane in self.lanes:
-                sw = self.screen_size[0] + 2 * offset  # screen width
                 m = offset
                 draw_line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
                 draw_line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
