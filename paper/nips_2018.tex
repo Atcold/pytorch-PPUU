@@ -107,7 +107,6 @@ If the prior distribution over latent variables is dependent on the input, it ma
 We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
 
-
 \section{Prediction Model}
 
 \subsection{Architecture}
@@ -135,6 +134,15 @@ In our experiments we found setting the dimension of $z_i$ to be of much lower d
 
 
 \subsection{Sampling}
+
+
+Our sampling sheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
+These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
+Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
+
+
+Our sampling scheme is based on such ideas, in particular, we can treat the vectors $z_t$ extracted from the training set as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
+
 
 After training, we extract all vectors $z_i$ from the training set and use these as inputs to the stochastic prediction model.
 We refer to this set of vectors as $\mathcal{Z}$.
@@ -293,6 +301,22 @@ Since we are also interested in the the performance of models to generate predic
 \subsection{Results}
 
 To test the generality of our video prediction model, we also evaluated it on two other video prediction datasets used in the literature: Stochastic Moving MNIST introduced in \citep{Denton2018} and the BAIR robot pushing dataset originally introduced in \citep{Ebert17} and used for video prediction in \citep{Babaeizadeh2018, Denton2018}.
+We used the same model architectures as in \citep{Denton2018}: for BAIR, a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units, and for SM-MNIST a DCGAN encoder and decoder also combined with a 2-layer LSTM with 128 hidden units. All models were training with Adam \citep{ADAM} with learning rate $0.002$.
+The main difference is that we did not use a prior network at training time, did not include a KL term in the loss function, and instead sampled latents at test time using the approaches described in Section 2.
+We also set the dimension of $z$ to be lower (2 dimensions) and pretrained the model deterministically with $z=0$.
+
+Average results using the best-of-$k$ metric along with $95\%$ confidence intervals are shown in Figure \ref{bair}. Our method performs slightly worse on average than the model of \citep{Denton2018}, however this difference is not statistically significant. Our method and that of \citep{Denton2018} perform better than \citep{Babaeizadeh2018} according to the SSIM metric and worse according to PSNR.
+Examples of video generations can be found at \url{url}.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.4\textwidth]{images/bair_ssim.pdf}
+  \includegraphics[width=0.4\textwidth]{images/bair_psnr.pdf}
+%  \fbox{\rule[-.5cm]{0cm}{4cm}
+%    \rule[-.5cm]{4cm}{0cm}}
+  \caption{}
+  \label{bair}
+\end{figure}
 
 
 
