@@ -180,10 +180,8 @@ class RealTraffic(StatefulEnv):
             now_and_on = df['Frame ID'] >= self.frame
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
-                if self.display:
-                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], self.font[20])
-                else:
-                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0])
+                f = self.font[20] if self.display else None
+                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], f)
                 self.vehicles.append(car)
             self.vehicles_history |= vehicles  # union set operation
 
