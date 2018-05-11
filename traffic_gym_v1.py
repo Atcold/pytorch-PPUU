@@ -129,9 +129,9 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-#        self.file_name = './data_i80/trajectories-0515-0530.txt'
+        self.file_name = './data_i80/trajectories-0515-0530.txt'
         self.file_name = './data_i80/trajectories-0500-0515.txt'
-#        self.file_name = './data_i80/trajectories-0400-0415.txt'
+        self.file_name = './data_i80/trajectories-0400-0415.txt'
         self.df = self._get_data_frame(self.file_name, self.screen_size[0])
         self.vehicles_history = set()
         self.lane_occupancy = None
@@ -190,12 +190,11 @@ class RealTraffic(StatefulEnv):
         self.lane_occupancy = [[] for _ in range(7)]
         print('[t={}]'.format(self.frame), end="\r")
 
-
         for v in self.vehicles[:]:
             if v.off_screen:
-#                print(f'vehicle {v.id} [off screen]')
+                # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', os.path.basename(self.file_name))
+                    file_name = os.path.join('scratch/data_i80_v3/', os.path.basename(self.file_name))
                     print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
@@ -239,14 +238,16 @@ class RealTraffic(StatefulEnv):
     def _draw_lanes(self, surface, mode='human', offset=0):
 
         slope = 0.035
+
+        lanes = self.lanes  # lanes
+
         if mode == 'human':
-            lanes = self.lanes  # lanes
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['w']  # colour white
             sw = self.screen_size[0]  # screen width
 
-            for lane in self.lanes:
+            for lane in lanes:
                 draw_dashed_line(s, w, (0, lane['min']), (sw, lane['min']), 3)
                 draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
@@ -266,14 +267,13 @@ class RealTraffic(StatefulEnv):
             draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
 
         if mode == 'machine':
-            lanes = self.lanes  # lanes
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['r']  # colour white
             sw = self.screen_size[0]  # screen width
             m = offset
 
-            for lane in self.lanes:
+            for lane in lanes:
                 draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
 
             draw_line(s, w, (0, lanes[0]['min'] + m), (sw, lanes[0]['min'] + m), 1)

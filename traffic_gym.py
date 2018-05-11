@@ -67,16 +67,20 @@ class Car:
         """
         self._length = round(4.8 * self.SCALE)
         self._width = round(1.8 * self.SCALE)
-        self._direction = np.array((1, 0), np.float)
         self.id = car_id
         lane = random.choice(tuple(free_lanes))
-        self._position = np.array((
-            -self._length,
-            lanes[lane]['mid']
-        ), np.float)
+        if lane == 6 and type(self).__name__ == 'PatchedCar':
+            self._position = np.array((0, lanes[-1]['max'] + 42), np.float)
+            self._direction = np.array((1, -0.035), np.float) / np.sqrt(1 + 0.035 ** 2)
+        else:
+            self._position = np.array((
+                -self._length,
+                lanes[lane]['mid']
+            ), np.float)
+            self._direction = np.array((1, 0), np.float)
         self._target_speed = max(
-            30,
-            (MAX_SPEED - random.randrange(0, 30) - 10 * lane)
+            0,
+            (MAX_SPEED - random.randrange(0, 15) - 10 * lane)
         ) * 1000 / 3600 * self.SCALE  # m / s
         self._speed = self._target_speed
         self._dt = dt
@@ -90,7 +94,7 @@ class Car:
         self._states = list()
         self._states_image = list()
         self._actions = list()
-        self._safe_factor = random.gauss(1, .2)  # 0.9 Germany, 2 safe
+        self._safe_factor = random.gauss(1.5, 0)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
         self.pid_k2 = np.random.normal(1e-3, 1e-4)
         self.look_ahead = look_ahead
@@ -109,8 +113,8 @@ class Car:
         state = torch.zeros(4)
         state[0] = self._position[0]  # x
         state[1] = self._position[1]  # y
-        state[2] = self._direction[0] * self._speed  # dx
-        state[3] = self._direction[1] * self._speed  # dy
+        state[2] = self._direction[0] * self._speed  # dx/dt
+        state[3] = self._direction[1] * self._speed  # dy/dt
         return state
 
     def compute_cost(self, other):
@@ -212,10 +216,7 @@ class Car:
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
 
-        # Hack... clip direction between -10 and +10
         d = self._direction
-        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         if mode == 'human':
             if c:
@@ -224,7 +225,6 @@ class Car:
             draw_rect(surface, self._colour, rectangle, d, 3)
 
             # Drawing vehicle number
-            # draw_text(surface, str(self.id), (x, y - self._width // 2), 20, colours['b'])
             self._text[1].left = x
             self._text[1].top = y - self._width // 2
             surface.blit(self._text[0], self._text[1])
@@ -239,10 +239,6 @@ class Car:
         """
         # Actions: acceleration (a), steering (b)
         a, b = action
-
-        # TODO: principled kinematics model
-        if abs(b) > 0.1:
-            b = 0.1 * numpy.sign(b)
 
         # State integration
         self._position += self._speed * self._direction * self._dt
@@ -370,13 +366,14 @@ class Car:
         if a == 0:
             a = 1 * (self._target_speed - self._speed)
 
-        if random.random() < 0.1:
-            self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+        # if random.random() < 0.1:
+        #     self._noisy_target_lane = self._target_lane + np.random.normal(0, LANE_W * 0.1)
+        # error = -(self._noisy_target_lane - self._position[1])
 
-        if random.random() < 0.05 and not self._passing:
-            self._target_speed *= (1 + np.random.normal(0, 0.05))
+        # if random.random() < 0.05 and not self._passing:
+        #     self._target_speed *= (1 + np.random.normal(0, 0.05))
 
-        error = -(self._noisy_target_lane - self._position[1])
+        error = -(self._target_lane - self._position[1])
         d_error = error - self._error
         d_clip = 2
         if abs(d_error) > d_clip:
@@ -404,10 +401,6 @@ class Car:
 
     def _get_observation_image(self, m, screen_surface, width_height, scale):
         d = self._direction
-
-        # Hack... clip direction between -10 and +10
-        # alpha = np.clip(np.arctan2(*d[::-1]), -10 * np.pi / 180, 10 * np.pi / 180)
-        # d = np.array((np.cos(alpha), np.sin(alpha)))
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (self._length // 2, 0)
@@ -446,16 +439,13 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last_state_image(self, ncond):
-        #        self._states_image = self._states_image[-10:]
-        #        self._states = self._states[-10:]
+    def get_last_state_image(self, n):
         transpose = list(zip(*self._states_image))
         im = transpose[0]
         im = torch.stack(im).permute(0, 3, 1, 2)
-        zip_ = list(zip(*self._states))
-        #        proximity_cost = torch.Tensor(zip_[2])
-        states = torch.stack(zip_[0])[:, 0]
-        out = [im[-10:], states[-10:]]
+        zip_ = list(zip(*self._states))  # n x (obs, mask, cost) -> (n x obs, n x mask, n x cost)
+        states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
+        out = [im[-n:], states[-n:]]
         return out
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
@@ -520,9 +510,9 @@ class StatefulEnv(core.Env):
         self.collision = None  # an accident happened
         self.episode = 0  # episode counter
         self.car_id = None  # car counter init
-        self.state_image = state_image
+        self.state_image = state_image or policy_type == 'imitation'
         self.mean_fps = None
-        self.store = store
+        self.store = store or policy_type == 'imitation'
         self.policy_car_id = None
         self.next_car_id = None
         self.photos = None
@@ -546,8 +536,6 @@ class StatefulEnv(core.Env):
                 30: pygame.font.SysFont(None, 30),
             }
 
-        print('Frame rate: {} fps'.format(fps))
-
     def build_lanes(self, nb_lanes):
         return tuple(
             {'min': self.offset + n * self.LANE_W,
@@ -563,7 +551,7 @@ class StatefulEnv(core.Env):
         # Initialise environment state
         self.frame = 0
         self.vehicles = list()
-        self.lane_occupancy = [[] for _ in self.lanes]
+        self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
         # keep track of the car we are controlling
         self.policy_car_id = -1
@@ -669,6 +657,7 @@ class StatefulEnv(core.Env):
                 continue
 
             current_lane_idx = lane_set.pop()
+
             # Given that I'm not in the left/right-most lane
             left_vehicles = self._get_neighbours(current_lane_idx, - 1, v) \
                 if current_lane_idx > 0 and len(lane_set) == 0 else None
@@ -678,16 +667,17 @@ class StatefulEnv(core.Env):
 
             state = left_vehicles, mid_vehicles, right_vehicles
 
-            if len(v._states_image) > 10 and self.policy_type == 'imitation':  # and v.id == self.policy_car_id:
-                state_image, state_raw = v.get_last_state_image(10)
-                v.update = 1
-            else:
-                state_image, state_raw = [torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)]
-                v.update = 0
+            if self.policy_type == 'imitation':
+                if len(v._states_image) > 10:  # and v.id == self.policy_car_id:
+                    state_image, state_raw = v.get_last_state_image(10)
+                    v.update = 1
+                else:
+                    state_image, state_raw = torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)
+                    v.update = 0
 
-            states_images.append(state_image.float())
-            states_raw.append(state_raw.float())
-            v.store('state', state)
+                states_images.append(state_image.float())
+                states_raw.append(state_raw.float())
+                v.store('state', state)
 
             if self.policy_type == 'hardcoded':
                 # Compute the action
@@ -738,7 +728,7 @@ class StatefulEnv(core.Env):
                 v.step(action)
                 # if v.id == 2:
                 # print(v.id, *action, v._speed / SCALE, v._target_speed / SCALE)
-                v.store('action', action)
+                # v.store('action', action)
                 car_cntr += 1
             self.time_cntr += 1
             if self.time_cntr >= predictions_nb:
