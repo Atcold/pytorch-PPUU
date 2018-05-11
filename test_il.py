@@ -24,7 +24,7 @@ parser.add_argument('-n_samples', type=int, default=1)
 parser.add_argument('-log_dir', type=str, default='logs/')
 parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-policy', type=str, default='hardcoded', choices={'hardcoded', 'imitation'})
-parser.add_argument('-v', type=str, default='0')
+parser.add_argument('-v', type=str, default='0', choices={'0', '2'})
 opt = parser.parse_args()
 
 random.seed(opt.seed)
