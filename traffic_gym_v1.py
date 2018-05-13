@@ -58,7 +58,6 @@ class RealCar(Car):
         self._safe_factor = 1.5  # second, manually matching the data
         if font is not None:
             self._text = self.get_text(self.id, font)
-        self.is_controlled = False
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
@@ -181,6 +180,9 @@ class RealTraffic(StatefulEnv):
                         car.current_lane == self.controlled_car['lane']:
                     self.controlled_car['locked'] = car
                     car.is_controlled = True
+                    car.buffer_size = self.controlled_car['n']
+                    car.lanes = self.lanes
+                    car.screen_w = self.screen_size[0]
                     print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
@@ -200,7 +202,7 @@ class RealTraffic(StatefulEnv):
                 lane_idx = v.current_lane
                 bisect.insort(self.lane_occupancy[lane_idx], v)
 
-        if self.state_image:
+        if self.state_image or self.controlled_car and self.controlled_car['locked']:
             # How much to look far ahead
             look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
             look_sideways = 2 * self.LANE_W
