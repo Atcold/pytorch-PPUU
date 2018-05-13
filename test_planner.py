@@ -20,6 +20,7 @@ torch.manual_seed(opt.seed)
 
 kwargs = {
     'fps': 50,
+    'nb_states': opt.nb_conditions,
 }
 
 gym.envs.registration.register(
@@ -31,15 +32,14 @@ gym.envs.registration.register(
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
-env.reset(frame=2000, control={
-    'lane': 3,
-    'nb_states': opt.nb_conditions,
-})
+for episode in range(10):
 
-done = False
-while not done:
-    observation, reward, done, info = env.step(numpy.zeros((2,)))
-    # print(observation, reward, done, info)
-    env.render()
+    env.reset()
+
+    done = False
+    while not done:
+        observation, reward, done, info = env.step(numpy.zeros((2,)))
+        # print(observation, reward, done, info)
+        env.render()
 
 print('Done')

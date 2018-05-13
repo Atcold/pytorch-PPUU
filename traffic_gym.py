@@ -500,7 +500,7 @@ class StatefulEnv(core.Env):
     LANE_W = LANE_W
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
-                 policy_type='hardcoded'):
+                 policy_type='hardcoded', nb_states=0):
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -528,6 +528,7 @@ class StatefulEnv(core.Env):
         self._lane_surfaces = dict()
         self.time_counter = None
         self.controlled_car = None
+        self.nb_states = nb_states
 
         print(self.delta_t)
 
@@ -552,9 +553,9 @@ class StatefulEnv(core.Env):
     def set_policy(self, policy_network):
         self.policy_network = policy_network
 
-    def reset(self, frame=0, control=None):
+    def reset(self, frame=None, control=True):
         # Initialise environment state
-        self.frame = frame
+        self.frame = 0 if frame is not None else frame
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
@@ -562,13 +563,11 @@ class StatefulEnv(core.Env):
         self.next_car_id = 0
         self.mean_fps = None
         self.time_counter = 0
-        pygame.display.set_caption('Traffic simulator, episode {}, start from frame {}'.format(self.episode, frame))
+        pygame.display.set_caption('Traffic simulator, episode {}, start from frame {}'.format(self.episode, self.frame))
         if control:
             self.controlled_car = {
-                'lane': control['lane'],
-                'n': control['nb_states'],
+                'lane': random.randrange(self.nb_lanes),
                 'locked': False,
-                'frame': frame,
             }
 
     def policy_imitation(self, observation):

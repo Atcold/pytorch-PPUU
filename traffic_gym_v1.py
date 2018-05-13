@@ -1,3 +1,5 @@
+from random import choice, randrange
+
 from custom_graphics import draw_dashed_line
 from traffic_gym import StatefulEnv, Car, colours
 import pygame
@@ -124,13 +126,16 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        self.file_name = './data_i80/trajectories-0515-0530.txt'
-        self.file_name = './data_i80/trajectories-0500-0515.txt'
-        self.file_name = './data_i80/trajectories-0400-0415.txt'
-        self.df = self._get_data_frame(self.file_name, self.screen_size[0])
+        self.file_names = (
+            './data_i80/trajectories-0515-0530.txt',
+            './data_i80/trajectories-0500-0515.txt',
+            './data_i80/trajectories-0400-0415.txt',
+        )
+        self.df = None
         self.vehicles_history = set()
         self.lane_occupancy = None
         self._lane_surfaces = dict()
+        self.nb_lanes = 7
 
     @staticmethod
     def _get_data_frame(file_name, x_max):
@@ -161,6 +166,14 @@ class RealTraffic(StatefulEnv):
         # Restrict data frame to valid x coordinates
         return df[valid_x]
 
+    def reset(self, frame=None, control=True, time_interval=None):
+        super().reset(frame, control)
+        file_name = self.file_names[time_interval] if time_interval else choice(self.file_names)
+        self.df = self._get_data_frame(file_name, self.screen_size[0])
+        if frame is None:
+            frame_df = self.df['Frame ID']
+            self.frame = self.controlled_car['frame'] = randrange(min(frame_df), max(frame_df))
+
     def step(self, policy_action=None):
 
         df = self.df
@@ -180,9 +193,10 @@ class RealTraffic(StatefulEnv):
                         car.current_lane == self.controlled_car['lane']:
                     self.controlled_car['locked'] = car
                     car.is_controlled = True
-                    car.buffer_size = self.controlled_car['n']
+                    car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.screen_w = self.screen_size[0]
+                    car.look_ahead = self.look_ahead
                     print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
@@ -235,7 +249,7 @@ class RealTraffic(StatefulEnv):
         # return observation, reward, done, info
 
         if self.controlled_car and self.controlled_car['locked']:
-            return_ = self.controlled_car['locked'].get_last(self.controlled_car['n'])
+            return_ = self.controlled_car['locked'].get_last(self.nb_states)
             if return_: return return_
 
         return None, None, False, None

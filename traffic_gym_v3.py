@@ -13,6 +13,7 @@ class ControlledCar(RealCar):
         self.buffer_size = 0
         self.lanes = None
         self.screen_w = None
+        self.look_ahead = None
 
     @property
     def current_lane(self):
@@ -22,7 +23,7 @@ class ControlledCar(RealCar):
 
         # Otherwise fetch x location
         x = self._position[0]
-        if x > self.screen_w: self.off_screen = True
+        if x > self.screen_w - 1.75 * self.look_ahead: self.off_screen = True
 
         # Fetch the y location
         y = self._position[1]
