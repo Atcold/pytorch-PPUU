@@ -102,6 +102,7 @@ class Car:
         self._text = self.get_text(self.id, font)
         self._policy_type = policy_type
         self.policy_network = policy_network
+        self.is_controlled = False
 
     @staticmethod
     def get_text(n, font):
@@ -204,7 +205,7 @@ class Car:
 
         return obs, mask, cost
 
-    def draw(self, surface, c=False, mode='human', offset=0):
+    def draw(self, surface, mode='human', offset=0):
         """
         Draw current car on screen with a specific colour
         :param surface: PyGame ``Surface`` where to draw
@@ -219,7 +220,7 @@ class Car:
         d = self._direction
 
         if mode == 'human':
-            if c:
+            if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
             draw_rect(surface, self._colour, rectangle, d, 3)
@@ -439,14 +440,18 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last_state_image(self, n):
+    def get_last(self, n):
+        if len(self._states_image) < n: return None
         transpose = list(zip(*self._states_image))
         im = transpose[0]
         im = torch.stack(im).permute(0, 3, 1, 2)
         zip_ = list(zip(*self._states))  # n x (obs, mask, cost) -> (n x obs, n x mask, n x cost)
         states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
-        out = [im[-n:], states[-n:]]
-        return out
+        observation = (im[-n:], states[-n:])
+        proximity_cost = torch.Tensor(zip_[2][-n:])
+        lane_cost = torch.Tensor(transpose[1][-n:])
+        cost = (proximity_cost, lane_cost)
+        return observation, cost, self.off_screen, self
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
         os.system('mkdir -p ' + save_dir)
@@ -513,7 +518,6 @@ class StatefulEnv(core.Env):
         self.state_image = state_image or policy_type == 'imitation'
         self.mean_fps = None
         self.store = store or policy_type == 'imitation'
-        self.policy_car_id = None
         self.next_car_id = None
         self.photos = None
         self.look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
@@ -523,6 +527,7 @@ class StatefulEnv(core.Env):
         self.policy_network = None
         self._lane_surfaces = dict()
         self.time_counter = None
+        self.controlled_car = None
 
         print(self.delta_t)
 
@@ -547,21 +552,24 @@ class StatefulEnv(core.Env):
     def set_policy(self, policy_network):
         self.policy_network = policy_network
 
-    def reset(self):
+    def reset(self, frame=0, control=None):
         # Initialise environment state
-        self.frame = 0
+        self.frame = frame
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
         # keep track of the car we are controlling
-        self.policy_car_id = -1
         self.next_car_id = 0
         self.mean_fps = None
         self.time_counter = 0
-        pygame.display.set_caption('Traffic simulator, episode {}'.format(self.episode))
-        state = list()
-        objects = list()
-        return state, objects
+        pygame.display.set_caption('Traffic simulator, episode {}, start from frame {}'.format(self.episode, frame))
+        if control:
+            self.controlled_car = {
+                'lane': control['lane'],
+                'n': control['nb_states'],
+                'locked': False,
+                'frame': frame,
+            }
 
     def policy_imitation(self, observation):
         s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
@@ -606,9 +614,6 @@ class StatefulEnv(core.Env):
                     self.lane_occupancy[l].remove(v)
             # Remove from the environment cars outside the screen
             if v.back[0] > self.screen_size[0]:
-                # if this is the controlled car, pick new car
-                if v.id == self.policy_car_id:
-                    self.policy_car_id = self.vehicles[-1].id
                 for l in lanes_occupied: self.lane_occupancy[l].remove(v)
                 self.vehicles.remove(v)
 
@@ -627,9 +632,6 @@ class StatefulEnv(core.Env):
                 for l in car.get_lane_set(self.lanes):
                     # Prepend the new car to each lane it can be found
                     self.lane_occupancy[l].insert(0, car)
-
-        if self.policy_car_id == -1:
-            self.policy_car_id = 0
 
         if self.state_image:
             self.render(mode='machine', width_height=(2 * self.look_ahead, 2 * self.look_sideways), scale=0.25)
@@ -669,7 +671,7 @@ class StatefulEnv(core.Env):
 
             if self.policy_type == 'imitation':
                 if len(v._states_image) > 10:  # and v.id == self.policy_car_id:
-                    state_image, state_raw = v.get_last_state_image(10)
+                    state_image, state_raw = v.get_last(10)
                     v.update = 1
                 else:
                     state_image, state_raw = torch.zeros(10, 3, 117, 24), torch.zeros(10, 4)
@@ -681,7 +683,7 @@ class StatefulEnv(core.Env):
 
             if self.policy_type == 'hardcoded':
                 # Compute the action
-                if v.id == self.policy_car_id and policy_action is not None:
+                if v.is_controlled and policy_action is not None:
                     action = policy_action
                 else:
                     # if len(v._states_image) >= 10 and self.policy_type == 'imitation':
@@ -696,7 +698,7 @@ class StatefulEnv(core.Env):
                 # Check for accident
                 if v.crashed: self.collision = v
 
-                if self.store and v.valid or v.id == self.policy_car_id:
+                if (self.store or v.is_controlled) and v.valid:
                     v.store('state', state)
                     v.store('action', action)
 
@@ -715,7 +717,6 @@ class StatefulEnv(core.Env):
             car_counter = 0
             for v in self.vehicles:
                 if v.update == 1:
-                    #                print(car_counter, self.time_cntr)
                     if car_counter >= self.actions_buffer.size(0):
                         pdb.set_trace()
                     action = self.actions_buffer[car_counter][self.time_counter].numpy()
@@ -778,8 +779,7 @@ class StatefulEnv(core.Env):
             self._draw_lanes(self.screen)
 
             for v in self.vehicles:
-                c = (v.id == self.policy_car_id)
-                v.draw(self.screen, c)
+                v.draw(self.screen)
 
             draw_text(self.screen, '# cars: {}'.format(len(self.vehicles)), (10, 2), font=self.font[30])
             draw_text(self.screen, 'frame #: {}'.format(self.frame), (120, 2), font=self.font[30])
@@ -809,7 +809,7 @@ class StatefulEnv(core.Env):
 
             # extract states
             for i, v in enumerate(self.vehicles):
-                if self.store and v.valid or v.id == self.policy_car_id:
+                if (self.store or v.is_controlled) and v.valid:
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
 
     def _draw_lanes(self, surface, mode='human', offset=0):

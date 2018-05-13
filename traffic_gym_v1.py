@@ -45,7 +45,7 @@ class RealCar(Car):
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
-        self.off_screen = False
+        self.off_screen = len(df) <= self._k + 1
         self._states = list()
         self._states_image = list()
         self._actions = list()
@@ -58,6 +58,7 @@ class RealCar(Car):
         self._safe_factor = 1.5  # second, manually matching the data
         if font is not None:
             self._text = self.get_text(self.id, font)
+        self.is_controlled = False
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
@@ -174,6 +175,13 @@ class RealTraffic(StatefulEnv):
                 f = self.font[20] if self.display else None
                 car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], f)
                 self.vehicles.append(car)
+                if self.controlled_car and \
+                        not self.controlled_car['locked'] and \
+                        self.frame > self.controlled_car['frame'] and \
+                        car.current_lane == self.controlled_car['lane']:
+                    self.controlled_car['locked'] = car
+                    car.is_controlled = True
+                    print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
@@ -210,19 +218,25 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state)
+            action = v.policy(state) if not v.is_controlled else policy_action  # TODO: not quite, need to prime it
 
             # Perform such action
             v.step(action)
 
             # Store state and action pair
-            if self.store and v.valid:
+            if (self.store or v.is_controlled) and v.valid:
                 v.store('state', state)
                 v.store('action', action)
 
         self.frame += 1
 
-        return None, None, None
+        # return observation, reward, done, info
+
+        if self.controlled_car and self.controlled_car['locked']:
+            return_ = self.controlled_car['locked'].get_last(self.controlled_car['n'])
+            if return_: return return_
+
+        return None, None, False, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
