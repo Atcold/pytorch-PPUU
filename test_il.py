@@ -23,7 +23,8 @@ parser.add_argument('-npred', type=int, default=10)
 parser.add_argument('-n_samples', type=int, default=1)
 parser.add_argument('-log_dir', type=str, default='logs/')
 parser.add_argument('-models_dir', type=str, default='./models_il/')
-parser.add_argument('-v', type=str, default='0')
+parser.add_argument('-policy', type=str, default='hardcoded', choices={'hardcoded', 'imitation'})
+parser.add_argument('-v', type=str, default='0', choices={'0', '2'})
 opt = parser.parse_args()
 
 random.seed(opt.seed)
@@ -35,9 +36,7 @@ kwargs = {
     'nb_lanes': opt.lanes,
     'delta_t': 0.1,
     'fps': 60,
-    'store': False,
-    'state_image': True,
-    # 'policy_type': 'imitation',
+    'policy_type': opt.policy,
     'traffic_rate': opt.traffic_rate,
 }
 

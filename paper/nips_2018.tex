@@ -94,9 +94,6 @@ The contributions of this work are the following:
 \item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for hundreds of timesteps into the future.
 \end{itemize}
 
-
-\section{Prediction Model}
-
 Most methods for stochastic prediction rely on the framework of conditional Variational Autoencoders (cVAEs).
 VAEs assume a prior over latent variables and include a loss term measuring the KL divergence between this prior and the distribution output by the posterior network.
 This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
@@ -110,12 +107,30 @@ If the prior distribution over latent variables is dependent on the input, it ma
 We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
 
+\section{Prediction Model}
+
+\subsection{Architecture}
+
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.5\textwidth]{images/ae_train-crop.pdf}
+%  \fbox{\rule[-.5cm]{0cm}{4cm}
+%    \rule[-.5cm]{4cm}{0cm}}
+  \caption{Prediction Model. }
+\end{figure}
+
+
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
 The architecture consists of three neural networks: an encoder $f_1$, a decoder $f_2$ and a latent variable network $\phi$.
 For each sample, the update equations are given by:
 
 \begin{align*}
-z_i &= \phi(x_i, y_i) \\
+  z_i &=
+  \begin{cases}
+    0 & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
+    \phi(x_i, y_i) & \mbox{   else }
+  \end{cases} \\
 \tilde{y}_i &= f_2(f_1(x_i), z_i)
 \end{align*}
 
@@ -123,17 +138,42 @@ and all networks are trained by gradient descent to optimize the following objec
 
 \begin{align}
   \mathcal{L} &= \sum_i \|y_i - \tilde{y_i} \|_2^2 \\
-  &= \sum_i \|y_i - f(x_i, \phi(x_i, y_i)) \|_2^2
+  &= \sum_i \|y_i - f(x_i, z_i) \|_2^2
 \end{align}
 
 Note in particular that no sampling or reparamaterization is done at training time.
 In standard autoencoders, some mechanism is used to limit the information content of the latent representation to avoid learning trivial mappings and thus encourage the model to learn good representations.
 In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $y_i$ while ignoring the input $x_i$.
 In our experiments we found setting the dimension of $z_i$ to be of much lower dimension than $y_i$ to work well, however other methods such as adding a sparsity or contractive penalty term could also be used.
-After training, we extract all vectors $z_i$ from the training set and use these as inputs to new inputs.
+
+
+\subsection{Sampling}
+
+Our sampling sheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
+These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
+Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
+
+Our sampling scheme is based on such ideas, in particular, we can treat the vectors $z_t$ extracted from the training set as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
+
+After training, we extract all vectors $z_i$ from the training set and use these as inputs to the stochastic prediction model.
+We refer to this set of vectors as $\mathcal{Z}$.
+We explore three sampling methods:
+
+\textbf{No Prior} For a given input $x$, we sample some $z$ from $\mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
+
+\textbf{KNN Prior} Here we make a smoothness assumption on the trajectories followed along the latent manifold. In particular, we assume that $z_{t+1}$ tends to be closer (on average) to $z_t$ than a random other vector in $\mathcal{Z}$. This assumption is motivated by a smoothness assumption on the inputs: if $s_t$ and $s_{t+1}$ are close and $\phi$ is a smooth function, then $z_t$ and $z_{t+1}$ will be close as well. This smoothness assumption can be reflected by restricting the choice of $z_{t+1}$ we sample from $\mathcal{Z}$ to the $k$ nearest neighbors of $z_t$.
+This approach can be implemented by construcing a $k$ nearest neighbor graph and performing a random walk along this graph (see algorithm \ref{algo}).
+
+\textbf{Learned Prior} We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $x$. Specifically, we train a Mixture Density network \citep{mixture-density-networks} $\psi(x)$ which outputs the parameters $(\{\pi_j\}, \{\mu_j\}, \{\sigma_j\})$ of a Gaussian mixture model and is trained to maximize the likelihood of $z_t$ under this model. Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions which can be represented with our approach.
+
+A tradeoff in modeling distributions using non-parametric approaches is that they trade flexibility for increased memory and computational cost.
+All the approaches above have a memory footprint which grows with the size of the dataset.
+In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
+The second approach allows us to construct the graph offline since it is input-independent, hence sampling is also $\mathcal{O}(1)$.
+The third approach is input-dependent, however we note that is can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$. Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as kd-trees or locally sensitive hashing. In our experiments, we found that a simple linear exact search using a subset of the training data was sufficiently fast using a GPU and achieved good results.
 
 \begin{algorithm}
-  \caption{My algorithm}\label{euclid}
+  \caption{My algorithm}\label{algo}
   \begin{algorithmic}[1]
     \State \textbf{Input}: Time series $\{s_1...s_T\}$.
     \State Train latent model:
@@ -168,7 +208,7 @@ After training, we extract all vectors $z_i$ from the training set and use these
 
 \section{Related Work}
 
-In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016}.
+In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016,canziani2017cortexnet}.
 These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}.
 Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}.
 In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
@@ -188,19 +228,22 @@ The general architecture and loss is similar in both our works, however their fo
 We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
 
 \subsection{Synthetic data set}
-Variable number of lanes, vehicles, and so on.  % Add some details
+The controlled environment consists of a traffic simulator where cars are moving on straight lanes and behave following a rule based policy.
+Vehicles can safely pass each other both to the left and to the right side, with well defined probabilities and using a PID controller.
+If a car is getting closer than a driver specific safe-distance ($t\text{-second} \times \text{speed}$), then delayed braking is applied ($\sim \sqrt[5]{\text{distance}}$).
+If vehicles are not blocked and free to drive, they will match their specific target-velocity, follow a Gaussian process offset by the lane centre coordinate, and may sporadically change lane.
+Everything is rendered using 24 pixels per $3.7\,\text{m}$, which corresponds to the US standard freeway lane width.
 
-\subsection{NGSIM I-80}
-The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segmets of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville, CA, in 2005.
-Some numbers:
-\begin{itemize}
-  \item 4.5M distinct data points
-  \item data point: 'Vehicle ID', 'Frame ID', 'Total Frames', 'Global Time', 'Local X', 'Local Y', 'Global X', 'Global Y', 'Vehicle Length', 'Vehicle Width', 'Vehicle Class', 'Vehicle Velocity', 'Vehicle Acceleration', 'Lane Identification', 'Preceding Vehicle', 'Following Vehicle', 'Spacing', 'Headway'
-  \item 3 sections of 15 minutes each
-  \item 2052, 1836, 1790 individual vehicles per section, for a total of 5.5k vehicles, including
+\subsection{NGSIM I-80 freeway data set}
+The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville in 2005.
+Seven cameras, mounted on the top of a 30-story building, recorded the 6 lanes and the onramp, with a frame rate of $10\,\text{Hz}$.
+A viewpoint transformation is then applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
 
-\end{itemize}
-
+% \begin{figure}
+%   \centering
+%   \includegraphics[width=4cm]{figures/I-80.png}
+%   \caption{I-80 section schematic.}
+% \end{figure}
 
 
 
@@ -267,14 +310,30 @@ Since we are also interested in the the performance of models to generate predic
 \end{figure}
 
 
+\subsection{Results}
+
+To test the generality of our video prediction model, we also evaluated it on two other video prediction datasets used in the literature: Stochastic Moving MNIST introduced in \citep{Denton2018} and the BAIR robot pushing dataset originally introduced in \citep{Ebert17} and used for video prediction in \citep{Babaeizadeh2018, Denton2018}.
+We used the same model architectures as in \citep{Denton2018}: for BAIR, a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units, and for SM-MNIST a DCGAN encoder and decoder also combined with a 2-layer LSTM with 128 hidden units. All models were training with Adam \citep{ADAM} with learning rate $0.002$.
+The main difference is that we did not use a prior network at training time, did not include a KL term in the loss function, and instead sampled latents at test time using the approaches described in Section 2.
+We also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p=1$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p=0.5$.
+
+Results for our method and two other state-of-the-art methods using the best-of-$k$ metric are shown in Figure \ref{bair}. Our AE-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of AE-LP, AE-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the AE-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings as well as the full graph variant can be found in the Appendix. Overall, these results suggest that our architecture and non-parametric sampling approach are at least comparable to variational approaches. The fact that our model is able to achieve good performance using a latent variable of such small size (2 dimensions) also shows that this dataset is in fact quite simple.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.4\textwidth]{images/bair_ssim.pdf}
+  \includegraphics[width=0.4\textwidth]{images/bair_psnr.pdf}
+%  \fbox{\rule[-.5cm]{0cm}{4cm}
+%    \rule[-.5cm]{4cm}{0cm}}
+  \caption{}
+  \label{bair}
+\end{figure}
+
+
+
 
 %\subsection{Figures}
 %
-%\begin{figure}
-%  \centering
-%  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-%  \caption{Sample figure caption.}
-%\end{figure}
 %
 %
 %\subsection{Tables}
@@ -301,6 +360,11 @@ Since we are also interested in the the performance of models to generate predic
 
 
 \section{Appendix}
+
+
+
+
+
 
 
 \subsection{Proof of Expected Loss}
@@ -375,6 +439,18 @@ The KL divergence is therefore:
 \end{align}
 
 The last term is a constant and can be ignored.
+
+
+\subsection{Additional Video Prediction Results}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_ssim.pdf}
+  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_psnr.pdf}
+  \caption{}
+  \label{bair}
+\end{figure}
+
 
 % \subsubsection*{Acknowledgments}
 %

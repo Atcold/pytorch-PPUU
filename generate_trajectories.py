@@ -18,7 +18,7 @@ parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
-parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
+parser.add_argument('-data_dir', type=str, default='scratch/nvidia-collab/data/')
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
 parser.add_argument('-fps', type=int, default=30)
@@ -54,21 +54,18 @@ register(
     kwargs=kwargs
 )
 
-if opt.dataset == 'i80':
-    opt.steps = 10000000000
-
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
 
 def run_episode():
     env.reset()
-    for t in range(opt.steps):
-        state, reward, vehicles = env.step(None)
+    while True:
+        env.step(None)
         env.render()
 
 
 episodes = []
 for i in range(opt.n_episodes):
-    runs = run_episode()
+    run_episode()
     episodes += runs

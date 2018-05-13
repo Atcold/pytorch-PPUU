@@ -1,3 +1,5 @@
+from random import choice, randrange
+
 from custom_graphics import draw_dashed_line
 from traffic_gym import StatefulEnv, Car, colours
 import pygame
@@ -23,7 +25,6 @@ class RealCar(Car):
 
     def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
         self._k = 15  # running window size
-        # self._k = 0
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
@@ -46,7 +47,7 @@ class RealCar(Car):
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
-        self.off_screen = False
+        self.off_screen = len(df) <= self._k + 1
         self._states = list()
         self._states_image = list()
         self._actions = list()
@@ -67,7 +68,7 @@ class RealCar(Car):
         if what == 'speed':
             return np.linalg.norm(direction_vector) / self._dt
 
-    # This was trajectories reply (to be used as ground truth, without any policy and action generation)
+    # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
     #     self._frame += 1
     #     position = self._position
@@ -90,10 +91,6 @@ class RealCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
             b = self._speed * np.sign(b)
-        b_abs = abs(b)
-        if b_abs > 5:
-            pdb.set_trace()
-            b_abs = 5
         return np.array((a, b))
 
     @property
@@ -129,17 +126,16 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-#        self.file_name = './data_i80/trajectories-0515-0530.txt'
-        self.file_name = './data_i80/trajectories-0500-0515.txt'
-#        self.file_name = './data_i80/trajectories-0400-0415.txt'
-        self.df = self._get_data_frame(self.file_name, self.screen_size[0])
+        self.file_names = (
+            './data_i80/trajectories-0515-0530.txt',
+            './data_i80/trajectories-0500-0515.txt',
+            './data_i80/trajectories-0400-0415.txt',
+        )
+        self.df = None
         self.vehicles_history = set()
         self.lane_occupancy = None
-        # self._kf = KalmanFilter(
-        #     transition_matrices=np.array([[1, 1], [0, 1]]),
-        #     transition_covariance=0.00001 * np.eye(2)
-        # ).em(self.df[self.df['Vehicle ID'] == self.df.at[self.df.index[0], 'Vehicle ID']].loc[:, ['Local X']].values)
         self._lane_surfaces = dict()
+        self.nb_lanes = 7
 
     @staticmethod
     def _get_data_frame(file_name, x_max):
@@ -170,6 +166,14 @@ class RealTraffic(StatefulEnv):
         # Restrict data frame to valid x coordinates
         return df[valid_x]
 
+    def reset(self, frame=None, control=True, time_interval=None):
+        super().reset(frame, control)
+        file_name = self.file_names[time_interval] if time_interval else choice(self.file_names)
+        self.df = self._get_data_frame(file_name, self.screen_size[0])
+        if frame is None:
+            frame_df = self.df['Frame ID']
+            self.frame = self.controlled_car['frame'] = randrange(min(frame_df), max(frame_df))
+
     def step(self, policy_action=None):
 
         df = self.df
@@ -180,22 +184,30 @@ class RealTraffic(StatefulEnv):
             now_and_on = df['Frame ID'] >= self.frame
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
-                if self.display:
-                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], self.font[20])
-                else:
-                    car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0])
+                f = self.font[20] if self.display else None
+                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], f)
                 self.vehicles.append(car)
+                if self.controlled_car and \
+                        not self.controlled_car['locked'] and \
+                        self.frame > self.controlled_car['frame'] and \
+                        car.current_lane == self.controlled_car['lane']:
+                    self.controlled_car['locked'] = car
+                    car.is_controlled = True
+                    car.buffer_size = self.nb_states
+                    car.lanes = self.lanes
+                    car.screen_w = self.screen_size[0]
+                    car.look_ahead = self.look_ahead
+                    print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
         print('[t={}]'.format(self.frame), end="\r")
 
-
         for v in self.vehicles[:]:
             if v.off_screen:
-#                print(f'vehicle {v.id} [off screen]')
+                # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v3/', os.path.basename(self.file_name))
+                    file_name = os.path.join('scratch/data_i80_v3/', os.path.basename(self.file_name))
                     print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
@@ -204,7 +216,7 @@ class RealTraffic(StatefulEnv):
                 lane_idx = v.current_lane
                 bisect.insort(self.lane_occupancy[lane_idx], v)
 
-        if self.state_image:
+        if self.state_image or self.controlled_car and self.controlled_car['locked']:
             # How much to look far ahead
             look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
             look_sideways = 2 * self.LANE_W
@@ -222,31 +234,39 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state)
+            action = v.policy(state) if not v.is_controlled else policy_action  # TODO: not quite, need to prime it
 
             # Perform such action
             v.step(action)
 
             # Store state and action pair
-            if self.store and v.valid:
+            if (self.store or v.is_controlled) and v.valid:
                 v.store('state', state)
                 v.store('action', action)
 
         self.frame += 1
 
-        return None, None, None
+        # return observation, reward, done, info
+
+        if self.controlled_car and self.controlled_car['locked']:
+            return_ = self.controlled_car['locked'].get_last(self.nb_states)
+            if return_: return return_
+
+        return None, None, False, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
         slope = 0.035
+
+        lanes = self.lanes  # lanes
+
         if mode == 'human':
-            lanes = self.lanes  # lanes
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['w']  # colour white
             sw = self.screen_size[0]  # screen width
 
-            for lane in self.lanes:
+            for lane in lanes:
                 draw_dashed_line(s, w, (0, lane['min']), (sw, lane['min']), 3)
                 draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
@@ -266,14 +286,13 @@ class RealTraffic(StatefulEnv):
             draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
 
         if mode == 'machine':
-            lanes = self.lanes  # lanes
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['r']  # colour white
             sw = self.screen_size[0]  # screen width
             m = offset
 
-            for lane in self.lanes:
+            for lane in lanes:
                 draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
 
             draw_line(s, w, (0, lanes[0]['min'] + m), (sw, lanes[0]['min'] + m), 1)
