@@ -103,6 +103,7 @@ class Car:
         self._policy_type = policy_type
         self.policy_network = policy_network
         self.is_controlled = False
+        self.collisions = 0
 
     @staticmethod
     def get_text(n, font):
@@ -307,15 +308,15 @@ class Car:
 
     def __gt__(self, other):
         """
-        Check if self is in front of other: self.back[0] > other.front[0]
+        Check if self is in front of other: self.front[0] > other.front[0]
         """
-        return self.back[0] > other.front[0]
+        return self.front[0] > other.front[0]
 
     def __lt__(self, other):
         """
-        Check if self is behind of other: self.front[0] < other.back[0]
+        Check if self is behind of other: self.front[0] < other.front[0]
         """
-        return self.front[0] < other.back[0]
+        return self.front[0] < other.front[0]
 
     def __sub__(self, other):
         """
@@ -450,7 +451,7 @@ class Car:
         observation = (im[-n:], states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
-        cost = (proximity_cost, lane_cost)
+        cost = (proximity_cost, lane_cost, self.collisions)
         return observation, cost, self.off_screen, self
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):

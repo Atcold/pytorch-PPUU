@@ -244,6 +244,9 @@ class RealTraffic(StatefulEnv):
                 v.store('state', state)
                 v.store('action', action)
 
+            if v.is_controlled and v.valid:
+                v.count_collisions(state)
+
         self.frame += 1
 
         # return observation, reward, done, info
