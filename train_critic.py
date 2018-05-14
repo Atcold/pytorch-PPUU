@@ -84,16 +84,16 @@ def compute_pz(nbatches):
 model.opt.npred = opt.npred
 
 if '-ae' in opt.mfile:
+    pzfile = opt.model_dir + opt.mfile + '_100000.pz'
+    if os.path.isfile(pzfile):
+        p_z = torch.load(pzfile)
+        graph = torch.load(pzfile + '.graph')
+        model.p_z = p_z
+        model.knn_indx = graph.get('knn_indx')
+        model.knn_dist = graph.get('knn_dist')
+        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)
     if opt.sampling != 'fp':
-        pzfile = opt.mfile + '_100000.pz'
         opt.critic_file += f'-density={opt.graph_density}'
-        if os.path.isfile(pzfile):
-            p_z = torch.load(pzfile)
-            graph = torch.load(pzfile + '.graph')
-            model.p_z = p_z
-            model.knn_indx = graph.get('knn_indx')
-            model.knn_dist = graph.get('knn_dist')
-            opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)
             
     print('[done]')
 
@@ -129,7 +129,7 @@ def train(n_batches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, loss_p = model(inputs, actions, targets)
+        pred, loss_p = model(inputs, actions, targets, sampling=opt.sampling)
         batch = prepare_batch(pred, targets)
         logits = critic(batch)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
