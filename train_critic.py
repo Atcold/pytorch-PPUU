@@ -24,7 +24,7 @@ parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=200)
-parser.add_argument('-nfeature', type=int, default=64)
+parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-nhidden', type=int, default=128)
 parser.add_argument('-combine', type=str, default='add')
@@ -38,7 +38,7 @@ opt = parser.parse_args()
 
 opt.eval_dir += opt.mfile
 os.system('mkdir -p ' + opt.eval_dir)
-opt.critic_file = opt.eval_dir + f'/critic-nfeature={opt.nfeature}-nhidden={opt.nhidden}-lrt={opt.lrt}-sampling={opt.sampling}.model'
+opt.critic_file = opt.eval_dir + f'/critic-nfeature={opt.nfeature}-nhidden={opt.nhidden}-lrt={opt.lrt}-sampling={opt.sampling}-seed={opt.seed}.model'
 
 if opt.dataset == 'simulator':
     opt.height = 97
@@ -84,12 +84,14 @@ model.opt.npred = opt.npred
 
 if '-ae' in opt.mfile:
     if opt.sampling != 'fp':
-        p_model_file = opt.model_dir + opt.mfile + f'-loss={opt.sampling}-usphere={opt.usphere}-nfeature=96.prior'
-        print(f'[loading prior model: {p_model_file}]')
-        model.q_network = torch.load(p_model_file)
-        if opt.cuda == 1:
-            model.q_network.cuda()
-    compute_pz(20)
+        pzfile = opt.mfile + '_100000.pz'
+        if os.path.isfile(pzfile):
+            p_z = torch.load(pzfile)
+            graph = torch.load(pzfile + '.graph')
+            model.p_z = p_z
+            model.knn_indx = graph.get('knn_indx')
+            model.knn_dist = graph.get('knn_dist')
+            
     print('[done]')
 
 n_batches = 200

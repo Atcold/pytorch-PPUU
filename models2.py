@@ -752,9 +752,7 @@ class FwdCNN_AE_FP(nn.Module):
         z = None
         for t in range(npred):
             h_x = self.encoder(input_images, input_states, actions[:, t])
-#            if (sampling is None) or t == 0:
-            if sampling is None:
-                print('bad')
+            if (sampling is None) or t == 0:
                 target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
                 h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
