@@ -14,7 +14,7 @@ class ControlledCar(RealCar):
         self.lanes = None
         self.screen_w = None
         self.look_ahead = None
-        self.collisions = 0
+        self.collisions_per_frame = 0
 
     @property
     def current_lane(self):
@@ -49,19 +49,20 @@ class ControlledCar(RealCar):
         return 6
 
     def count_collisions(self, state):
+        self.collisions_per_frame = 0
         for cars in state:
             if cars:
                 behind, ahead = cars
                 if behind:
                     d = self - behind
                     if d[0] < 0 and abs(d[1]) < self._width + behind._width / 2:
-                        self.collisions += 1
-                        print(f'Collision {self.collisions}, behind, vehicle {behind.id}')
+                        self.collisions_per_frame += 1
+                        print(f'Collision {self.collisions_per_frame}/6, behind, vehicle {behind.id}')
                 if ahead:
                     d = ahead - self
                     if d[0] < 0 and abs(d[1]) < self._width + ahead._width / 2:
-                        self.collisions += 1
-                        print(f'Collision {self.collisions}, ahead, vehicle {ahead.id}')
+                        self.collisions_per_frame += 1
+                        print(f'Collision {self.collisions_per_frame}/6, ahead, vehicle {ahead.id}')
 
 
 class ControlledI80(RealTraffic):

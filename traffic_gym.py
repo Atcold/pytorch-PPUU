@@ -103,7 +103,7 @@ class Car:
         self._policy_type = policy_type
         self.policy_network = policy_network
         self.is_controlled = False
-        self.collisions = 0
+        self.collisions_per_frame = 0
 
     @staticmethod
     def get_text(n, font):
@@ -451,7 +451,7 @@ class Car:
         observation = (im[-n:], states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
-        cost = (proximity_cost, lane_cost, self.collisions)
+        cost = (proximity_cost, lane_cost, self.collisions_per_frame)
         return observation, cost, self.off_screen, self
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
