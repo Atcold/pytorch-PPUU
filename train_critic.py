@@ -29,6 +29,7 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-nhidden', type=int, default=128)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-n_samples', type=int, default=10)
+parser.add_argument('-graph_density', type=float, default=0.005)
 parser.add_argument('-sampling', type=str, default='pdf')
 parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
@@ -85,15 +86,18 @@ model.opt.npred = opt.npred
 if '-ae' in opt.mfile:
     if opt.sampling != 'fp':
         pzfile = opt.mfile + '_100000.pz'
+        opt.critic_file += f'-density={opt.graph_density}'
         if os.path.isfile(pzfile):
             p_z = torch.load(pzfile)
             graph = torch.load(pzfile + '.graph')
             model.p_z = p_z
             model.knn_indx = graph.get('knn_indx')
             model.knn_dist = graph.get('knn_dist')
+            opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)
             
     print('[done]')
 
+print(f'will save as {opt.critic_file}')
 n_batches = 200
 loss = torch.zeros(n_batches, opt.batch_size, opt.n_samples)
 if opt.cuda == 1:
@@ -169,7 +173,7 @@ for i in range(100):
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
         torch.save(critic, opt.critic_file + '.model')
-    log_string = f'epoch: {i} | train loss: {train_loss:.5f}, valid loss: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
+    log_string = f'epoch: {i+1} | train loss: {train_loss:.5f}, valid loss: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.critic_file + '.log', log_string)
     torch.save({'train_loss': train_loss_all, 'valid_loss': valid_loss_all}, opt.critic_file + '.curves')
