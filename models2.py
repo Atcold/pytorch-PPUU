@@ -471,7 +471,7 @@ class FwdCNN(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
@@ -608,7 +608,7 @@ class FwdCNN_AE_FP(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
@@ -752,7 +752,9 @@ class FwdCNN_AE_FP(nn.Module):
         z = None
         for t in range(npred):
             h_x = self.encoder(input_images, input_states, actions[:, t])
-            if (sampling is None) or t == 0:
+#            if (sampling is None) or t == 0:
+            if sampling is None:
+                print('bad')
                 target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
                 h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
@@ -780,7 +782,7 @@ class FwdCNN_AE_FP(nn.Module):
             if sampling is not None:
                 pred_image.detach()
                 pred_state.detach()
-                pred_cost.detach()
+#                pred_cost.detach()
             pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
             # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
             pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
@@ -794,6 +796,28 @@ class FwdCNN_AE_FP(nn.Module):
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
         return [pred_images, pred_states, pred_costs], ploss
+
+
+    def plan_actions_backprop(self, observation, args):
+        input_images, input_states = observation
+        input_images = Variable(input_images.cuda().float()).unsqueeze(0)
+        input_states = Variable(input_states.cuda()).unsqueeze(0)
+        bsize = input_images.size(0)
+        # repeat for multiple rollouts
+        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda(), requires_grad=True)
+        optimizer_a = optim.Adam([actions], args.lrt)
+        for i in range(0, args.n_iter):
+            optimizer_a.zero_grad()
+            pred, _ = self.forward([input_images, input_states], actions, None, sampling='fp')
+            pdb.set_trace()
+            costs = pred[2]
+            loss = costs.mean()
+            loss.backward()
+            if verbose:
+                print('[iter {} | mean cost = {}], grad = {}'.format(i, loss.data[0], 0))
+            optimizer_a.step()
+
+
 
     def intype(self, t):
         if t == 'gpu':
@@ -816,7 +840,7 @@ class FwdCNN_VAE_FP(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
@@ -828,7 +852,7 @@ class FwdCNN_VAE_FP(nn.Module):
         self.z_network = z_network_gaussian(opt)
         self.z_expander = z_expander(opt, 1)
 
-    def forward(self, inputs, actions, targets, sampling=None):
+    def forward(self, inputs, actions, targets, sampling=None, z_seq=None):
         input_images, input_states = inputs
         bsize = input_images.size(0)
         npred = actions.size(1)
@@ -853,7 +877,10 @@ class FwdCNN_VAE_FP(nn.Module):
                 z_exp = self.z_expander(z)
             else:
                 # we are generating samples
-                z = Variable(torch.randn(bsize, self.opt.nz).cuda())
+                if z_seq is not None:
+                    z = Variable(z_seq[t].cuda())
+                else:
+                    z = Variable(torch.randn(bsize, self.opt.nz).cuda())
                 z_exp = self.z_expander(z)
 
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -876,21 +903,40 @@ class FwdCNN_VAE_FP(nn.Module):
         return [pred_images, pred_states, pred_costs], kld
 
 
-    def plan_actions_backprop(self, input_images, input_states, args):
+    def plan_actions_backprop(self, observation, args, verbose=True, normalize=True):
+        input_images, input_states = observation
+        input_images = input_images.float().clone()
+        input_states = input_states.clone()
+        if normalize:
+            input_images.div_(255.0)
+            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
+            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
+        input_images = Variable(input_images.cuda()).unsqueeze(0)
+        input_states = Variable(input_states.cuda()).unsqueeze(0)
         bsize = input_images.size(0)
         # repeat for multiple rollouts
-        pdb.set_trace()
-        actions = nn.Parameter(torch.randn(bsize * args.n_rollouts, args.npred, self.opt.n_actions)).cuda()
-        optimizer_a = optim.Adam([actions], args.lrt)
+        actions = Variable(torch.zeros(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.01), requires_grad=True)
+        optimizer_a = optim.SGD([actions], args.lrt)
+        Z = torch.randn(args.npred, 1, self.opt.nz).cuda()
         for i in range(0, args.n_iter):
             optimizer_a.zero_grad()
-            pred, _ = self(input_images, input_states, actions)
+            self.zero_grad()
+            pred, _ = self.forward([input_images, input_states], actions, None, sampling='vae', z_seq=None)
             costs = pred[2]
-            loss = costs.mean()
+            loss = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
             loss.backward()
             if verbose:
-                print(f'[iter {i} | mean cost = {loss}], grad = {gnorm}')
+                print('[iter {} | mean pred cost = {}], grad = {}'.format(i, loss.data[0], actions.grad.data.norm()))
+            torch.nn.utils.clip_grad_norm([actions], 0.1)
             optimizer_a.step()
+            actions.data.clamp_(min=-2, max=2)
+            actions.data[:, :, 1].clamp_(min=-1, max=1)
+        actions = actions.data.cpu()
+        actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
+        actions += self.stats['a_mean'].view(1, 1, 2).expand(actions.size())
+        return actions.squeeze().numpy()
+
+
         
 
     def intype(self, t):
@@ -920,7 +966,7 @@ class FwdCNN_VAE_LP(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
@@ -1023,7 +1069,7 @@ class FwdCNN_VAE_LP1(nn.Module):
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
             self.encoder = pretrained_model.encoder
@@ -1255,7 +1301,7 @@ class PolicyAE(nn.Module):
             )
 
         else:
-            print(f'[initializing encoder and decoder with: {mfile}]')
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
             pretrained_model = torch.load(mfile)
             self.encoder1 = pretrained_model.encoder
             self.fc1 = pretrained_model.fc

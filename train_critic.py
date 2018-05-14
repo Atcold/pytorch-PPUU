@@ -9,7 +9,8 @@ import torch.nn as nn
 from gym.envs.registration import register
 import scipy.misc
 from dataloader import DataLoader
-import utils, models
+import utils
+import models2 as models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
@@ -26,12 +27,12 @@ parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-nhidden', type=int, default=128)
+parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-sampling', type=str, default='pdf')
-parser.add_argument('-usphere', type=int, default=0)
 parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-warmstart=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model')
 parser.add_argument('-cuda', type=int, default=1)
 opt = parser.parse_args()
 
@@ -50,20 +51,13 @@ elif opt.dataset == 'i80':
     opt.width = 24
     opt.h_height = 14
     opt.h_width = 3
-
+    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 
-opt.model_dir += f'/dataset_{opt.dataset}/models'
-if opt.dataset == 'simulator':
-    opt.model_dir += f'_{opt.nshards}-shards/'
-    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
-else:
-    data_file = None
-opt.model_dir += '/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
@@ -73,7 +67,7 @@ if opt.cuda == 1:
     model.intype('gpu')
     critic.cuda()
 
-dataloader = DataLoader(data_file, opt, opt.dataset)
+dataloader = DataLoader(None, opt, opt.dataset)
 
 def compute_pz(nbatches):
     model.p_z = []
@@ -95,10 +89,6 @@ if '-ae' in opt.mfile:
         model.q_network = torch.load(p_model_file)
         if opt.cuda == 1:
             model.q_network.cuda()
-    if not hasattr(model.opt, 'z_sphere'):
-            model.opt.z_sphere = 0
-    if not hasattr(model.opt, 'z_mult'):
-        model.opt.z_mult = 0
     compute_pz(20)
     print('[done]')
 
@@ -114,17 +104,28 @@ labels = torch.cat((ones, zeros), 0)
 optimizer = optim.Adam(critic.parameters(), opt.lrt)
 
 
+def prepare_batch(pred, targets):
+    p_images, p_states, p_costs = pred
+    t_images, t_states, t_costs = targets
+    images = torch.cat((p_images, t_images), 0)
+    states = torch.cat((p_states, t_states), 0)
+    costs = torch.cat((p_costs, t_costs), 0)
+    states_costs = torch.cat((states, costs), 2)
+    images.detach()
+    states_costs.detach()
+    return [images, states_costs]
+
 def train(n_batches):
     total_loss = 0
     for i in range(n_batches):
         optimizer.zero_grad()
-        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred, cuda=(opt.cuda==1))
-        inputs = Variable(inputs)
+        inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
-        targets = Variable(targets)
-        pred, _ = model(inputs, actions, None, sampling=opt.sampling)
-        pred.detach()
-        logits = critic(torch.cat((targets, pred), 0))
+        pred, loss_p = model(inputs, actions, targets)
+        batch = prepare_batch(pred, targets)
+        logits = critic(batch)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
         loss.backward()
         optimizer.step()
@@ -139,12 +140,13 @@ def test(n_batches):
     nskip = 0
     for i in range(n_batches):
         optimizer.zero_grad()
-        inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid', opt.npred, cuda=(opt.cuda==1))
-        inputs = Variable(inputs)
+        inputs, actions, targets = dataloader.get_batch_fm('valid', opt.npred)
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
-        targets = Variable(targets)
-        pred, _ = model(inputs, actions, None, sampling=opt.sampling)
-        logits = critic(torch.cat((targets, pred), 0))
+        pred, _ = model(inputs, actions, targets, sampling=opt.sampling)
+        batch = prepare_batch(pred, targets)
+        logits = critic(batch)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
         if math.isnan(loss.data[0]):
             nskip += 1
