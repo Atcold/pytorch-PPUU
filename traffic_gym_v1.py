@@ -197,7 +197,7 @@ class RealTraffic(StatefulEnv):
                     car.lanes = self.lanes
                     car.screen_w = self.screen_size[0]
                     car.look_ahead = self.look_ahead
-                    print(f'Controlling car {car.id}')
+                    print('Controlling car {}'.format(car.id))
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
