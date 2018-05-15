@@ -57,12 +57,12 @@ class ControlledCar(RealCar):
                     d = self - behind
                     if d[0] < 0 and abs(d[1]) < self._width + behind._width / 2:
                         self.collisions_per_frame += 1
-                        print(f'Collision {self.collisions_per_frame}/6, behind, vehicle {behind.id}')
+                        print('Collision {}/6, behind, vehicle {}'.format(self.collisions_per_frame, behind.id))
                 if ahead:
                     d = ahead - self
                     if d[0] < 0 and abs(d[1]) < self._width + ahead._width / 2:
                         self.collisions_per_frame += 1
-                        print(f'Collision {self.collisions_per_frame}/6, ahead, vehicle {ahead.id}')
+                        print('Collision {}/6, ahead, vehicle {}'.format(self.collisions_per_frame, ahead.id))
 
 
 class ControlledI80(RealTraffic):
