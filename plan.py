@@ -23,7 +23,7 @@ parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-v', type=str, default='3', choices={'3'})
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=64-beta=0.0-nmix=1-warmstart=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model')
 
 opt = parser.parse_args()
 
