@@ -31,7 +31,7 @@ parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-graph_density', type=float, default=0.005)
 parser.add_argument('-sampling', type=str, default='pdf')
-parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics/')
+parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics2/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model')
 parser.add_argument('-cuda', type=int, default=1)
@@ -166,7 +166,7 @@ train_loss_all = []
 valid_loss_all = []
 print('[training]')
 for i in range(100):
-    train_loss = train(20)
+    train_loss = train(100)
     valid_loss = test(100)
     train_loss_all.append(train_loss)
     valid_loss_all.append(valid_loss)

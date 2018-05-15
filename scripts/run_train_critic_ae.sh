@@ -5,7 +5,7 @@ mfile=model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfea
 
 for sampling in fp; do 
     for density in 1.0; do 
-        for seed in 4 5; do 
+        for seed in 4; do 
             sbatch submit_train_critic.slurm $mfile $sampling $seed $density
         done
     done
