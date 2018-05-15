@@ -485,7 +485,7 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+                imwrite('{}/im{:05d}.png'.format(save_dir, t), im[t].numpy())
 
     @property
     def valid(self):
