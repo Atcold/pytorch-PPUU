@@ -228,39 +228,38 @@ In practice, we found that the computational cost of an exact search, using a su
 
 In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016,canziani2017cortexnet}.
 These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VideoPixel}.
-Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018}.
+Several works have included latent variables as a means to model the uncertainty, using the framework of Variational AutoEncoders \citep{Babaeizadeh2018, Denton2018}.
 In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
 Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
 
-Our method is closely related to Gated and Relational Autoencoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
+Our method is closely related to Gated and Relational AutoEncoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
 The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation for use in planning.
 
 \begin{itemize}
-\item Video Prediction \citep{mathieu-iclr-2016}, stochastic:  using the framework of Variational Autoencoders \citep{VAE}.
+\item Video Prediction \citep{mathieu-iclr-2016}, stochastic:  using the framework of Variational AutoEncoders \citep{VAE}.
 \item Mixture Density Networks \citep{mixture-density-networks}.
-\item VQ-VAE, GLO, Gated Autoencoders
+\item VQ-VAE, GLO, Gated AutoEncoders
 \end{itemize}
 
 
 \section{Data sets}
 
 In addition to evaluating our method on existing data sets used in the literature, we also use a new, large-scale data set for training and evaluating deep predictive models.
-The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville in 2005.
-Seven cameras mounted on the top of a 30-story building record a segment of highway including 6 lanes and an onramp with a frame rate of $10\,\text{Hz}$.
-We use a total of 3 video segments, each of 15 minutes, which capture varying levels of congestion.
+The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I-80 in the San Francisco Bay area in Emeryville in 2005.
+Seven cameras, mounted on the top of a 30-story building, record a segment of highway including 6 lanes and an onramp with a frame rate of $10\,\text{Hz}$.
 A viewpoint transformation is applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
 
 Our use of this data set is motivated by two main factors.
 First, it can potentially allow us to learn predictive models of driver behavior, which have important applications for autonomous driving.
-An autonomous vehicle equipped with an accurate predictive model of its surroundings can potentially anticipate unsafe situations and alert a safety driver.
+An autonomous vehicle equipped with an accurate predictive model of its surroundings can potentially anticipate unsafe situations and alert the driver.
 A predictive model can also be used for model-based planning, and can be learned from observational data without interacting with the environment.
 
-Second, this data set reflects complex interactions between a large number of agents (in this case vehicle drivers), leading to a challenging prediction problem which can be useful for evaluating new methods more generally. Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of synthetic moving MNIST digits \citep{Denton2018}, robot manipulation videos \citep{Ebert17}, or videos of human movement \citep{Human}. These have the advantage of being able to evaluate specific model capabilities in a controlled setting, have applications in robotics. However, they also have relatively few degrees of freedom: for example, the SM-MNIST data set's latent variables are two-dimenional (random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (i.e. the position of the robot arm, which we demonstrate in our experiments).
-In contrast, the NGSIM data set has a relatively large number of cars per context image, as shown in Figure \ref{car-statistics}, with each car having multiple degrees of freedom.
+Second, this data set reflects complex interactions between a large number of agents (in this case vehicle drivers), leading to a challenging prediction problem which can be useful for evaluating new methods more generally.
+Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of Synthetic Moving MNIST digits \citep{Denton2018}, BAIR robot manipulation videos \citep{Ebert17}, or videos of human movements \citep{Human}.
+These have the advantage of being able to evaluate specific model capabilities in a controlled setting, and have applications in robotics.
+However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (\emph{i.e.}\ the longitudinal and lateral position of the robot arm, which we demonstrate in our experiments).
+In contrast, the NGSIM I-80 data set has a relatively large number of cars per context image, as shown in figure \ref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other data sets used in the literature.
-
-
-
 
 \begin{figure}
   \centering
@@ -270,20 +269,14 @@ We therefore believe this prediction tasks offers unique features which compleme
   \caption{Preprocessing pipeline for the NGSIM-I80 data set.}
 \end{figure}
 
-
-
 \begin{figure}
   \centering
   \begin{subfigure}[b]{0.5\textwidth}
     \includegraphics[width=\textwidth]{images/car_statistics.pdf}
   \end{subfigure}
+  \caption{Cars per context state}
   \label{car-statistics}
 \end{figure}
-
-
-
-
-
 
 %We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
 
@@ -297,9 +290,7 @@ We therefore believe this prediction tasks offers unique features which compleme
 % \end{figure}
 
 
-
 \section{Experiments}
-
 
 We evaluate our prediction model using two quantitative metrics in addition to visual evaluation.
 \begin{itemize}
