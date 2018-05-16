@@ -15,7 +15,7 @@ class DataLoader():
 #            return 
 
         if dataset == 'i80':
-            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data_i80_v2/'
+            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80/'
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']

@@ -15,5 +15,4 @@
 
 module load python-3.6
 cd ../
-srun python train_critic.py -mfile $1 -batch_size 4 -npred 200 -lrt 0.001 -sampling fp
-
+srun python train_critic.py -mfile $1 -batch_size 4 -npred 200 -lrt 0.0001 -sampling $2 -seed $3 -graph_density $4

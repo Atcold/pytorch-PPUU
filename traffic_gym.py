@@ -103,6 +103,7 @@ class Car:
         self._policy_type = policy_type
         self.policy_network = policy_network
         self.is_controlled = False
+        self.collisions_per_frame = 0
 
     @staticmethod
     def get_text(n, font):
@@ -140,8 +141,8 @@ class Car:
         obs = obs.view(n_cars, 4)
         cost = 0
 
-        vstate = self.get_state()
-        obs[0].copy_(vstate)
+        v_state = self.get_state()
+        obs[0].copy_(v_state)
 
         if left_vehicles:
             if left_vehicles[0] is not None:
@@ -152,7 +153,7 @@ class Car:
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
-                obs[1].copy_(vstate)
+                obs[1].copy_(v_state)
 
             if left_vehicles[1] is not None:
                 s = left_vehicles[1].get_state()
@@ -160,10 +161,10 @@ class Car:
                 mask[2] = 1
                 cost = max(cost, self.compute_cost(left_vehicles[1]))
             else:
-                obs[2].copy_(vstate)
+                obs[2].copy_(v_state)
         else:
-            obs[1].copy_(vstate)
-            obs[2].copy_(vstate)
+            obs[1].copy_(v_state)
+            obs[2].copy_(v_state)
 
         if mid_vehicles[0] is not None:
             s = mid_vehicles[0].get_state()
@@ -171,7 +172,7 @@ class Car:
             mask[3] = 1
             cost = max(cost, mid_vehicles[0].compute_cost(self))
         else:
-            obs[3].copy_(vstate)
+            obs[3].copy_(v_state)
 
         if mid_vehicles[1] is not None:
             s = mid_vehicles[1].get_state()
@@ -179,7 +180,7 @@ class Car:
             mask[4] = 1
             cost = max(cost, self.compute_cost(mid_vehicles[1]))
         else:
-            obs[4].copy_(vstate)
+            obs[4].copy_(v_state)
 
         if right_vehicles:
             if right_vehicles[0] is not None:
@@ -188,7 +189,7 @@ class Car:
                 mask[5] = 1
                 cost = max(cost, right_vehicles[0].compute_cost(self))
             else:
-                obs[5].copy_(vstate)
+                obs[5].copy_(v_state)
 
             if right_vehicles[1] is not None:
                 s = right_vehicles[1].get_state()
@@ -196,12 +197,14 @@ class Car:
                 mask[6] = 1
                 cost = max(cost, self.compute_cost(right_vehicles[1]))
             else:
-                obs[6].copy_(vstate)
+                obs[6].copy_(v_state)
         else:
-            obs[5].copy_(vstate)
-            obs[6].copy_(vstate)
+            obs[5].copy_(v_state)
+            obs[6].copy_(v_state)
 
         # self._colour = (255 * cost, 0, 255 * (1 - cost))
+        # if cost and cost > 0.95:
+        #     print(f'Car {self.id} prox cost: {cost:.2f}')
 
         return obs, mask, cost
 
@@ -222,7 +225,7 @@ class Car:
         if mode == 'human':
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
-                                 (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
+                                 (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
             draw_rect(surface, self._colour, rectangle, d, 3)
 
             # Drawing vehicle number
@@ -307,15 +310,15 @@ class Car:
 
     def __gt__(self, other):
         """
-        Check if self is in front of other: self.back[0] > other.front[0]
+        Check if self is in front of other: self.front[0] > other.front[0]
         """
-        return self.back[0] > other.front[0]
+        return self.front[0] > other.front[0]
 
     def __lt__(self, other):
         """
-        Check if self is behind of other: self.front[0] < other.back[0]
+        Check if self is behind of other: self.front[0] < other.front[0]
         """
-        return self.front[0] < other.back[0]
+        return self.front[0] < other.front[0]
 
     def __sub__(self, other):
         """
@@ -450,7 +453,7 @@ class Car:
         observation = (im[-n:], states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
-        cost = (proximity_cost, lane_cost)
+        cost = (proximity_cost, lane_cost, self.collisions_per_frame)
         return observation, cost, self.off_screen, self
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
@@ -462,7 +465,6 @@ class Car:
             # print(transpose)
             return
         im = transpose[0]
-        os.system('mkdir -p ' + save_dir)
         if mode == 'tensor':
             lane_cost = transpose[1]
             zip_ = list(zip(*self._states))
@@ -484,11 +486,15 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
+                imwrite('{}/im{:05d}.png'.format(save_dir, t), im[t].numpy())
 
     @property
     def valid(self):
         return self.back[0] > self.look_ahead and self.front[0] < self.screen_w - 1.75 * self.look_ahead
+
+    def __repr__(self) -> str:
+        cls = self.__class__
+        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 
 
 class StatefulEnv(core.Env):
@@ -529,8 +535,6 @@ class StatefulEnv(core.Env):
         self.time_counter = None
         self.controlled_car = None
         self.nb_states = nb_states
-
-        print(self.delta_t)
 
         self.display = display
         if self.display:  # if display is required

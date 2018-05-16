@@ -7,13 +7,12 @@ class ControlledCar(RealCar):
     # Import get_lane_set from PatchedCar
     get_lane_set = PatchedCar.get_lane_set
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
-        super().__init__(df, y_offset, look_ahead, screen_w, font)
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
+        super().__init__(df, y_offset, look_ahead, screen_w, font, kernel)
         self.is_controlled = False
         self.buffer_size = 0
         self.lanes = None
-        self.screen_w = None
-        self.look_ahead = None
+        self.collisions_per_frame = 0
 
     @property
     def current_lane(self):
@@ -46,6 +45,26 @@ class ControlledCar(RealCar):
         # Actually, way too low
         self.off_screen = True
         return 6
+
+    @property
+    def is_autonomous(self):
+        return self.is_controlled and len(self._states_image) > self.buffer_size
+
+    def count_collisions(self, state):
+        self.collisions_per_frame = 0
+        for cars in state:
+            if cars:
+                behind, ahead = cars
+                if behind:
+                    d = self - behind
+                    if d[0] < 0 and abs(d[1]) < self._width + behind._width / 2:
+                        self.collisions_per_frame += 1
+                        # print('Collision {}/6, behind, vehicle {}'.format(self.collisions_per_frame, behind.id))
+                if ahead:
+                    d = ahead - self
+                    if d[0] < 0 and abs(d[1]) < self._width + ahead._width / 2:
+                        self.collisions_per_frame += 1
+                        # print('Collision {}/6, ahead, vehicle {}'.format(self.collisions_per_frame, ahead.id))
 
 
 class ControlledI80(RealTraffic):

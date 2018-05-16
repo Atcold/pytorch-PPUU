@@ -53,7 +53,7 @@ os.system('mkdir -p ' + opt.model_dir)
 
 
 dataloader = DataLoader(data_file, opt, opt.dataset)
-
+pdb.set_trace()
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-decoder={opt.decoder}-combine={opt.combine}'
 

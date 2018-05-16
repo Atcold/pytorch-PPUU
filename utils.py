@@ -29,11 +29,11 @@ def combine(x, y, method):
 
 def format_losses(loss_i, loss_s, loss_c, loss_p, split):
     log_string = ''
-    log_string += f'{split} loss ['
-    log_string += f'i: {loss_i:.5f}, '
-    log_string += f's: {loss_s:.5f}, '
-    log_string += f'c: {loss_c:.5f}, '
-    log_string += f'p: {loss_p:.5f}] '
+    log_string += '{} loss [' % split
+    log_string += 'i: {:.5f}, ' % loss_i
+    log_string += 's: {:.5f}, ' % loss_s
+    log_string += 'c: {:.5f}, ' % loss_c
+    log_string += 'p: {:.5f}] ' % loss_p
     return log_string
 
 

@@ -23,8 +23,8 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
-        self._k = 15  # running window size
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
+        self._k = kernel  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
@@ -43,6 +43,7 @@ class RealCar(Car):
         self._df = df
         self._frame = 0
         self._dt = 1 / 10
+        self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
         self._direction = self._get('direction', 0)
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
@@ -63,10 +64,12 @@ class RealCar(Car):
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
+        norm = np.linalg.norm(direction_vector)
         if what == 'direction':
-            return direction_vector / (np.linalg.norm(direction_vector) + 1e-6)
+            if norm < 1e-6: return self._direction  # if static returns previous direction
+            return direction_vector / norm
         if what == 'speed':
-            return np.linalg.norm(direction_vector) / self._dt
+            return norm / self._dt
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
@@ -136,6 +139,7 @@ class RealTraffic(StatefulEnv):
         self.lane_occupancy = None
         self._lane_surfaces = dict()
         self.nb_lanes = 7
+        self.smoothing_window = 15
 
     @staticmethod
     def _get_data_frame(file_name, x_max):
@@ -184,8 +188,10 @@ class RealTraffic(StatefulEnv):
             now_and_on = df['Frame ID'] >= self.frame
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
+                car_df = df[this_vehicle & now_and_on]
+                if len(car_df) < self.smoothing_window + 1: continue
                 f = self.font[20] if self.display else None
-                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], f)
+                car = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f, self.smoothing_window)
                 self.vehicles.append(car)
                 if self.controlled_car and \
                         not self.controlled_car['locked'] and \
@@ -195,9 +201,8 @@ class RealTraffic(StatefulEnv):
                     car.is_controlled = True
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
-                    car.screen_w = self.screen_size[0]
                     car.look_ahead = self.look_ahead
-                    print(f'Controlling car {car.id}')
+                    print('Controlling car {}'.format(car.id))
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
@@ -234,7 +239,7 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state) if not v.is_controlled else policy_action  # TODO: not quite, need to prime it
+            action = v.policy(state) if not v.is_autonomous else policy_action
 
             # Perform such action
             v.step(action)
@@ -243,6 +248,9 @@ class RealTraffic(StatefulEnv):
             if (self.store or v.is_controlled) and v.valid:
                 v.store('state', state)
                 v.store('action', action)
+
+            if v.is_controlled and v.valid:
+                v.count_collisions(state)
 
         self.frame += 1
 
