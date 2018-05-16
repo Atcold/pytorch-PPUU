@@ -23,8 +23,8 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
-        self._k = 15  # running window size
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
+        self._k = kernel  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
@@ -136,6 +136,7 @@ class RealTraffic(StatefulEnv):
         self.lane_occupancy = None
         self._lane_surfaces = dict()
         self.nb_lanes = 7
+        self.smoothing_window = 15
 
     @staticmethod
     def _get_data_frame(file_name, x_max):
@@ -184,8 +185,10 @@ class RealTraffic(StatefulEnv):
             now_and_on = df['Frame ID'] >= self.frame
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
+                car_df = df[this_vehicle & now_and_on]
+                if len(car_df) < self.smoothing_window + 1: continue
                 f = self.font[20] if self.display else None
-                car = self.EnvCar(df[this_vehicle & now_and_on], self.offset, self.look_ahead, self.screen_size[0], f)
+                car = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f, self.smoothing_window)
                 self.vehicles.append(car)
                 if self.controlled_car and \
                         not self.controlled_car['locked'] and \

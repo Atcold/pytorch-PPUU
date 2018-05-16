@@ -7,8 +7,8 @@ class ControlledCar(RealCar):
     # Import get_lane_set from PatchedCar
     get_lane_set = PatchedCar.get_lane_set
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None):
-        super().__init__(df, y_offset, look_ahead, screen_w, font)
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
+        super().__init__(df, y_offset, look_ahead, screen_w, font, kernel)
         self.is_controlled = False
         self.buffer_size = 0
         self.lanes = None
