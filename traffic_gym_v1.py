@@ -43,6 +43,7 @@ class RealCar(Car):
         self._df = df
         self._frame = 0
         self._dt = 1 / 10
+        self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
         self._direction = self._get('direction', 0)
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
@@ -63,10 +64,12 @@ class RealCar(Car):
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
+        norm = np.linalg.norm(direction_vector)
         if what == 'direction':
-            return direction_vector / (np.linalg.norm(direction_vector) + 1e-6)
+            if norm < 1e-6: return self._direction  # if static returns previous direction
+            return direction_vector / norm
         if what == 'speed':
-            return np.linalg.norm(direction_vector) / self._dt
+            return norm / self._dt
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
