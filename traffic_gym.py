@@ -492,6 +492,10 @@ class Car:
     def valid(self):
         return self.back[0] > self.look_ahead and self.front[0] < self.screen_w - 1.75 * self.look_ahead
 
+    def __repr__(self) -> str:
+        cls = self.__class__
+        return f'{cls.__module__}.{cls.__name__}.{self.id}'
+
 
 class StatefulEnv(core.Env):
     # Environment's car class
