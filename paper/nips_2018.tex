@@ -29,6 +29,8 @@
 \usepackage{algorithm}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{color}
+\usepackage{bm}
 
 \usepackage{amsmath}
 \usepackage[noend]{algpseudocode}
@@ -88,36 +90,38 @@
 
 \section{Introduction}
 
-Learning to predict future states of a complex time series, such as sensory inputs, is an important research problem with applications in unsupervised learning, planning and compression.
-A significant difficulty is the inherently uncertain nature of many such time series: for example, given an initial part of a video sequence, there are often many ways in which the rest of the sequence can unfold. The space of possible futures can form a set of discrete modes, a connected manifold, or some combination of these, and training with classical $\ell_1$ or $\ell_2$ losses will predict the mean or the median of the set of possible futures, which often does not itself constitute a valid prediction.
+Learning to predict future states of a complex time series, such as sensory inputs, is an important research problem with applications in unsupervised learning, planning, and compression.
+A significant difficulty is the inherently uncertain nature of many such time series: for example, given an initial part of a video sequence, there are often many ways in which the rest of the sequence can unfold.
+The space of possible futures can form a set of discrete modes, a connected manifold, or some combination of these, and training with classical $\ell_1$ or $\ell_2$ losses will predict the median or the mean of the set of possible futures, which often does not itself constitute a valid prediction.
 
-One approach is to learn the parameters of a distribution over the set of possible futures, for example a Gaussian Mixture Model \citep{MDN}.
+One approach is to learn the parameters of a distribution over the set of possible future states, for example a Gaussian Mixture Model \citep{mixture-density-networks}.
 This has been successfully used when the dimensionality is low, but is not practical when the states are high-dimensional.
-More recently, several works have been proposed which use the framework of conditional Variational Autoencoders for generating images and video frames.
-VAEs assume a prior over latent variables and include a loss term measuring the KL divergence between this prior and the distribution output by the posterior network.
+More recently, several works have been proposed which use the framework of conditional Variational AutoEncoders (VAEs) for generating images and video frames.
+VAEs assume a prior over latent variables and include a loss term measuring the Kullback–Leibler (KL) divergence between this prior and the distribution output by the posterior network.
 This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
-Simple priors such as diagonal Gaussians are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
+Simple priors, such as diagonal Gaussians, are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
 One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
-Therefore, careful tuning of the prior term or annealing schedules can be required.
+Therefore, careful tuning of the prior term, or annealing schedules, are often required.
 
-In this work, we propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time. It is simple to implement, contains a single term in the loss function and does not run the risk of mode collapse.
-By removing the prior assumption, we also do away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss. After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
+In this work, we propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time.
+It is simple to implement, contains a single term in the loss function, and does not run the risk of mode collapse.
+By removing the prior assumption, we also do away with the need for a regularization term at training time, which enforces a match between prior and posterior distributions, leading to a simple and easy-to-optimize loss.
+After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
 Through this non-parametric sampling procedure, we naturally obtain samples which are on the manifold of latent variables.
 If the prior distribution over latent variables is dependent on the input, it may additionally be necessary to restrict our sampling to a limited region of the manifold.
-We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
+We therefore propose and empirically investigate two ways of achieving this: (1) through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and (2) by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
 The contributions of this work are the following:
 \begin{itemize}
 \item We introduce a new open-source environment to test methods for autonomous driving, based on a large dataset of real-world driving data.
-\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for hundreds of timesteps into the future.
+\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for over one thousand time steps (a few minutes) into the future.
 \end{itemize}
 
 
 
-\section{Prediction Model}
+\section{Predictive Model}
 
 \subsection{Architecture}
-
 
 \begin{figure}
   \centering
@@ -127,51 +131,59 @@ The contributions of this work are the following:
   \caption{Prediction Model. }
 \end{figure}
 
-
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
-The architecture consists of three neural networks: an encoder $f_1$, a decoder $f_2$ and a latent variable network $\phi$.
-For each sample, the update equations are given by:
-
+The architecture consists of three neural networks: an encoder $f_\text{enc}$, a decoder $f_\text{dec}$ and a latent variable network $\phi$.
+For each input sample $x$, the update equations are given by:
+%
 \begin{align*}
-  z_i &=
+  \bm{z} &=
   \begin{cases}
     0 & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
-    \phi(x_i, y_i) & \mbox{   else }
+    \phi(x, y) & \mbox{   else }
   \end{cases} \\
-\tilde{y}_i &= f_2(f_1(x_i), z_i)
+  \tilde{y} &= f_\text{dec}(f_\text{enc}(x), \bm{z}) = f(x, \bm{z})
 \end{align*}
-
-and all networks are trained by gradient descent to optimize the following objective:
-
+%
+where $\bm{z}$ is the corresponding latent variable, $y$ is the future state, and $\tilde{y}$ is the reconstructed target state.
+All networks are trained by gradient descent to optimize the following objective:
+%
 \begin{align}
   \mathcal{L} &= \sum_i \|y_i - \tilde{y_i} \|_2^2 \\
-  &= \sum_i \|y_i - f(x_i, z_i) \|_2^2
+  &= \sum_i \|y_i - f(x_i, \bm{z}_i) \|_2^2
 \end{align}
 
 Note in particular that no sampling or reparamaterization is done at training time.
 In standard autoencoders, some mechanism is used to limit the information content of the latent representation to avoid learning trivial mappings and thus encourage the model to learn good representations.
-In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $y_i$ while ignoring the input $x_i$.
-In our experiments we found setting the dimension of $z_i$ to be of much lower dimension than $y_i$ to work well, however other methods such as adding a sparsity or contractive penalty term could also be used.
+In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $y$ while ignoring the input $x$.
+In our experiments we found setting the dimension of $\bm{z}$ to be of much lower dimension than $y$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
 
 
 \subsection{Sampling}
 
-Our sampling sheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
+Our sampling scheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
 These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
 Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
 
-Our sampling scheme is based on such ideas, in particular, we can treat the vectors $z_t$ extracted from the training set as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
+Our sampling scheme is based on such ideas, in particular, we can treat the vectors $\bm{z}_t$, extracted from the training set, as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
 
-After training, we extract all vectors $z_i$ from the training set and use these as inputs to the stochastic prediction model.
+After training, we extract all vectors $\bm{z}$ from the training set and use these as inputs to the stochastic prediction model.
 We refer to this set of vectors as $\mathcal{Z}$.
 We explore three sampling methods:
 
-\textbf{No Prior} For a given input $x$, we sample some $z$ from $\mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
+\textbf{No Prior} \quad
+For a given input $x$, we sample some $\bm{z}$ from $\mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
 
-\textbf{KNN Prior} Here we make a smoothness assumption on the trajectories followed along the latent manifold. In particular, we assume that $z_{t+1}$ tends to be closer (on average) to $z_t$ than a random other vector in $\mathcal{Z}$. This assumption is motivated by a smoothness assumption on the inputs: if $s_t$ and $s_{t+1}$ are close and $\phi$ is a smooth function, then $z_t$ and $z_{t+1}$ will be close as well. This smoothness assumption can be reflected by restricting the choice of $z_{t+1}$ we sample from $\mathcal{Z}$ to the $k$ nearest neighbors of $z_t$.
-This approach can be implemented by construcing a $k$ nearest neighbor graph and performing a random walk along this graph (see algorithm \ref{algo}).
+\textbf{\emph{k}-Nearest Neighbors Prior} \quad
+Here we make a smoothness assumption on the trajectories followed along the latent manifold.
+In particular, we assume that $\bm{z}_{t+1}$ tends to be closer (on average) to $\bm{z}_t$ than a random other vector in $\mathcal{Z}$.
+This assumption is motivated by a smoothness assumption on the inputs: if $x_t$ and $x_{t+1}$ are close and $\phi$ is a smooth function, then $\bm{z}_t$ and $\bm{z}_{t+1}$ will be close as well.
+This smoothness assumption can be reflected by restricting the choice of $\bm{z}_{t+1}$ we sample from $\mathcal{Z}$ to the $k$-nearest neighbors of $\bm{z}_t$.
+This approach can be implemented by constructing a $k$-nearest neighbor graph and performing a random walk along this graph (see algorithm \ref{algo}).
 
-\textbf{Learned Prior} We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $x$. Specifically, we train a Mixture Density network \citep{mixture-density-networks} $\psi(x)$ which outputs the parameters $(\{\pi_j\}, \{\mu_j\}, \{\sigma_j\})$ of a Gaussian mixture model and is trained to maximize the likelihood of $z_t$ under this model. Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions which can be represented with our approach.
+\textbf{Learned Prior} \quad
+We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $x$.
+Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $\psi(x)$ which outputs the parameters $(\tau, \mu, \sigma)$ of a Gaussian mixture model and is trained to maximize the likelihood of $\bm{z}_t$ under this model.
+Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions that can be represented with our approach.
 
 A tradeoff in modeling distributions using non-parametric approaches is that they trade flexibility for increased memory and computational cost.
 All the approaches above have a memory footprint which grows with the size of the dataset.
