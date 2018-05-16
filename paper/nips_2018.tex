@@ -33,7 +33,7 @@
 \usepackage{amsmath}
 \usepackage[noend]{algpseudocode}
 
-\title{Prediction Under Uncertainty for Autonomous Driving}
+\title{Stochastic Prediction via Non-Parametric Sampling}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -88,23 +88,30 @@
 
 \section{Introduction}
 
+Learning to predict future states of a complex time series, such as sensory inputs, is an important research problem with applications in unsupervised learning, planning and compression.
+A significant difficulty is the inherently uncertain nature of many such time series: for example, given an initial part of a video sequence, there are often many ways in which the rest of the sequence can unfold. The space of possible futures can form a set of discrete modes, a connected manifold, or some combination of these, and training with classical $\ell_1$ or $\ell_2$ losses will predict the mean or the median of the set of possible futures, which often does not itself constitute a valid prediction.
+
+One approach is to learn the parameters of a distribution over the set of possible futures, for example a Gaussian Mixture Model \citep{MDN}.
+This has been successfully used when the dimensionality is low, but is not practical when the states are high-dimensional.
+More recently, several works have been proposed which use the framework of conditional Variational Autoencoders for generating images and video frames.
+VAEs assume a prior over latent variables and include a loss term measuring the KL divergence between this prior and the distribution output by the posterior network.
+This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
+Simple priors such as diagonal Gaussians are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
+One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
+Therefore, careful tuning of the prior term or annealing schedules can be required.
+
+In this work, we propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time. It is simple to implement, contains a single term in the loss function and does not run the risk of mode collapse.
+By removing the prior assumption, we also do away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss. After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
+Through this non-parametric sampling procedure, we naturally obtain samples which are on the manifold of latent variables.
+If the prior distribution over latent variables is dependent on the input, it may additionally be necessary to restrict our sampling to a limited region of the manifold.
+We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
+
 The contributions of this work are the following:
 \begin{itemize}
 \item We introduce a new open-source environment to test methods for autonomous driving, based on a large dataset of real-world driving data.
 \item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for hundreds of timesteps into the future.
 \end{itemize}
 
-Most methods for stochastic prediction rely on the framework of conditional Variational Autoencoders (cVAEs).
-VAEs assume a prior over latent variables and include a loss term measuring the KL divergence between this prior and the distribution output by the posterior network.
-This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
-Simple priors such as diagonal Gaussians are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
-A widely recognized issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
-
-We propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time.
-By removing the prior assumption, we also do away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss. After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
-Through this non-parametric sampling procedure, we naturally obtain samples which are on the manifold of latent variables.
-If the prior distribution over latent variables is dependent on the input, it may additionally be necessary to restrict our sampling to a limited region of the manifold.
-We therefore propose and empirically investigate two ways of achieving this: one through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
 
 \section{Prediction Model}
@@ -170,7 +177,7 @@ A tradeoff in modeling distributions using non-parametric approaches is that the
 All the approaches above have a memory footprint which grows with the size of the dataset.
 In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
 The second approach allows us to construct the graph offline since it is input-independent, hence sampling is also $\mathcal{O}(1)$.
-The third approach is input-dependent, however we note that is can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$. Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as kd-trees or locally sensitive hashing. In our experiments, we found that a simple linear exact search using a subset of the training data was sufficiently fast using a GPU and achieved good results.
+The third approach is input-dependent, however we note that is can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$. Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as kd-trees or locally sensitive hashing. In practice, we found that the computational cost of an exact search using a subset of the training data on a GPU was small compared to the cost of the forward and backward passes through the network.
 
 \begin{algorithm}
   \caption{My algorithm}\label{algo}
@@ -225,19 +232,48 @@ The general architecture and loss is similar in both our works, however their fo
 
 
 \section{Data sets}
-We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
 
-\subsection{Synthetic data set}
-The controlled environment consists of a traffic simulator where cars are moving on straight lanes and behave following a rule based policy.
-Vehicles can safely pass each other both to the left and to the right side, with well defined probabilities and using a PID controller.
-If a car is getting closer than a driver specific safe-distance ($t\text{-second} \times \text{speed}$), then delayed braking is applied ($\sim \sqrt[5]{\text{distance}}$).
-If vehicles are not blocked and free to drive, they will match their specific target-velocity, follow a Gaussian process offset by the lane centre coordinate, and may sporadically change lane.
-Everything is rendered using 24 pixels per $3.7\,\text{m}$, which corresponds to the US standard freeway lane width.
+In addition to evaluating our method on existing datasets used in the literature, we also use a new, large-scale dataset for training and evaluating deep predictive models.
+The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville in 2005.
+Seven cameras mounted on the top of a 30-story building record a segment of highway including 6 lanes and an onramp with a frame rate of $10\,\text{Hz}$.
+We use a total of 3 video segments, each of 15 minutes, which capture varying levels of congestion.
+A viewpoint transformation is applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
+
+Our use of this dataset is motivated by two main factors.
+First, it can potentially allow us to learn predictive models of driver behavior, which have important applications for autonomous driving.
+An autonomous vehicle equipped with an accurate predictive model of its surroundings can potentially anticipate unsafe situations and alert a safety driver.
+A predictive model can also be used for model-based planning, and can be learned from observational data without interacting with the environment.
+
+Second, this dataset reflects complex interactions between a large number of agents (in this case vehicle drivers), leading to a challenging prediction problem which can be useful for evaluating new methods more generally. Current video prediction datasets used in the literature to evaluate stochastic prediction models consist of synthetic moving MNIST digits \citep{Denton2018}, robot manipulation videos \citep{Ebert17}, or videos of human movement \citep{Human}. These have the advantage of being able to evaluate specific model capabilities in a controlled setting, have applications in robotics. However, they also have relatively few degrees of freedom: for example, the SM-MNIST dataset's latent variables are two-dimenional (random velocities are picked), while the major factors of variation within the BAIR robot dataset can also be captured with two dimensions (i.e. the position of the robot arm, which we demonstrate in our experiments).
+In contrast, the NGSIM dataset has a relatively large number of cars per context image, as shown in Figure \ref{car-statistics}, with each car having multiple degrees of freedom.
+We therefore believe this prediction tasks offers unique features which complement other datasets used in the literature.
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
+    %    \caption{$n=50$}
+    \ref{car-statistics}
+  \end{subfigure}
+  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+  %(or a blank line to force the subfigure onto a new line)
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
+%    \caption{$n=200$}
+  \end{subfigure}
+  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+  %(or a blank line to force the subfigure onto a new line)
+  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
+  \end{figure}
+
+
+
+
+
+%We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
+
 
 \subsection{NGSIM I-80 freeway data set}
-The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I–80 in the San Francisco Bay area in Emeryville in 2005.
-Seven cameras, mounted on the top of a 30-story building, recorded the 6 lanes and the onramp, with a frame rate of $10\,\text{Hz}$.
-A viewpoint transformation is then applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
 
 % \begin{figure}
 %   \centering
@@ -310,7 +346,7 @@ Since we are also interested in the the performance of models to generate predic
 \end{figure}
 
 
-\subsection{Results}
+\subsection{Bair Robot Pushing Dataset}
 
 To test the generality of our video prediction model, we also evaluated it on two other video prediction datasets used in the literature: Stochastic Moving MNIST introduced in \citep{Denton2018} and the BAIR robot pushing dataset originally introduced in \citep{Ebert17} and used for video prediction in \citep{Babaeizadeh2018, Denton2018}.
 We used the same model architectures as in \citep{Denton2018}: for BAIR, a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units, and for SM-MNIST a DCGAN encoder and decoder also combined with a 2-layer LSTM with 128 hidden units. All models were training with Adam \citep{ADAM} with learning rate $0.002$.
@@ -325,10 +361,57 @@ Results for our method and two other state-of-the-art methods using the best-of-
   \includegraphics[width=0.4\textwidth]{images/bair_psnr.pdf}
 %  \fbox{\rule[-.5cm]{0cm}{4cm}
 %    \rule[-.5cm]{4cm}{0cm}}
-  \caption{}
+  \caption{Best-of-$k$ performance on the BAIR dataset, where the best PSNR and SSIM out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
   \label{bair}
 \end{figure}
 
+
+\subsection{NGSIM-80 Driving Dataset}
+
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.5\textwidth]{images/best_of_k_i80.pdf}
+%  \fbox{\rule[-.5cm]{0cm}{4cm}
+%    \rule[-.5cm]{4cm}{0cm}}
+  \caption{Best-of-$k$ performance on the NGSIM-I80 dataset, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
+  \label{bair}
+\end{figure}
+
+
+
+\begin{table}
+  \caption{Independent Critic Evaluation}
+  \label{sample-table}
+  \centering
+  \begin{tabular}{lll}
+    \toprule
+    Model     & Independent Critic Loss \\
+    \midrule
+    Deterministic & -  \\
+    cVAE     & - \\
+    AE-FP     & -      \\
+    AE-KNN     & - \\
+    AE-LP     & - \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+\begin{table}
+  \caption{Timing for NGSIM-I80 dataset}
+  \label{sample-table}
+  \centering
+  \begin{tabular}{lll}
+    \toprule
+    Operation     & Time (s) \\
+    \midrule
+    Encoding & 0.0014  \\
+    Decoding     & 0.0024 \\
+    NN search over 100K codes & 0.0005      \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 
 
