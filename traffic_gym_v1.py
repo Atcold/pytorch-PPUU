@@ -201,7 +201,6 @@ class RealTraffic(StatefulEnv):
                     car.is_controlled = True
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
-                    car.screen_w = self.screen_size[0]
                     car.look_ahead = self.look_ahead
                     print('Controlling car {}'.format(car.id))
             self.vehicles_history |= vehicles  # union set operation

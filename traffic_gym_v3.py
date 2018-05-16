@@ -12,8 +12,6 @@ class ControlledCar(RealCar):
         self.is_controlled = False
         self.buffer_size = 0
         self.lanes = None
-        self.screen_w = None
-        self.look_ahead = None
         self.collisions_per_frame = 0
 
     @property
