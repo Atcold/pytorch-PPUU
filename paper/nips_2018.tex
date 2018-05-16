@@ -248,23 +248,45 @@ Second, this dataset reflects complex interactions between a large number of age
 In contrast, the NGSIM dataset has a relatively large number of cars per context image, as shown in Figure \ref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other datasets used in the literature.
 
+
+
+
 \begin{figure}
   \centering
-  \begin{subfigure}[b]{0.4\textwidth}
+  \begin{subfigure}[b]{0.8\textwidth}
+    \includegraphics[width=\textwidth]{images/i80_preprocess.pdf}
+  \end{subfigure}
+  \caption{Preprocessing pipeline for the NGSIM-I80 dataset.}
+\end{figure}
+
+
+
+
+
+\begin{figure}
+  \centering
+    \begin{subfigure}[b]{0.6\textwidth}
+    \includegraphics[width=\textwidth]{images/vlcsnap-2018-02-22-14h40m23s503.png}
+  \end{subfigure}
+    \caption{Frame from NGSIM dataset after viewpoint transformation and tracking.}
+
+  \begin{subfigure}[b]{0.6\textwidth}
+    \includegraphics[width=0.3\textwidth]{images/state_image.png}
+  \end{subfigure}
+
+  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+  %(or a blank line to force the subfigure onto a new line)
+\end{figure}
+
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.5\textwidth}
     \includegraphics[width=\textwidth]{images/car_statistics.pdf}
-    %    \caption{$n=50$}
     \ref{car-statistics}
   \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
-%    \caption{$n=200$}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
-  \end{figure}
+\end{figure}
+
 
 
 
