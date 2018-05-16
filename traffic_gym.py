@@ -203,6 +203,8 @@ class Car:
             obs[6].copy_(v_state)
 
         # self._colour = (255 * cost, 0, 255 * (1 - cost))
+        # if cost and cost > 0.95:
+        #     print(f'Car {self.id} prox cost: {cost:.2f}')
 
         return obs, mask, cost
 
@@ -223,7 +225,7 @@ class Car:
         if mode == 'human':
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
-                                 (int(x - 15), int(y - 15), self._length + 20, self._width + 20), 2)
+                                 (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
             draw_rect(surface, self._colour, rectangle, d, 3)
 
             # Drawing vehicle number
@@ -463,7 +465,6 @@ class Car:
             # print(transpose)
             return
         im = transpose[0]
-        os.system('mkdir -p ' + save_dir)
         if mode == 'tensor':
             lane_cost = transpose[1]
             zip_ = list(zip(*self._states))
@@ -530,8 +531,6 @@ class StatefulEnv(core.Env):
         self.time_counter = None
         self.controlled_car = None
         self.nb_states = nb_states
-
-        print(self.delta_t)
 
         self.display = display
         if self.display:  # if display is required
