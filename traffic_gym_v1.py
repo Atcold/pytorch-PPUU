@@ -239,7 +239,7 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state) if not v.is_controlled else policy_action  # TODO: not quite, need to prime it
+            action = v.policy(state) if not v.is_autonomous else policy_action
 
             # Perform such action
             v.step(action)

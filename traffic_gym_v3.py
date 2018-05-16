@@ -46,6 +46,10 @@ class ControlledCar(RealCar):
         self.off_screen = True
         return 6
 
+    @property
+    def is_autonomous(self):
+        return self.is_controlled and len(self._states_image) > self.buffer_size
+
     def count_collisions(self, state):
         self.collisions_per_frame = 0
         for cars in state:
