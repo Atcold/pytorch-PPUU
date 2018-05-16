@@ -261,24 +261,6 @@ We therefore believe this prediction tasks offers unique features which compleme
 
 
 
-
-
-\begin{figure}
-  \centering
-    \begin{subfigure}[b]{0.6\textwidth}
-    \includegraphics[width=\textwidth]{images/vlcsnap-2018-02-22-14h40m23s503.png}
-  \end{subfigure}
-    \caption{Frame from NGSIM dataset after viewpoint transformation and tracking.}
-
-  \begin{subfigure}[b]{0.6\textwidth}
-    \includegraphics[width=0.3\textwidth]{images/state_image.png}
-  \end{subfigure}
-
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-\end{figure}
-
-
 \begin{figure}
   \centering
   \begin{subfigure}[b]{0.5\textwidth}
@@ -406,15 +388,13 @@ Results for our method and two other state-of-the-art methods using the best-of-
   \caption{Independent Critic Evaluation}
   \label{sample-table}
   \centering
-  \begin{tabular}{lll}
+  \begin{tabular}{llll}
     \toprule
-    Model     & Independent Critic Loss \\
+    Training iteration     & Deterministic & cVAE & AE-LP \\
     \midrule
-    Deterministic & -  \\
-    cVAE     & - \\
-    AE-FP     & -      \\
-    AE-KNN     & - \\
-    AE-LP     & - \\
+    500 & 0.0089 & 0.0979 & 0.1105 ($\pm$ 0.0261)  \\
+    1000 &  0.0015 & 0.0084 & 0.0308 ($\pm$ 0.0346) \\
+    1500 & 0.0009 & 0.0011 & 0.0026 \\
     \bottomrule
   \end{tabular}
 \end{table}
