@@ -141,8 +141,8 @@ class Car:
         obs = obs.view(n_cars, 4)
         cost = 0
 
-        vstate = self.get_state()
-        obs[0].copy_(vstate)
+        v_state = self.get_state()
+        obs[0].copy_(v_state)
 
         if left_vehicles:
             if left_vehicles[0] is not None:
@@ -153,7 +153,7 @@ class Car:
             else:
                 # for bag-of-cars this will be ignored by the mask,
                 # but fill in with a similar value to not mess up batch norm
-                obs[1].copy_(vstate)
+                obs[1].copy_(v_state)
 
             if left_vehicles[1] is not None:
                 s = left_vehicles[1].get_state()
@@ -161,10 +161,10 @@ class Car:
                 mask[2] = 1
                 cost = max(cost, self.compute_cost(left_vehicles[1]))
             else:
-                obs[2].copy_(vstate)
+                obs[2].copy_(v_state)
         else:
-            obs[1].copy_(vstate)
-            obs[2].copy_(vstate)
+            obs[1].copy_(v_state)
+            obs[2].copy_(v_state)
 
         if mid_vehicles[0] is not None:
             s = mid_vehicles[0].get_state()
@@ -172,7 +172,7 @@ class Car:
             mask[3] = 1
             cost = max(cost, mid_vehicles[0].compute_cost(self))
         else:
-            obs[3].copy_(vstate)
+            obs[3].copy_(v_state)
 
         if mid_vehicles[1] is not None:
             s = mid_vehicles[1].get_state()
@@ -180,7 +180,7 @@ class Car:
             mask[4] = 1
             cost = max(cost, self.compute_cost(mid_vehicles[1]))
         else:
-            obs[4].copy_(vstate)
+            obs[4].copy_(v_state)
 
         if right_vehicles:
             if right_vehicles[0] is not None:
@@ -189,7 +189,7 @@ class Car:
                 mask[5] = 1
                 cost = max(cost, right_vehicles[0].compute_cost(self))
             else:
-                obs[5].copy_(vstate)
+                obs[5].copy_(v_state)
 
             if right_vehicles[1] is not None:
                 s = right_vehicles[1].get_state()
@@ -197,10 +197,10 @@ class Car:
                 mask[6] = 1
                 cost = max(cost, self.compute_cost(right_vehicles[1]))
             else:
-                obs[6].copy_(vstate)
+                obs[6].copy_(v_state)
         else:
-            obs[5].copy_(vstate)
-            obs[6].copy_(vstate)
+            obs[5].copy_(v_state)
+            obs[6].copy_(v_state)
 
         # self._colour = (255 * cost, 0, 255 * (1 - cost))
 
