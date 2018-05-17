@@ -31,8 +31,9 @@
 \usepackage{graphicx}
 %\usepackage{subfig}
 \usepackage{subcaption}
-\usepackage{color}
+\usepackage[usenames,dvipsnames]{color}
 \usepackage{bm}
+\usepackage[font=footnotesize]{caption}
 
 \usepackage{amsmath}
 \usepackage[noend]{algpseudocode}
@@ -316,10 +317,24 @@ We therefore believe this prediction tasks offers unique features which compleme
 
 \begin{figure}
   \centering
-  \begin{subfigure}[b]{0.8\textwidth}
-    \includegraphics[width=\textwidth]{images/i80_preprocess.pdf}
-  \end{subfigure}
-  \caption{Preprocessing pipeline for the NGSIM-I80 data set.}
+    \includegraphics[width=\textwidth]{images/I-80}
+  \caption{
+    \textbf{Preprocessing pipeline for the NGSIM-I80 data set.}
+    \textcolor{Orange}{Orange arrows} show same vehicles across stages.
+    \textcolor{ProcessBlue}{Blue arrows} show corresponding extracted context state.
+    \textbf{(a)} Snapshots from two of the six cameras.
+    \textbf{(b)} View point transformation, car localisation, characterisation, classification, and tracking.
+    \textbf{(c)} Every vehicle in the simulator is initialised with starting position $\bm{p} = (x, y)$, initial velocity $v \bm{d}$ (where $v$ represents the speed and $\bm{d}$ the direction versor), correct dimensions, and identification (ID) number.
+    At every time step $\Delta t = 0.1\,\text{s}$, we use the tracked trajectories (previously smoothed with a $1.5\,\text{s}$ running average) and a simplified kinematic model of a car to compute the agent actions $(a, b)$, corresponding to acceleration and tangential deviation.
+    Therefore, the vehicle internal state is updated with: $\bm{p} \gets \bm{p} + v \bm{d} \Delta t$, $v \gets v + a \Delta t$, $\bm{d} \gets \bm{d} + v b \bm{d}_\perp \Delta t$, and $\bm{d} \gets \bm{d} / \lVert \bm{d} \rVert$.
+    A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
+    Finally, the vehicles are drawn onto the screen canvas and displayed with their corresponding ID number.
+    \textbf{(d)} Lanes and vehicles are also drawn on a secondary canvas, from which the context states are extracted.
+    Rectangular regions around each vehicle --- oriented according to $\bm{d}$, of length corresponding to twice the space travelled in $1\,\text{s}$ at $130\,\text{km/h}$, of width equal four times the lane width --- scaled by a $0.5$ factor constitute the context states.
+    At this stage, the lane-crossing cost is computed using a modified morphological distance transform between each vehicle and the lane channel.
+    \textbf{(e)} Five examples of context states extracted at the previous stage.
+    Notice how vehicles oriented slightly to the left (2nd and 3rd examples) have lane markings rotated to the right.
+  }
 \end{figure}
 
 \begin{figure}
