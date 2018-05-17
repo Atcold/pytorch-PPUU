@@ -24,6 +24,7 @@
 \usepackage{booktabs}       % professional-quality tables
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 \usepackage{algorithm}
@@ -35,7 +36,7 @@
 \usepackage{amsmath}
 \usepackage[noend]{algpseudocode}
 
-\title{Stochastic Prediction via Non-Parametric Sampling}
+\title{Target Encoding Networks}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -113,14 +114,14 @@ We therefore propose and empirically investigate two ways of achieving this: (1)
 
 The contributions of this work are the following:
 \begin{itemize}
-\item We introduce a new open-source environment to test methods for autonomous driving, based on a large data set of real-world driving data.
-\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions for over one thousand time steps (a few minutes) into the future.
+\item New large-scale dataset with applications for autonomous driving
+\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions many timesteps into the future.
 \end{itemize}
 
 
 \section{Predictive Model}
 
-\subsection{Architecture}
+\subsection{Architecture and Training}
 
 \begin{figure}
   \centering
@@ -130,98 +131,149 @@ The contributions of this work are the following:
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
 The architecture consists of three neural networks: an encoder $f_\text{enc}$, a decoder $f_\text{dec}$ and a latent variable network $f_\phi$.
-For each input $s_{1:t}$ (\emph{i.e.}\ a sequence of $t$ consecutive states $s$) and a target $s_{t+1}$ (\emph{i.e.}\ the following state), the update equations are given by:
+For each input $s_{1:t}$ (\emph{i.e.}\ a sequence of $t$ consecutive states) and a target $s_{t+1}$ (\emph{i.e.}\ the following state), the update equations are given by:
 %
 \begin{align}
-  \bm{z}_t &=
+  z_t &=
   \begin{cases}
     \bm{0} & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
     f_\phi(s_{1:t}, s_{t+1}) & \mbox{   otherwise}
   \end{cases} \\
-  \hat{s}_{t+1} &= f_\text{dec}(f_\text{enc}(s_{1:t}), \bm{z}_t) = f_\theta(s_{1:t}, \bm{z}_t)
+  \hat{s}_{t+1} &= f_\text{dec}(f_\text{enc}(s_{1:t}), z_t) = f_\theta(s_{1:t}, z_t)
 \end{align}
 %
-where $\bm{z}_t$ is the latent variable vector associated to the input $s_{1:t}$, and $\hat{s}_{t + 1}$ is the reconstructed target state.
+where $z_t$ is the latent variable vector associated to the input $s_{1:t}$, $\hat{s}_{t + 1}$ is the reconstructed target state, and $\mathcal{B}(p)$ is a Bernoulli random variable with probability $p$.
 All networks are trained by gradient descent to optimize the following objective:
 %
 \begin{align}
   \ell(\hat{s}_{t+1}, s_{t+1}) &= \lVert \hat{s}_{t+1} - s_{t+1} \rVert_2^2 \\
-  &= \lVert f_\theta(s_{1:t}, \bm{z}_t) - s_{t+1} \rVert_2^2
+  &= \lVert f_\theta(s_{1:t}, z_t) - s_{t+1} \rVert_2^2
 \end{align}
 
 Note in particular that no sampling or reparamaterization is done at training time.
 In standard autoencoders, some mechanism is used to limit the information content of the latent representation to avoid learning trivial mappings and thus encourage the model to learn good representations.
-In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $s_{t+1}$ fromt $\bm{z}_t$ while ignoring the input $s_{1:t}$.
-In our experiments we found setting the dimension of $\bm{z}$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
+In the conditional case we are considering, we also need such a mechanism to prevent the network from simply reconstructing $s_{t+1}$ from $z_t$ while ignoring the input $s_{1:t}$.
+This is accomplished by setting the latent vector $z_t$ to zero with some probability $p$ at every training iteration.
+This setting encourages the network to continue to extract as much information as possible from the input $s_{1:t}$, rather than simply trying to reconstruct the target, and only use the true target $s_{t+1}$ to reconstruct what cannot be predicted from the input.
+In our experiments, we train with $p=1$ for an initial fixed number of iterations, which corresponds to purely deterministic training, after which we reduce $p$ to incorporate the latent variables encoded from the targets.
+
+A second key point is that the dimension of the latent variable $z_t$ is much lower than the dimension of the states $s_t$. This has two benefits: first, it can further help limit the information content and prevent trivial reconstructions of the targets. Second, it allows us to use non-parametric estimates of the distribution over latent variables using a reasonable number of points, which we detail in the next section.
+
+%In our experiments we found setting the dimension of $z$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
 
 
-\subsection{Sampling}
-
-Our sampling scheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
-These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
-Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
-
-Our sampling scheme is based on such ideas, in particular, we can treat the vectors $\bm{z}$, extracted from the training set, as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
-
-After training, we extract all vectors $\bm{z}$ from the training set and use these as inputs to the stochastic prediction model.
-We refer to this set of vectors as $\mathcal{Z}$.
-We explore three sampling methods:
-
-\textbf{No Prior} \quad
-For a given input $s_{1:t}$, we sample some $\bm{z}$ from $\mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
-
-\textbf{\emph{k}-Nearest Neighbors Prior} \quad
-Here we make a smoothness assumption on the trajectories followed along the latent manifold.
-In particular, we assume that $\bm{z}_{t+1}$ tends to be closer (on average) to $\bm{z}_t$ than a random other vector in $\mathcal{Z}$.
-This assumption is motivated by a smoothness assumption on the inputs: if $s_{t+1}$ and $s_{t+2}$ are close and $f_\phi$ is a smooth function, then $\bm{z}_t$ and $\bm{z}_{t+1}$ will be close as well.
-This smoothness assumption can be reflected by restricting the choice of $\bm{z}_{t+1}$ we sample from $\mathcal{Z}$ to the $k$-nearest neighbors of $\bm{z}_t$.
-This approach can be implemented by constructing a $k$-nearest neighbor graph and performing a random walk along this graph (see algorithm \ref{algo}).
-
-\textbf{Learned Prior} \quad
-We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $s_{1:t}$.
-Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\sigma})$ of a Gaussian mixture model and is trained to maximize the likelihood of $\bm{z}_t$ under this model.
-Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions that can be represented with our approach.
-
-A trade-off in modeling distributions using non-parametric approaches is that they trade flexibility for increased memory and computational cost.
-All the approaches above have a memory footprint which grows with the size of the data set.
-In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
-The second approach allows us to construct the graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$.
-The third approach is input-dependent, however we note that it can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
-Finding nearest neighbors is a well-studied problem for which fast exact or approximate solutions exist, such as $k$-d trees or locally sensitive hashing.
-In practice, we found that the computational cost of an exact search, using a subset of the training data on a GPU, was small compared to the cost of the forward and backward passes through the network.
-
-\begin{algorithm}
-  \caption{My algorithm}\label{algo}
+\begin{algorithm}[t]
+  \caption{Build Stochastic Model}\label{algo-train}
   \begin{algorithmic}[1]
-    \State \textbf{Input}: Time series $\{s_1...s_T\}$.
-    \State Train latent model:
-    \While{not converged}
+    \State \textbf{Input} Training set $\mathcal{D}$.
+    \State Initialize networks $f_\theta, f_\phi$
+    \While{not converged} \Comment{Train networks}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
     \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
     \State $\ell(\theta, \phi) = \|s_{t+1} - \tilde{s}_{t+1} \|_2^2$
     \State $\theta \leftarrow \theta - \eta \nabla \theta$
     \State $\phi \leftarrow \phi - \eta \nabla \phi$
     \EndWhile
-    \Procedure{EstimateLatentManifold}{}
-    \State $V \leftarrow \{ \}$
-    \State $E \leftarrow \{ \}$
-    \For{$t = 1:T$}
+    \State $\mathcal{Z} \leftarrow \varnothing$     \Comment{Estimate latent distribution}
+    \For{$i = 1:N_Z$}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $V[t] = z_t$
+    \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
     \EndFor
-    \For{$t = 1:T$}
-    \State $E[t] \leftarrow $ list of $k$ nearest neighbors of $V[t] = z_t$ in $V$
-    \EndFor
-    \Return $G = (V, E)$
+    \Return $f_\theta, \mathcal{Z}$
+  \end{algorithmic}
+\end{algorithm}
+
+
+
+\subsection{Sampling}
+
+After the model is trained, we need a sampling scheme to pair latent variables $z$ with novel input sequences $s_{1:t}$ for which we want to generate future states.
+Since we do not use any prior on the latent distribution during training, we cannot assume the latent distribution follows a known parametric form which we can sample from.
+Instead, we obtain a non-parametric estimate of the distribution over latent vectors by extracting a large collection of $z$ vectors from the training set, which we refer to as $\mathcal{Z}$.
+We explore three sampling methods based on this estimate, which are described explicitly in Algorithm \ref{algo-sample}.
+
+%Our sampling scheme is based on ideas from manifold learning, for which there is an extensive literature \citep{isomap, LLE, Belkin2003, TSNE}.
+%These methods assume we are given a set of points $\{x_i\}$ which are assumed to lie on a low-dimensional manifold $\mathcal{M}$, and approximate the manifold by forming a graph whose vertices are $\{x_i\}$ and whose edges (which can be weighted or unweighted) depend on the Euclidean distance between them. In particular, two points are connected by an edge if they are close in Euclidean distance, as this approximates the geodesic distance along the manifold as it becomes small.
+%Paths along the manifold can then be approximated by paths along the graph, and it can be shown that given a sufficiently dense sampling of points, graph distances converge to geodesic distances \citep{Bernstein2000}.
+
+%Our sampling scheme is based on such ideas, in particular, we can treat the vectors $z$, extracted from the training set, as points sampled from the unknown latent manifold, form a graph approximation to this manifold using these points, and sample trajectories on this manifold to generate new trajectories in the original input space.
+
+%After training, we extract all vectors $z$ from the training set and use these as inputs to the stochastic prediction model.
+
+\textbf{Uniform} \quad
+For a given input $s_{1:t}$, we simply sample some $z \sim \mathcal{Z}$ uniformly at random. In this case the latent variable is independent of the input, similarly to the Fixed Prior VAEs used in \citep{Denton18}.
+
+\textbf{\emph{k}-Nearest Neighbors} \quad
+Here we make a smoothness assumption on the trajectories followed along the latent manifold.
+In particular, we assume that $z_{t+1}$ tends to be closer (on average) to $z_t$ than a random other vector in $\mathcal{Z}$.
+This assumption is motivated by a smoothness assumption on the inputs: if $s_{t+1}$ and $s_{t+2}$ are close and $f_\phi$ is a smooth function, then $z_t$ and $z_{t+1}$ will be close as well.
+This smoothness assumption can be reflected by restricting the choice of $z_{t+1}$ we sample from $\mathcal{Z}$ to the $k$-nearest neighbors of $z_t$.
+This approach can be implemented by constructing a $k$-nearest neighbor graph and performing a random walk along this graph.
+
+\textbf{Learned Prior} \quad
+We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $s_{1:t}$.
+Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\sigma})$ of a Gaussian mixture model and is trained to maximize the likelihood of $z_t$ under this model.
+Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions that can be represented with our approach.
+
+%Although they offer increased flexibility, non-parametric approaches to modeling distributions can also bring potential challenges, which we discuss here.
+One potential challenge with using non-parametric approaches to modeling distributions is that the memory and computational cost can increase with the number of points used to construct the estimate, i.e. $\mathcal{Z}$.
+%A possible issue in modeling distributions using non-parametric approaches is that they can trade flexibility for increased memory and computational cost.
+All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
+In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
+The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
+The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
+In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (details are in the Experiments section).
+If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
+
+
+
+
+\begin{algorithm}[t]
+  \caption{Sampling Procedures}\label{algo-sample}
+  \begin{algorithmic}[1]
+
+    \Procedure{KNN}{$\mathcal{Z}, z, K$}
+    \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
+    \State \textbf{return} $\mathcal{S}$
     \EndProcedure
-    \Procedure{Generate}{$s_0, s_1$}
-    \State Initialize $z_1 = f_{\phi}(s_0, s_1)$
-    \For{$t = 1:T$}
-    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \EndFor
+
+
+    \Procedure{SampleUniform}{$\mathcal{Z}$}
+    \State Sample $z \sim \mathcal{Z}$ uniformly at random
+    \State \textbf{return} $z$
+    \EndProcedure
+
+    \Procedure{SampleKNN}{$\mathcal{Z}, z, K$}
+    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, K)$
+    \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
+    \State \textbf{return} $z$
+    \EndProcedure
+
+    \Procedure{SampleLearnedPrior}{$\mathcal{Z}, f_\psi, s_{1:t}$}
+    \State $(\pi, \mu, \sigma) = f_\psi(s_{1:t})$
+    \State $z^* \sim \mbox{GMM}(\pi, \mu, \sigma)$
+    \State $\{z\} \gets \textsc{KNN}(\mathcal{Z}, z^*, 1)$
+    \State \textbf{return} $z$
     \EndProcedure
   \end{algorithmic}
 \end{algorithm}
+
+
+
+\begin{algorithm}[t]
+  \caption{Generate Sequence}\label{algo-gen}
+  \begin{algorithmic}[1]
+    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
+    \For{j = 1:T}
+    \State $z \gets \textsc{Sample}(\mathcal{Z})$
+    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
+    \EndFor
+    \Return $s_{1:(t+T)}$
+  \end{algorithmic}
+\end{algorithm}
+
 
 
 \section{Related Work}
@@ -312,29 +364,6 @@ The number of possible futures of a stochastic process can grow exponentially wi
 We therefore use this metric to evaluate model predictions over a limited time horizon in order to give models a chance to capture the true future with a number of samples which is computationally tractable.
 Since we are also interested in the the performance of models to generate predictions over long time horizons, we also provide a complementary measure where we train an separate model to distinguish between real and generated images after the stochastic model has been trained. This has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however the approach is applicable to generative models more broadly. In this work we use the Least-Squares GAN Criterion \citep{Mao16}, as this was found to be both stable and sensitive in \citep{GANeval}.
 
-\begin{figure}
-  \centering
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n50.pdf}
-    \caption{$n=50$}
-    \label{fig:gull}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n200.pdf}
-    \caption{$n=200$}
-    \label{fig:tiger}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n1000.pdf}
-    \caption{$n=1000$}
-    \label{fig:mouse}
-  \end{subfigure}
-  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
-  \end{figure}
 
 
 
@@ -350,6 +379,14 @@ Since we are also interested in the the performance of models to generate predic
 %    \rule[-.5cm]{4cm}{0cm}}
   \caption{Distribution of distances between consecutive $z$ and random pairs of $z$ vectors extracted from the I-80 training set. Consecutive vectors are closer on average, which supports the smoothness assumption underlying Algorithm \ref{knn-algo}.}
 \end{figure}
+
+
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.5\textwidth]{images/z_gradient.pdf}
+\end{figure}
+
 
 
 \subsection{Bair Robot Pushing Dataset}
@@ -479,6 +516,32 @@ Putting this together, the expected best-of-$k$ loss is given by:
   \mathbb{E}[\mathcal{L}_{\mbox{best-of-$k$}}] &= \mbox{P(at least one sample matches)}\cdot 0 + \mbox{P(none of the samples match)} \cdot \sqrt{2} \\
   &= \sqrt{2} \cdot F\Big (k, k, \frac{n-1}{n} \Big) \\
 \end{align}
+
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{images/best_of_k_toy_n50.pdf}
+    \caption{$n=50$}
+    \label{fig:gull}
+  \end{subfigure}
+  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+  %(or a blank line to force the subfigure onto a new line)
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{images/best_of_k_toy_n200.pdf}
+    \caption{$n=200$}
+    \label{fig:tiger}
+  \end{subfigure}
+  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+  %(or a blank line to force the subfigure onto a new line)
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{images/best_of_k_toy_n1000.pdf}
+    \caption{$n=1000$}
+    \label{fig:mouse}
+  \end{subfigure}
+  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
+  \end{figure}
+
 
 
 
