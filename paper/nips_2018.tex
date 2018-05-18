@@ -115,11 +115,20 @@ Choosing a simple distribution, such as a diagonal Gaussian, gives a simple clos
 %One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
 %Therefore, careful tuning of the prior term, or annealing schedules, are often required.
 
-In this work, we propose a new model called Target Encoding Networks (TENs) in which the latent variable is the sum of a deterministic function of the input and a latent variable on which no prior distribution is placed. The TEN model relies on three key ideas:
+In this work, we propose a new model called Target Encoding Networks (TENs) in which the latent variable is the sum of a deterministic function of the input and a latent variable on which no prior distribution is placed.
+The TEN model relies on three key ideas:
+%
 \begin{itemize}
-\item The information content of the latent variable is limited by making it low dimensional.
-\item At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $\phi$ that takes as input the target to be predicted as input. This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
-\item To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $\phi$ function on ``future'' values). This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from. This is made easy because the latent variable is low dimensional and because the ``predictable'' component of the target was taken out. Through this sampling procedure, we naturally obtain samples which are on the manifold of latent variables and, when fed to the decoder, produce samples in the regions of high data density.
+  \item
+    The information content of the latent variable is limited by making it low dimensional.
+  \item
+    At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $f_\phi$ that takes as input the target to be predicted as input.
+  This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
+  \item
+    To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $f_\phi$ function on ``future'' values).
+    This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from.
+    This is made easy because the latent variable is low dimensional and because the ``predictable'' component of the target was taken out.
+    Through this sampling procedure, we naturally obtain samples which are on the manifold of latent variables and, when fed to the decoder, produce samples in the regions of high data density.
 \end{itemize}
 
 This method does away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk mode collapse.
@@ -138,7 +147,9 @@ Modeling and anticipating the behavior of surrounding drivers can be framed as a
 \begin{figure}
   \centering
   \includegraphics[width=0.5\textwidth]{images/ae_train-crop.pdf}
-  \caption{Target-Encoding Network}
+  \caption{
+    \textbf{Target-Encoding Network diagram.}
+  }
 \end{figure}
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
@@ -149,7 +160,7 @@ For each input $s_{1:t}$ (\emph{i.e.}\ a sequence of $t$ consecutive states) and
   \label{update-eqn}
   z_t &=
   \begin{cases}
-    \bm{0} & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
+    0 & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
     f_\phi(s_{1:t}, s_{t+1}) & \mbox{   otherwise}
   \end{cases} \\
   \hat{s}_{t+1} &= f_\text{dec}(f_\text{enc}(s_{1:t}), z_t) = f_\theta(s_{1:t}, z_t)
