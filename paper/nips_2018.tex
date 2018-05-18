@@ -115,11 +115,20 @@ Choosing a simple distribution, such as a diagonal Gaussian, gives a simple clos
 %One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
 %Therefore, careful tuning of the prior term, or annealing schedules, are often required.
 
-In this work, we propose a new model called Target Encoding Networks (TENs) in which the latent variable is the sum of a deterministic function of the input and a latent variable on which no prior distribution is placed. The TEN model relies on three key ideas:
+In this work, we propose a new model called Target Encoding Networks (TENs) in which the latent variable is the sum of a deterministic function of the input and a latent variable on which no prior distribution is placed.
+The TEN model relies on three key ideas:
+%
 \begin{itemize}
-\item The information content of the latent variable is limited by making it low dimensional.
-\item At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $\phi$ that takes as input the target to be predicted as input. This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
-\item To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $\phi$ function on ``future'' values). This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from. This is made easy because the latent variable is low dimensional and because the ``predictable'' component of the target was taken out. Through this sampling procedure, we naturally obtain samples which are on the manifold of latent variables and, when fed to the decoder, produce samples in the regions of high data density.
+  \item
+    The information content of the latent variable is limited by making it low dimensional.
+  \item
+    At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $f_\phi$ that takes as input the target to be predicted as input.
+  This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
+  \item
+    To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $f_\phi$ function on ``future'' values).
+    This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from.
+    This is made easy because the latent variable is low dimensional and because the ``predictable'' component of the target was taken out.
+    Through this sampling procedure, we naturally obtain samples which are on the manifold of latent variables and, when fed to the decoder, produce samples in the regions of high data density.
 \end{itemize}
 
 This method does away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk mode collapse.
@@ -138,7 +147,9 @@ Modeling and anticipating the behavior of surrounding drivers can be framed as a
 \begin{figure}
   \centering
   \includegraphics[width=0.5\textwidth]{images/ae_train-crop.pdf}
-  \caption{Target-Encoding Network}
+  \caption{
+    \textbf{Target-Encoding Network diagram.}
+  }
 \end{figure}
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
@@ -149,7 +160,7 @@ For each input $s_{1:t}$ (\emph{i.e.}\ a sequence of $t$ consecutive states) and
   \label{update-eqn}
   z_t &=
   \begin{cases}
-    \bm{0} & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
+    0 & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
     f_\phi(s_{1:t}, s_{t+1}) & \mbox{   otherwise}
   \end{cases} \\
   \hat{s}_{t+1} &= f_\text{dec}(f_\text{enc}(s_{1:t}), z_t) = f_\theta(s_{1:t}, z_t)
@@ -186,8 +197,8 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
     \While{not converged}
     \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \State $\ell(\theta, \phi) = \|s_{t+1} - \tilde{s}_{t+1} \|_2^2$
+    \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+    \State $\ell(\theta, \phi) = \|s_{t+1} - \hat{s}_{t+1} \|_2^2$
     \State $\theta \leftarrow \theta - \eta \nabla \theta$
     \State $\phi \leftarrow \phi - \eta \nabla \phi$
     \EndWhile
@@ -299,8 +310,8 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
     \While{not converged} \Comment{Train networks}
     \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \State $\ell(\theta, \phi) = \|s_{t+1} - \tilde{s}_{t+1} \|_2^2$
+    \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+    \State $\ell(\theta, \phi) = \|s_{t+1} - \hat{s}_{t+1} \|_2^2$
     \State $\theta \leftarrow \theta - \eta \nabla \theta$
     \State $\phi \leftarrow \phi - \eta \nabla \phi$
     \EndWhile
@@ -475,9 +486,14 @@ The main difference is that we did not use a prior network at training time, did
   \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
   \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
   \caption{}
-    \label{fig:gull}
   \end{subfigure}
-  \caption{Best-of-$k$ performance on the BAIR data set, where the best PSNR and SSIM out of 100 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. a) Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network. b) Comparison to VAE-based approaches.}
+  \caption{
+    \textbf{Best-of-$k$ performance on the BAIR data set.}
+    The best PSNR and SSIM out of 100 generated samples compared to the test sample is reported.
+    Shading indicates $95\%$ confidence interval.
+    \textbf{(a)} Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network.
+    \textbf{(b)} Comparison to VAE-based approaches.
+  }
   \label{bair}
 \end{figure}
 
@@ -529,7 +545,11 @@ In particular, this number can grow exponentially with the number of time steps 
   \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
 %  \fbox{\rule[-.5cm]{0cm}{4cm}
 %    \rule[-.5cm]{4cm}{0cm}}
-  \caption{Best-of-$k$ performance on the NGSIM-I80 data set, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
+  \caption{
+    \textbf{Best-of-$k$ performance on the NGSIM-I80 data set.}
+    The best PSNR out of 200 generated samples compared to the test sample is reported.
+    Shading indicates $95\%$ confidence interval.
+  }
   \label{best-of-k-i80}
 \end{figure}
 
@@ -658,7 +678,7 @@ The state $s_t$ at a given time step is a list $(i_t, p_t)$. In addition to pred
 The per-timestep prediction loss which all the models optimize is given by:
 
 \begin{equation}
-\ell(\tilde{s}_t, s_t) = \|\tilde{i}_t - i_t \|_2^2 + \| \tilde{p}_t - p_t \|_2^2 + \| \tilde{c}_t - c_t \|_2^2
+\ell(\hat{s}_t, s_t) = \|\hat{i}_t - i_t \|_2^2 + \| \hat{p}_t - p_t \|_2^2 + \| \hat{c}_t - c_t \|_2^2
 \end{equation}
 
 The architectural components used by the models are listed in the table below.
@@ -694,11 +714,11 @@ For the \modelname, $f_\phi$ represents the network in equation \ref{update-eqn}
 For the VAE, $f_\phi$ represent the posterior network and outputs the parameters $(\mu, \sigma)$ of a diagonal Gaussian which the latent vector $z$ is sampled from.
 All models are trained with ADAM \citep{ADAM} using a learning rate of 0.0001.
 The \modelname and VAE models have their encoder and decoder initialized with the encoder and decoder of the deterministic model to speed up training, and both have a latent code size of $|z|=32$.
-The \modelname is trained to optimize the loss $\ell(s_t, \tilde{s}_t)$.
+The \modelname is trained to optimize the loss $\ell(s_t, \hat{s}_t)$.
 The VAE additionally includes a KL term and is trained to minimize the following loss:
 
 \begin{equation}
-  \ell_{\text{VAE}} = \ell(s_t, \tilde{s_t}) + \beta \cdot \mbox{KL}(\mathcal{N}(0, I), \mathcal{N}(\mu, \sigma))
+  \ell_{\text{VAE}} = \ell(s_t, \hat{s_t}) + \beta \cdot \mbox{KL}(\mathcal{N}(0, I), \mathcal{N}(\mu, \sigma))
 \end{equation}
 
 We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001, 0.00001 \}$ in an initial search, and found that values greater than $0.0001$ yielded image predictions which resembled those of the baseline model.
@@ -736,20 +756,20 @@ We therefore used $0.0001$ in subsequent experiments.
 We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
 Here we argue that the best-of-$k$ metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} becomes less meaningful as the number of possible futures becomes large.
 Consider the task of modeling a distribution of one-hot vectors, where each sample is a binary vector with all zeros except for a single $1$, whose index is chosen uniformly between $1$ and $n$.
-A baseline model which always predicts the average $\tilde{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$. A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
+A baseline model which always predicts the average $\hat{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$. A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
 Curves of both of these loss functions for different $n$ are shown in Figure \ref{expected-loss}.
 These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the deterministic baseline according to this metric.
 
 
-The baseline model always produces the same prediction $\tilde{y} = (\frac{1}{n}, ..., \frac{1}{n})$. Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
+The baseline model always produces the same prediction $\hat{y} = (\frac{1}{n}, ..., \frac{1}{n})$. Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
 \begin{align}
-  \mathbb{E}[\mathcal{L}_{\mbox{baseline}}] &= \sqrt{\sum_{i=1}^n (\tilde{y}_i - y_i)^2} \\
+  \mathbb{E}[\mathcal{L}_{\mbox{baseline}}] &= \sqrt{\sum_{i=1}^n (\hat{y}_i - y_i)^2} \\
   &= \sqrt{(1-\frac{1}{n})^2 + (n-1)\Big ( \frac{1}{n} \Big )^2} \\
   &= \sqrt{\frac{(n-1)^2 + (n-1)}{n^2}} \\
   &= \sqrt{\frac{n-1}{n}}
 \end{align}
 
-To compute the best-of-$k$ loss, the true stochastic model produces $k$ samples of the same form as the one drawn from the true distribution, i.e. $\tilde{y}_k = (0, ..., 0, 1, 0, ..., 0)$, where the non-zero index is chosen uniformly from $1$ to $n$.
+To compute the best-of-$k$ loss, the true stochastic model produces $k$ samples of the same form as the one drawn from the true distribution, i.e. $\hat{y}_k = (0, ..., 0, 1, 0, ..., 0)$, where the non-zero index is chosen uniformly from $1$ to $n$.
 Let $j$ denote the non-zero index of the sample drawn from the true distribution and $i_1, i_2, ..., i_k$ non-zero indices of the samples output by the stochastic model.
 The probability of each sample \textit{not} matching $y_j$ is equal to $p=\frac{n-1}{n}$.
 Therefore, the probability of none of the generated samples matching $y_j$ is equal to the cumulative distribution function of a binomial random variable $B(k, p)$, denoted $F(k, k, p)$.
@@ -784,8 +804,11 @@ Putting this together, the expected best-of-$k$ loss is given by:
     \caption{$n=1000$}
     \label{fig:mouse}
   \end{subfigure}
-  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
-  \end{figure}
+  \caption{
+    \textbf{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$.}
+    As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}
+  \label{expected-loss}
+\end{figure}
 
 
 
