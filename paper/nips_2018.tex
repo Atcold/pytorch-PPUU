@@ -30,6 +30,7 @@
 \usepackage{algorithm}
 \usepackage{graphicx}
 \usepackage{multirow}
+\usepackage{comment}
 %\usepackage{subfig}
 \usepackage{subcaption}
 \usepackage[usenames,dvipsnames]{color}
@@ -38,6 +39,9 @@
 
 \usepackage{amsmath}
 \usepackage[noend]{algpseudocode}
+
+\newcommand{\modelname}{TENet }
+
 
 \title{Target Encoding Networks}
 
@@ -166,6 +170,87 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
 %In our experiments we found setting the dimension of $z$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
 
 
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+  \begin{algorithm}[H]
+    \caption{Build Stochastic Model}
+  \begin{algorithmic}[1]
+    \State \textbf{Input} Training set $\mathcal{D}$.
+    \State Initialize networks $f_\theta, f_\phi$
+    \While{not converged}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State $\tilde{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+    \State $\ell(\theta, \phi) = \|s_{t+1} - \tilde{s}_{t+1} \|_2^2$
+    \State $\theta \leftarrow \theta - \eta \nabla \theta$
+    \State $\phi \leftarrow \phi - \eta \nabla \phi$
+    \EndWhile
+    \State $\mathcal{Z} \leftarrow \varnothing$
+    \For{$i = 1:N_Z$}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
+    \EndFor
+    \Return $f_\theta, \mathcal{Z}$
+    \State
+  \end{algorithmic}
+  \end{algorithm}
+\end{minipage}%
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+\begin{algorithm}[H]
+  \caption{Sampling Procedures}\label{algo-sample}
+  \begin{algorithmic}[1]
+    \Procedure{KNN}{$\mathcal{Z}, z, K$}
+    \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
+    \State \textbf{return} $\mathcal{S}$
+    \EndProcedure
+
+    \Procedure{SampleUniform}{$\mathcal{Z}$}
+    \State Sample $z \sim \mathcal{Z}$ uniformly at random
+    \State \textbf{return} $z$
+    \EndProcedure
+
+    \Procedure{SampleKNN}{$\mathcal{Z}, z, K$}
+    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, K)$
+    \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
+    \State \textbf{return} $z$
+    \EndProcedure
+
+    \Procedure{SampleMDN}{$\mathcal{Z}, f_\psi, s_{1:t}$}
+    \State $(\pi, \mu, \sigma) = f_\psi(s_{1:t})$
+    \State $z^* \sim \mbox{GMM}(\pi, \mu, \sigma)$
+    \State $\{z\} \gets \textsc{KNN}(\mathcal{Z}, z^*, 1)$
+    \State \textbf{return} $z$
+    \EndProcedure
+    \State
+  \end{algorithmic}
+\end{algorithm}
+\end{minipage}
+
+\begin{algorithm}[h]
+  \caption{Generate Sequence}\label{algo-gen}
+  \begin{algorithmic}[1]
+    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
+    \For{j = 1:T}
+    \State $z \gets \textsc{Sample}(\mathcal{Z})$
+    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
+    \EndFor
+    \Return $s_{1:(t+T)}$
+  \end{algorithmic}
+\end{algorithm}
+
+
+
+
+
+
+
+
+
+\begin{comment}
 \begin{algorithm}[t]
   \caption{Build Stochastic Model}\label{algo-train}
   \begin{algorithmic}[1]
@@ -188,7 +273,7 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
     \Return $f_\theta, \mathcal{Z}$
   \end{algorithmic}
 \end{algorithm}
-
+\end{comment}
 
 
 \subsection{Sampling}
@@ -233,7 +318,7 @@ If additional speedups are required, we note that finding nearest neighbors is a
 
 
 
-
+\begin{comment}
 \begin{algorithm}[t]
   \caption{Sampling Procedures}\label{algo-sample}
   \begin{algorithmic}[1]
@@ -263,20 +348,9 @@ If additional speedups are required, we note that finding nearest neighbors is a
     \EndProcedure
   \end{algorithmic}
 \end{algorithm}
+\end{comment}
 
 
-
-\begin{algorithm}[t]
-  \caption{Generate Sequence}\label{algo-gen}
-  \begin{algorithmic}[1]
-    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
-    \For{j = 1:T}
-    \State $z \gets \textsc{Sample}(\mathcal{Z})$
-    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
-    \EndFor
-    \Return $s_{1:(t+T)}$
-  \end{algorithmic}
-\end{algorithm}
 
 
 
@@ -317,6 +391,9 @@ However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-M
 In contrast, the NGSIM I-80 data set has a relatively large number of cars per context image, as shown in figure \ref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other data sets used in the literature.
 
+
+
+
 \begin{figure}
   \centering
     \includegraphics[width=\textwidth]{images/I-80}
@@ -339,26 +416,6 @@ We therefore believe this prediction tasks offers unique features which compleme
   }
 \end{figure}
 
-\begin{figure}
-  \centering
-  \begin{subfigure}[b]{0.5\textwidth}
-    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
-  \end{subfigure}
-  \caption{Cars per context state}
-  \label{car-statistics}
-\end{figure}
-
-%We trained our latent variable forward model on a synthetic data set first --- where we are in partial control of the stochasticity of the data --- and on real vehicle trajectories afterwards.
-
-
-\subsection{NGSIM I-80 freeway data set}
-
-% \begin{figure}
-%   \centering
-%   \includegraphics[width=4cm]{figures/I-80.png}
-%   \caption{I-80 section schematic.}
-% \end{figure}
-
 
 \section{Experiments}
 
@@ -377,11 +434,24 @@ We also set the dimension of $z$ to be lower (2 dimensions) and trained the mode
 
 \begin{figure}
   \centering
-  \includegraphics[width=0.4\textwidth]{images/bair_ssim.pdf}
-  \includegraphics[width=0.4\textwidth]{images/bair_psnr.pdf}
-%  \fbox{\rule[-.5cm]{0cm}{4cm}
-%    \rule[-.5cm]{4cm}{0cm}}
-  \caption{Best-of-$k$ performance on the BAIR data set, where the best PSNR and SSIM out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
+  \begin{subfigure}[b]{\textwidth}
+    \centering
+  \includegraphics[width=0.45\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.45\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
+  \caption{}
+    \label{fig:gull}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{\textwidth}
+    \centering
+  \includegraphics[width=0.45\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.45\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
+    \label{fig:gull}
+  \caption{}
+  \end{subfigure}
+
+
+  \caption{Best-of-$k$ performance on the BAIR data set, where the best PSNR and SSIM out of 100 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. a) Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network. b) Comparison to VAE-based approaches.}
   \label{bair}
 \end{figure}
 
@@ -392,14 +462,14 @@ Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in Figure \r
 
 %To test the generality of our video prediction model, we also evaluated it on two other video prediction data sets used in the literature: Stochastic Moving MNIST introduced in \citep{Denton2018} and the BAIR robot pushing data set originally introduced in \citep{Ebert17} and used for video prediction in \citep{Babaeizadeh2018, Denton2018}.
 
-Our AE-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of AE-LP, AE-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the AE-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings as well as the uniform variant can be found in the Appendix.
+Our \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings as well as the uniform variant can be found in the Appendix.
 Interestingly, we found that the position of the $z_t$ closely reflected the position of the robotic arm.
 The fact that our model is able to achieve good performance using a latent variable of such small size (2 dimensions) also shows that this data set is in fact quite simple.
 
 
 \subsection{NGSIM-I80 Dataset}
 
-We next report results on the NGSIM-I80 Dataset. Here we again compared our AE architecture to a VAE-based model with an identical architecture except for the different loss function and sampling procedure.
+We next report results on the NGSIM-I80 Dataset. Here we again compared our \modelname architecture to a VAE-based model with an identical architecture except for the different loss function and sampling procedure.
 We conditioned the model on sequences of 10 initial states, provided it a sequence of 20 actions and trained it to predict the subsequent 20 states corresponding to those actions.
 This corresponds to a setting where the model is required to evaluated different candidate action sequences by generating predictions corresponding to those actions.
 We used an autoregressive model taking 10 consecutive states as input and producing a prediction for the next state as well as the cost at the following timestep; the predicted state is then concatenated with the 9 previous states and input back into the model; this procedure is repeated 20 times, resulting in 20 predicted states which are compared to the ground truth states to produce a loss.
@@ -415,117 +485,19 @@ This is evidence that the best-of-$k$ metric should be interpreted with caution 
 In particular, the number of possible future states can grow exponentially with the number of timesteps into the future which are predicted.
 
 
-Since we are also interested in measuring the ability of models to generate predictions over long time horizons, we provide a complementary measure where we train an separate model to distinguish between real and generated images after the stochastic model has been trained.
-This has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however the approach is applicable to generative models more broadly.
-Here
-
-
-\begin{table}
-  \caption{Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds. $p$-value indicates whether the difference between cVAE and AE-LP scores is statistically significant according to a Wilcoxon rank-sum test.}
-  \label{critic-table}
-  \centering
-  \begin{tabular}{l|l|lll}
-    \toprule
-    Training iteration     & Deterministic & cVAE & AE-LP & $p$-value \\
-    \midrule
-    500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
-    1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
-    1500 & 0.00095 & 0.00168 & \textbf{0.00391} & 0.0068 \\
-    2000 & 0.00059 & 0.00074 & \textbf{0.00154} & 0.0002 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-
-
-
-
-
-\begin{itemize}
-\item Gradient of $z$ vectors for single timestep
-\end{itemize}
-
+Since we are also interested in measuring the ability of models to generate predictions over long time horizons, we provide a complementary measure where we train an separate classifier to distinguish between real and generated images after the stochastic model has been trained.
+This approach has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however it is applicable to generative models more broadly.
+After the critic is trained to classify real from generated sequences (conditioned on initial sequences drawn from the training set), we use it to produce predictions for sequences generated conditioned on initial sequences drawn from the testing set.
+We use the critic predictions as scores to evaluate the quality of generated sequences, which corresponds to the GC criterion in \citep{GANeval}.
+To help control for factors of variation inherent in the stochastic optimization process of training the critic (such as the order in which samples are presented, weight initialization and gradient noise due to small minibatches), we train the critic on all three models we wish to evaluate (deterministic, cVAE and \modelname) jointly.
+More specifically, we construct minibatches where the negatively labeled sequences are produced by the three generative models in equal proportion, and the positively labeled sequences are drawn from the training set.
+The critic is trained on this binary classification problem, and after training produces scores for each of the three generative models.
+This process is described explicitly in Algorithm \ref{algo-critic}.
 
 
 \begin{figure}
   \centering
-  \begin{subfigure}[b]{0.45\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_i80.pdf}
-    \caption{A gull}
-    \label{fig:gull}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.45\textwidth}
-    \includegraphics[width=\textwidth]{images/z_gradient-crop.pdf}
-    \caption{A tiger}
-    \label{fig:tiger}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \caption{Pictures of animals}\label{fig:animals}
-  \end{figure}
-
-
-
-
-
-
-
-
-
-
-\begin{figure}
-  \centering
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_i80.pdf}
-    \caption{Best-of-$k$ measure}
-    \label{fig:gull}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.25\textwidth}
-  \centering
-  \begin{tabular}{l|l|lll}
-    \toprule
-    Steps     & Det & cVAE & AE-LP & $p$-value \\
-    \midrule
-    500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
-    1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
-    1500 & 0.00095 & 0.00168 & \textbf{0.00391} & 0.0068 \\
-    2000 & 0.00059 & 0.00074 & \textbf{0.00154} & 0.0002 \\
-    \bottomrule
-  \end{tabular}
-      \caption{Independent Critic Scores}
-    \label{fig:tiger}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-      \caption{Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds. $p$-value indicates whether the difference between cVAE and AE-LP scores is statistically significant according to a Wilcoxon rank-sum test.}
-
-  \end{figure}
-
-
-
-
-
-
-
-
-
-\subsection{Bair Robot Pushing Dataset}
-
-
-
-
-\subsection{NGSIM-80 Driving Dataset}
-
-
-
-
-\begin{figure}
-  \centering
-  \includegraphics[width=0.5\textwidth]{images/best_of_k_i80.pdf}
+  \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
 %  \fbox{\rule[-.5cm]{0cm}{4cm}
 %    \rule[-.5cm]{4cm}{0cm}}
   \caption{Best-of-$k$ performance on the NGSIM-I80 data set, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
@@ -537,19 +509,23 @@ Here
 
 
 \begin{table}
-  \caption{Timing for NGSIM-I80 data set}
-  \label{sample-table}
+  \caption{Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds. $p$-value indicates whether the difference between cVAE and \modelname-LP scores is statistically significant according to a Wilcoxon rank-sum test.}
+  \label{critic-table}
   \centering
-  \begin{tabular}{lll}
+  \begin{tabular}{l|l|lll}
     \toprule
-    Operation     & Time (s) \\
+    Training iteration     & Deterministic & cVAE & \modelname-LP & $p$-value \\
     \midrule
-    Encoding & 0.0014  \\
-    Decoding     & 0.0024 \\
-    NN search over 100K codes & 0.0005      \\
+    500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
+    1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
+    1500 & 0.00095 & 0.00168 & \textbf{0.00391} & 0.0068 \\
+    2000 & 0.00059 & 0.00074 & \textbf{0.00154} & 0.0002 \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+
+
 
 
 
@@ -620,8 +596,8 @@ The architectural components used by the models are listed in the table below.
     & State Decoder & 2-layer MLP with 128 hidden units, size 5376-128-128-4 \\
         & Cost Predictor & 2-layer MLP with 128 hidden units, size 5376-128-128-1 \\
     \hline
-    $f_\phi$ & Frame Encoder & 3-layer convnet with 128 feature maps followed by 2-layer MLP \\ & & with 128 hidden units, size 5376-128-128-$|z|$ (for AE) \\
-             &               & or 5376-128-128 (for VAE) \\
+    $f_\phi$ & Frame Encoder & 3-layer convnet with 128 feature maps followed by 2-layer MLP \\ & & with 128 hidden units, size 5376-128-128-$|z|$ (for \modelname) \\
+             &               & or 5376-128-128 (for V\modelname) \\
     \hline
     \bottomrule
   \end{tabular}
@@ -629,11 +605,11 @@ The architectural components used by the models are listed in the table below.
 
 
 The deterministic model only uses $f_{enc}$ and $f_{dec}$.
-For the AE, $f_\phi$ represents the network in equation \ref{update-eqn}.
+For the \modelname, $f_\phi$ represents the network in equation \ref{update-eqn}.
 For the VAE, $f_\phi$ represent the posterior network and outputs the parameters $(\mu, \sigma)$ of a diagonal Gaussian which the latent vector $z$ is sampled from.
 All models are trained with ADAM \citep{ADAM} using a learning rate of 0.0001.
-The AE and VAE models have their encoder and decoder initialized with the encoder and decoder of the deterministic model to speed up training, and both have a latent code size of $|z|=32$.
-The AE is trained to optimize the loss $\ell(s_t, \tilde{s}_t)$.
+The \modelname and VAE models have their encoder and decoder initialized with the encoder and decoder of the deterministic model to speed up training, and both have a latent code size of $|z|=32$.
+The \modelname is trained to optimize the loss $\ell(s_t, \tilde{s}_t)$.
 The VAE additionally includes a KL term and is trained to minimize the following loss:
 
 \begin{equation}
@@ -644,8 +620,29 @@ We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001
 We therefore used $0.0001$ in subsequent experiments.
 
 
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.5\textwidth}
+    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
+  \end{subfigure}
+  \caption{Cars per context state}
+  \label{car-statistics}
+\end{figure}
 
 
+\begin{table}
+  \caption{NGSIM-I80 dataset statistics}
+  \label{i80-stats}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Training Sequences     & 10454 \\
+    Validation Sequences & 579 \\
+    Testing Sequences & 579 \\
+    Average Sequence Length & 348.7 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 
 
@@ -708,15 +705,72 @@ Putting this together, the expected best-of-$k$ loss is given by:
 
 
 
+\subsection{Critic Evaluation Details}
+
+\begin{algorithm}[h]
+  \caption{Compare Generative Models using an Offline Critic}\label{algo-critic}
+  \begin{algorithmic}[1]
+    \State \textbf{Input} Trained generative models $M_1, M_2, ..., M_{N_{models}}$ we wish to evaluate.
+    \State Initialize critic model $f_{critic}$
+    \For{$j = 1:N_{train}$}
+    \State Sample a sequence $\{s_1, ..., s_T\}$ from the training set.
+    \State $\mathcal{B} \gets \{\}$ \Comment{Initialize minibatch}
+    \State $\mathcal{B}[1] \gets \{s_{t+1}, ..., s_T\}$ \Comment{True Sequence}
+    \For{$i = 1:N_{models}$}
+    \State $\mathcal{B}[i+1] \gets \textsc{Generate}(M_i, \{s_1, ..., s_t\})$ \Comment{Sequence generated by model $M_i$}
+    \EndFor
+    \State $p \gets [ ]$
+    \For{$i = 1:(N+1)$}
+    \State $p[i] \gets f_{critic}(\mathcal{B}[i])$ \Comment{Compute critic predictions}
+    \EndFor
+    \State $t \gets [1, 0, 0, ..., 0]$ \Comment{True/False labels}
+    \State $\mathcal{L}_{critic} \gets $ BinaryCrossEntropy($p, t$)
+    \State $f_{critic} \gets f_{critic} - \eta \nabla{\mathcal{L}_{critic}}$
+    \EndFor
+    \State $S\gets []$ \Comment{Initialize model scores}
+    \For{$j = 1:N_{test}$}
+    \State Sample a sequence $\{s_1, ..., s_T\}$ from the testing set.
+    \For{$i = 1:N_{models}$} \Comment{Score sequence generated by each model}
+    \State $S[i] \gets S[i] + f_{critic}(\textsc{Generate}(M_i, \{s_1, ..., s_t\}))$
+    \EndFor
+    \State $S \gets S / N_{test}$
+    \EndFor
+    \Return $S$ \Comment{Return model scores}
+  \end{algorithmic}
+\end{algorithm}
+
+
+
+\subsection{Timing of Nearest Neighbor Search}
+
+
+\begin{table}
+  \caption{Timing for NGSIM-I80 data set}
+  \label{sample-table}
+  \centering
+  \begin{tabular}{lll}
+    \toprule
+    Operation     & Time (s) \\
+    \midrule
+    Encoding & 0.0014  \\
+    Decoding     & 0.0024 \\
+    NN search over 100K codes & 0.0005      \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+\begin{comment}
 \subsection{Additional Video Prediction Results}
 
 \begin{figure}
   \centering
-  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_ssim.pdf}
-  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_psnr.pdf}
+  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_psnr-crop.pdf}
   \caption{}
   \label{bair}
 \end{figure}
+\end{comment}
 
 
 \begin{figure}
