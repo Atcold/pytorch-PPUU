@@ -349,7 +349,7 @@ All the approaches above have a memory footprint which grows with the size of $\
 In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
 The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
 The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
-In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (details are in the Experiments section).
+In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see table \ref{nn-search-timing} in the Appendix).
 If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
 
 
@@ -637,16 +637,18 @@ The architectural components used by the models are listed in the table below.
     \toprule
     Network & Sub-Networks     & Architecture    \\
     \midrule
-    \multirow{3}{*}{$f_{enc}$} & Image Encoder & 3-layer convnet with 128 feature maps, reshaped output size 5376 \\
+    \multirow{3}{*}{$f_\text{enc}$} & Image Encoder & 3-layer convnet with 128 feature maps, reshaped output size 5376 \\
     & State Encoder & 2-layer MLP with 128 hidden units, size 4-128-128-5376 \\
     & Action Encoder & 2-layer MLP with 128 hidden units, size 2-128-128-5376  \\
     \hline
-        \multirow{3}{*}{$f_{dec}$} & Image Decoder & 3-layer deconvnet with 128 feature maps \\
+        \multirow{3}{*}{$f_\text{dec}$} & Image Decoder & 3-layer deconvnet with 128 feature maps \\
     & State Decoder & 2-layer MLP with 128 hidden units, size 5376-128-128-4 \\
         & Cost Predictor & 2-layer MLP with 128 hidden units, size 5376-128-128-1 \\
     \hline
     $f_\phi$ & Frame Encoder & 3-layer convnet with 128 feature maps followed by 2-layer MLP \\ & & with 128 hidden units, size 5376-128-128-$|z|$ (for \modelname) \\
-             &               & or 5376-128-128 (for V\modelname) \\
+    &               & or 5376-128-128 (for V\modelname) \\
+    \hline
+    $f_\text{exp}$ & Expansion Network & 2-layer MLP with 128 hidden units, size $|z|$-128-128-5376. \\
     \hline
     \bottomrule
   \end{tabular}
@@ -794,16 +796,16 @@ Putting this together, the expected best-of-$k$ loss is given by:
 
 
 \begin{table}
-  \caption{Timing for NGSIM-I80 data set}
-  \label{sample-table}
+  \caption{Timing for different operations. The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM-I80. }
+  \label{nn-search-timing}
   \centering
   \begin{tabular}{lll}
     \toprule
-    Operation     & Time (s) \\
+    Operation     & BAIR & NGSIM-I80 \\
     \midrule
-    Encoding & 0.0014  \\
-    Decoding     & 0.0024 \\
-    NN search over 100K codes & 0.0005      \\
+    Encoding & 0.0012 & 0.0014  \\
+    Decoding  & 0.0028   & 0.0024 \\
+    NN search & 0.0007 & 0.0005      \\
     \bottomrule
   \end{tabular}
 \end{table}
