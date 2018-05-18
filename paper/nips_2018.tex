@@ -562,8 +562,15 @@ In particular, the number of possible future states can grow exponentially with 
   \caption{
     \textbf{Predicted states visual comparison $\tau$-times-steps in the future.}
     Four alternative futures $\hat{s}_{t+(1:\tau)}$ are visualised and compared.
-    Multiple frames are shown using the \emph{ghost} function $g(x_{t+(1:\tau)})$, which superimpose 3 frames 5 time steps apart, backwards, starting from the last one $t + \tau$, where $\tau = 15$.
-    Each of the four images to the left is the ghost function corresponding to the $k$-th future prediction generated with the sequence of latent variable $z_{1:\tau}^{(k)}$.
+    Multiple frames are shown using the \emph{ghost} function $g(x_{t+(1:\tau)})$, which superimpose 3 frames 5 time steps apart, backwards, starting from the last one $t + \tau$, where $\tau = 15 = 1.5\,\text{s}$.
+    \textbf{Left:} each of the four images is the ghost function corresponding to the $k$-th future prediction, generated with the sequence of latent variable $z_{1:\tau}^{(k)}$.
+    \textbf{Centre, black box:} ghost function of the true future $s_{t+(1:\tau)}$.
+    \textbf{Right:} differential images between predictions  and ground truth (GT) $\tau$-time-steps in the future.
+    %\textbf{Right:} differential images between predictions (\textcolor{LimeGreen}{green vehicle} and \textcolor{OrangeRed}{red lanes}) and ground truth (GT, \textcolor{Mulberry}{purple vehicles} and \textcolor{PineGreen}{dark green lanes}) $\tau$-time-steps in the future.
+    \textcolor{Orange}{\textbf{Orange box:}} the predicted vehicle (\textcolor{LimeGreen}{green}) is much ahead than GT (\textcolor{Mulberry}{purple}).
+    \textcolor{ProcessBlue}{\textbf{Blue box:}} in future 1 the two vehicles (\textcolor{LimeGreen}{green}) move in opposite relative direction wrt GT (\textcolor{Mulberry}{purple}), in future 2 both vehicles (\textcolor{LimeGreen}{green}) are slower than GT (\textcolor{Mulberry}{purple}).
+    \textcolor{Red}{\textbf{Red boxes:}} the ego car, turning to the right, makes appear \textcolor{OrangeRed}{red}-\textcolor{PineGreen}{green} lanes on the top, and \textcolor{PineGreen}{green}-\textcolor{OrangeRed}{red} lanes on the bottom.
+    \textcolor{LimeGreen}{\textbf{Green box:}} a new car (\textcolor{LimeGreen}{green}) appears in the context state.
   }
   \label{I-80_qual}
 \end{figure}
