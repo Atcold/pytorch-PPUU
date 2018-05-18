@@ -545,7 +545,11 @@ In particular, this number can grow exponentially with the number of time steps 
   \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
 %  \fbox{\rule[-.5cm]{0cm}{4cm}
 %    \rule[-.5cm]{4cm}{0cm}}
-  \caption{Best-of-$k$ performance on the NGSIM-I80 data set, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
+  \caption{
+    \textbf{Best-of-$k$ performance on the NGSIM-I80 data set.}
+    The best PSNR out of 200 generated samples compared to the test sample is reported.
+    Shading indicates $95\%$ confidence interval.
+  }
   \label{best-of-k-i80}
 \end{figure}
 
@@ -800,8 +804,11 @@ Putting this together, the expected best-of-$k$ loss is given by:
     \caption{$n=1000$}
     \label{fig:mouse}
   \end{subfigure}
-  \caption{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$. As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}\label{expected-loss}
-  \end{figure}
+  \caption{
+    \textbf{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$.}
+    As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}
+  \label{expected-loss}
+\end{figure}
 
 
 
