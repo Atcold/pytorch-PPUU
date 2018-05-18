@@ -31,6 +31,7 @@
 \usepackage{graphicx}
 \usepackage{multirow}
 \usepackage{comment}
+\usepackage[bottom]{footmisc}
 %\usepackage{subfig}
 \usepackage{subcaption}
 \usepackage[usenames,dvipsnames]{color}
@@ -99,31 +100,31 @@
 \section{Introduction}
 
 Learning to predict future states of a complex time series, such as sensory inputs, is an important research problem with applications in unsupervised learning, planning, and compression.
-A significant difficulty is the inherently uncertain nature of many such time series: for example, given an initial part of a video sequence, there are often many ways in which the rest of the sequence can unfold.
-The space of possible futures can form a set of discrete modes, a connected manifold, or some combination of these, and training with classical $\ell_1$ or $\ell_2$ losses will predict the median or the mean of the set of possible futures, which often does not itself constitute a valid prediction.
+A significant difficulty is the inherently uncertain nature of many such time series: for example, given the initial frames of a video sequence, there are often many ways in which the rest of the sequence can unfold.
+The set of possible futures can form a set of discrete modes, a connected manifold, or some combination thereof, and training with classical $\ell_1$ or $\ell_2$ losses will predict the median or the mean of the set of possible futures, which often does not itself constitute a valid prediction.
 
-One approach is to learn the parameters of a distribution over the set of possible future states, for example a Gaussian Mixture Model \citep{mixture-density-networks}.
-This has been successfully used when the dimensionality is low, but is not practical when the states are high-dimensional.
-More recently, several works have been proposed which use the framework of conditional Variational AutoEncoders (VAEs) for generating images and video frames.
-VAEs assume a prior over latent variables and include a loss term measuring the Kullback–Leibler (KL) divergence between this prior and the distribution output by the posterior network.
-This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
-Simple priors, such as diagonal Gaussians, are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
-One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
-Therefore, careful tuning of the prior term, or annealing schedules, are often required.
+One approach is to learn to predict the parameters of a distribution over the set of possible future states, for example a Gaussian Mixture Model \citep{mixture-density-networks}.
+This can be effective when the dimensionality is low, but is not practical when the states are high-dimensional.
+Another approach is through the framework of Variational Autoencoders (VAEs), which assume a simple prior over latent variables and include a loss term measuring the divergence between the assumed prior and observed distribution.
+Choosing a simple prior, such as a diagonal Gaussian, gives a simple closed-form expression for this term, but also can also cause either mode collapse or poor reconstructions due to the conflict between reconstruction and prior matching terms, and can require careful tuning or annealing schedules.
+%More recently, several works have been proposed which use the framework of conditional Variational AutoEncoders (VAEs) for generating images and video frames.
+%VAEs assume a prior over latent variables and include a loss term measuring the Kullback–Leibler (KL) divergence between this prior and the distribution output by the posterior network.
+%This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
+%Simple priors, such as diagonal Gaussians, are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
+%One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
+%Therefore, careful tuning of the prior term, or annealing schedules, are often required.
 
 In this work, we propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time.
-It is simple to implement, contains a single term in the loss function, and does not run the risk of mode collapse.
-By removing the prior assumption, we also do away with the need for a regularization term at training time, which enforces a match between prior and posterior distributions, leading to a simple and easy-to-optimize loss.
+%It is simple to implement, contains a single term in the loss function, and does not run the risk of mode collapse.
+By removing the prior assumption, we also do away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk mode collapse.
 After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
 Through this non-parametric sampling procedure, we naturally obtain samples which are on the manifold of latent variables.
 If the prior distribution over latent variables is dependent on the input, it may additionally be necessary to restrict our sampling to a limited region of the manifold.
 We therefore propose and empirically investigate two ways of achieving this: (1) through a smoothness assumption on the trajectories of latent variables along the manifold, which translates into a nearest-neighbor based sampling scheme, and (2) by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold.
 
-The contributions of this work are the following:
-\begin{itemize}
-\item New large-scale dataset with applications for autonomous driving
-\item We introduce a novel method for prediction under uncertainty which is simple to train, does not make assumptions about a prior distribution over latent variables or require sampling at training time, and is able to generate diverse predictions many timesteps into the future.
-\end{itemize}
+In addition to the proposed model, which we show performs comparably or better to existing approaches on a standard video prediction dataset, we also introduce a new real-world dataset with applications to autonomous driving.
+This dataset consists of a large number of driving trajectories taken from mounted traffic cameras, which we preprocess to form a representation consistent with radar or lidar readings received by autonomous vehicle sensors.
+Modeling and anticipating the behavior of surrounding drivers can be framed as a stochastic prediction problem, whose solution can allow an autonomous vehicle to anticipate or avoid unsafe situations as well as perform model-based planning.
 
 
 \section{Predictive Model}
@@ -251,8 +252,8 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
     \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
     \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\mathcal{L}_\text{MDN} = \sum_i \tau_i \frac{\text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]}{\sqrt{(2\pi)^k |\Sigma_i|}}$
-%      \State $\mathcal{L}_\text{MDN} = \text{pdf}_{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnote{this refers to the probability density function of a Gaussian mixture model with parameters ($\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, i.e. $\sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}}\text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
+%    \State $\mathcal{L}_\text{MDN} = $
+      \State $\mathcal{L}_\text{MDN} = \text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnotemark
     \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
     \EndWhile
   \end{algorithmic}
@@ -277,6 +278,7 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
   \end{algorithmic}
 \end{algorithm}
 \end{minipage}
+\footnotetext{this refers to the probability density function of a Gaussian mixture model, i.e. $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
 
 
 
@@ -406,7 +408,7 @@ The general architecture and loss is similar in both our works, however their fo
 
 \section{Data sets}
 
-In addition to evaluating our method on existing data sets used in the literature, we also use a new, large-scale data set for training and evaluating deep predictive models.
+%In addition to evaluating our method on existing data sets used in the literature, we also use a new, large-scale data set for training and evaluating deep predictive models.
 The Next Generation SIMulation program's Interstate 80 (NGSIM I-80) freeway data set \cite{halkias2006ngsim} captures 3 segments of 15 minutes each of a 0.5 km long section of the eastbound I-80 in the San Francisco Bay area in Emeryville in 2005.
 Seven cameras, mounted on the top of a 30-story building, record a segment of highway including 6 lanes and an onramp with a frame rate of $10\,\text{Hz}$.
 A viewpoint transformation is applied to rectify the perspective, and each vehicle entering the interested section is classified (type), characterised (size), localised (global and local coordinates), and therefore tracked (coordinates over frame count) for its whole journey, totalling over all 5.5k distinct trajectories and 4.5M individual entries.
@@ -602,8 +604,9 @@ This process is described explicitly in Algorithm \ref{algo-critic}.
 \section{Appendix}
 
 
-\subsection{Details for NGSIM-I80 Experiments}
+\subsection{Details for NGSIM-I80 Dataset Experiments}
 
+We first give some additional dataset details.
 After preprocessing, at every time step we have the following items for each car in the video frame:
 
 
