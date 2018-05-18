@@ -348,13 +348,10 @@ Note that Gaussian mixture models can approximate arbitrary distributions given 
 
 %Although they offer increased flexibility, non-parametric approaches to modeling distributions can also bring potential challenges, which we discuss here.
 One potential challenge with using non-parametric approaches to modeling distributions is that the memory and computational cost can increase with the number of points used to construct the estimate, i.e. $\mathcal{Z}$.
+We provide a discussion in Appendix \ref{computational-cost}.
+In our experiments, we found that the cost of exact nearest neighbor searches required by the last two sampling schemes was lower than the cost of forward passes through other parts of the network, hence this did not pose a limitation.
+
 %A possible issue in modeling distributions using non-parametric approaches is that they can trade flexibility for increased memory and computational cost.
-All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
-In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
-The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
-The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
-In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see table \ref{nn-search-timing} in the Appendix).
-If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
 
 
 
@@ -458,17 +455,16 @@ We therefore believe this prediction tasks offers unique features which compleme
 \section{Experiments}
 
 We now describe our experimental results on two real-world datasets.
+We also encourage the reader to view videos at \url{https://sites.google.com/view/targetencodingnetworks/home}.
+
 
 \subsection{BAIR Results}
 
 The BAIR robot pushing dataset \citep{Ebert17} consists of videos of a Sawyer robotic arm randomly moving objects on a table.
 The dataset contains a high degree of stochasticity due to the random arm motion, and also contains real-world objects and backgrounds.
 Following previous work \citep{Babaeizadeh2018, Denton2018}, we condition our model on the first two frames in a video sequence and train it to predict the following 10 frames.
-We used the same model architecture as in \citep{Denton2018}, to isolate factors and better understand the influence of our loss and sampling procedure.
-This architecture consists of a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units.
-Our models were trained using ADAM \citep{ADAM} with a learning rate of 0.002.
-The main difference is that we did not use a prior network at training time, did not include a KL term in the loss function, and instead sampled latents at test time using the approaches described in Section 2.
-We also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p=1$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p=0.5$.
+We used the same model architecture as in \citep{Denton2018}, to isolate factors and better understand the influence of our loss and sampling procedure (details can be found in Appendix \ref{bair-details}.
+The main difference is that we did not use a prior network at training time, did not include a KL term in the loss function, and instead sampled latents at test time using the approaches described in Section 2. We also used a lower-dimensional latent variable, with 2 rather than 32 dimensions as in \citep{Denton2018}.
 
 \begin{figure}
   \centering
@@ -501,26 +497,32 @@ We also set the dimension of $z$ to be lower (2 dimensions) and trained the mode
 
 
 
-We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
+We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match. We refet to this metric in the rest of the paper as the ``best-of-$k$'' metric.
 This method provides some measure of how well the stochastic model covers the space of possible futures, although it does not necessarily reflect the realism of all the generated samples.
 Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in Figure \ref{bair}.
 
 We see that all \modelname variants outperform the deterministic baseline.
 The KNN variant performs better than the uniform, supporting the smoothness assumption that underlies it, and the MDN version with the learned prior network performs best of all.
-Compared to variational-based approaches, \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR, for predictions further into the future the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings can be found in the Appendi.x
+Compared to variational-based approaches, \modelname-LP performs best for the first few predicted timesteps according to both SSIM and PSNR, and for predictions further into the future the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric.
 The fact that our model is able to achieve performance which is similar or better than other state-of-the-art approaches using a latent variable with only two dimensions suggests that this data set is in fact quite simple.
+Please refer to the URL for videos.
 
 
 \subsection{NGSIM-I80 Dataset}
 
 We next report results on the NGSIM-I80 Dataset. Here we again compared our \modelname architecture to a VAE-based model with an identical architecture except for the different loss function and sampling procedure.
-We conditioned the model on sequences of 10 initial states, provided it a sequence of 20 actions and trained it to predict the subsequent 20 states corresponding to those actions.
-This corresponds to a setting where the model is required to evaluate different candidate action sequences by generating predictions corresponding to those actions.
-We used an autoregressive model taking 10 consecutive states as input and producing a prediction for the next state as well as the cost at the following timestep.
+%We conditioned the model on sequences of 10 initial states, provided it a sequence of 20 actions and trained it to predict the subsequent 20 states corresponding to those actions.
+%This corresponds to a setting where the model is required to evaluate different candidate action sequences by generating predictions corresponding to those actions.
+We used an autoregressive model taking 10 consecutive states as input and producing a prediction for the next state as well as a cost at the following timestep.
 The predicted state is then concatenated with the 9 previous states and input back into the model, and this procedure is repeated 20 times, resulting in 20 predicted states which are compared to the ground truth states to produce a loss. Further details of the loss and architecture used can be found in the Appendix.
 
-Results using the best-of-$k$ loss are shown in Figure \ref{best-of-k-i80}.
-Sampling using the KNN scheme offers a significant improvement over the uniform sampling, while using the learned prior network improves performance further, outperforming both the deterministic and VAE models.
+Results using the best-of-$k$ metric are shown in Figure \ref{best-of-k-i80}.
+Sampling using the KNN scheme offers a significant improvement over the uniform sampling, while using the learned prior network improves performance further, outperforming both the deterministic and VAE models for the first few time steps.
+We note an interesting phenomenon: for time steps further into the future, the performance of the deterministic model improves relative to the stochastic models according to the best-of-$k$ metric. It eventually even performs \emph{better}, even though it is clear from visual inspection that the deterministic predictions are actually becoming worse further into the future.
+We provide an explanation of this in Appendix \ref{proof}, along with a proof that the best-of-$k$ metric does indeed favor a deterministic averaging model over an exact model as the number of futures gets large in the case of a simple uniform distribution over one-hot vectors.
+This is evidence that the best-of-$k$ metric should be interpreted with caution when the number of possible futures becomes large.
+In particular, this number can grow exponentially with the number of time steps into the future which are predicted.
+
 
 \begin{figure}[t!]
   \centering
@@ -549,13 +551,6 @@ Sampling using the KNN scheme offers a significant improvement over the uniform 
 
 
 
-We note an interesting phenomenon: for time steps further into the future, the performance of the deterministic model improves relative to the stochastic models according to the best-of-$k$ metric. It eventually even performs \emph{better}, even though it is clear from visual inspection that the deterministic predictions are actually becoming worse further into the future.
-Consider a stochastic prediction task where the future states are $n$ equidistant points (such as the corners of a hypercube).
-As the number of futures gets large, it becomes increasingly unlikely that even a perfect stochastic prediction model (which exactly captures the distribution over future states) will generate the same future state as the one in the test set, and it becomes better (in terms of minimizing expected loss) to predict the average of all future states, which often will not be a valid prediction.
-In the appendix, we give a proof that the best-of-$k$ metric does indeed favor a deterministic averaging model over an exact model as the number of futures gets large for a uniform distribution over one-hot vectors.
-This is evidence that the best-of-$k$ metric should be interpreted with caution when the number of possible futures becomes large.
-In particular, the number of possible future states can grow exponentially with the number of time steps into the future which are predicted.
-
 \begin{figure}[t!]
   \centering
   \includegraphics[width=\textwidth]{images/qualitative_I-80}
@@ -570,16 +565,24 @@ In particular, the number of possible future states can grow exponentially with 
 
 Since we are also interested in measuring the ability of models to generate predictions over long time horizons, we provide a complementary measure where we train an separate classifier to distinguish between real and generated images after the stochastic model has been trained.
 This approach has been used in several works to evaluate GANs \citep{Danihelka17, Rosca17, GANeval}, however it is applicable to generative models more broadly.
-After the critic is trained to classify real from generated sequences (conditioned on initial sequences drawn from the training set), we use it to produce predictions for sequences generated conditioned on initial sequences drawn from the testing set.
+After the critic is trained to classify real from generated sequences (conditioned on initial sequences drawn from the training set), we use it to produce predictions for sequences generated by conditioning on initial sequences drawn from the testing set.
 We use the critic predictions as scores to evaluate the quality of generated sequences, which corresponds to the GC criterion in \citep{GANeval}.
-To help control for factors of variation inherent in the stochastic optimization process of training the critic (such as the order in which samples are presented, weight initialization and gradient noise due to small minibatches), we train the critic on all three models we wish to evaluate (deterministic, cVAE and \modelname) jointly.
-More specifically, we construct minibatches where the negatively labeled sequences are produced by the three generative models in equal proportion, and the positively labeled sequences are drawn from the training set.
-The critic is trained on this binary classification problem, and after training produces scores for each of the three generative models.
-This process is described explicitly in Algorithm \ref{algo-critic}.
+Details of this training procedure and scoring can be found in Appendix \ref{critic-details}.
+
+Resulting scores are shown in Table \ref{critic-table}.
+The deterministic model has the lowest score, the VAE has a higher score, which agrees with its improved perceptual quality, and the \modelname-LP has the highest.
+This provides further evidence that it is able to generate high-quality predictions far into the future.
+
 
 
 
 \section{Conclusion}
+
+In this work, we have made two contributions towards research in stochastic prediction: a new model architecture which is simple to train and does not suffer from mode collapse or posterior mismatch, and a challenging large-scale dataset with real-world applications in autonomous driving.
+We will make this dataset publicly available to the research community in an effort to encourage more research in this area.
+In future work, we plan to apply our stochastic forward model for model-based planning under uncertainty, by backpropagating gradient of predicted costs with respect to input actions.
+%Our preparation of this dataset also makes it straightforward to use for planning, by having agents execute actions which are rendered in the simulator.
+
 
 
 
@@ -620,6 +623,15 @@ This process is described explicitly in Algorithm \ref{algo-critic}.
 
 
 \section{Appendix}
+
+\subsection{Details for BAIR Experiments}
+\label{bair-details}
+
+This architecture consists of a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units.
+Our models were trained using ADAM \citep{ADAM} with a learning rate of 0.002.
+For the \modelname we also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p=1$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p=0.5$.
+
+
 
 
 \subsection{Details for NGSIM-I80 Dataset Experiments}
@@ -712,10 +724,10 @@ We therefore used $0.0001$ in subsequent experiments.
 
 
 
-\subsection{A note on evaluation}
+\subsection{A note on evaluation} \label{proof}
 
 We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
-Here we argue that the metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} is only meaningful when the number of samples generated is of similar magnitude to the number of possible futures.
+Here we argue that the best-of-$k$ metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} becomes less meaningful as the number of possible futures becomes large.
 Consider the task of modeling a distribution of one-hot vectors, where each sample is a binary vector with all zeros except for a single $1$, whose index is chosen uniformly between $1$ and $n$.
 A baseline model which always predicts the average $\tilde{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$. A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
 Curves of both of these loss functions for different $n$ are shown in Figure \ref{expected-loss}.
@@ -772,6 +784,12 @@ Putting this together, the expected best-of-$k$ loss is given by:
 
 
 \subsection{Critic Evaluation Details}
+\label{critic-details}
+
+To help control for factors of variation inherent in the stochastic optimization process of training the critic (such as the order in which samples are presented, weight initialization and gradient noise due to small minibatches), we train the critic on all three models we wish to evaluate (deterministic, cVAE and \modelname) jointly.
+More specifically, we construct minibatches where the negatively labeled sequences are produced by the three generative models in equal proportion, and the positively labeled sequences are drawn from the training set.
+The critic is trained on this binary classification problem, and after training produces scores for each of the three generative models.
+This process is described explicitly in Algorithm \ref{algo-critic}.
 
 \begin{algorithm}[h]
   \caption{Compare Generative Models using an Offline Critic}\label{algo-critic}
@@ -808,6 +826,15 @@ Putting this together, the expected best-of-$k$ loss is given by:
 
 
 \subsection{Timing of Nearest Neighbor Search}
+\label{computational-cost}
+
+
+All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
+In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
+The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
+The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
+In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see table \ref{nn-search-timing}).
+If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
 
 
 \begin{table}
