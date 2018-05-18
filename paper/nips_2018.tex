@@ -114,7 +114,7 @@ Choosing a simple prior, such as a diagonal Gaussian, gives a simple closed-form
 %One issue with VAEs is the so-called ``posterior collapse'' or ``over-regularization'' problem, which is caused by a conflict between the prior matching term and the reconstruction term in the loss function. If the regularization term is too high, this can cause the model to ignore the latent variables altogether in order to avoid a high cost due to the KL term. If the regularization term is too low, this can cause the model to learn a latent variable distribution which does not match with the assumed prior, leading to poor generations at test time.
 %Therefore, careful tuning of the prior term, or annealing schedules, are often required.
 
-In this work, we propose an alternate approach which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time.
+In this work, we propose an new model which does not place any priors on the latent variable distribution and instead relies on a non-parametric or semi-parametric sampling procedure to produce new generations at test time.
 %It is simple to implement, contains a single term in the loss function, and does not run the risk of mode collapse.
 By removing the prior assumption, we also do away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk mode collapse.
 After training, we obtain a non-parametric estimate of the distribution over latent variables by extracting a collection of latent variables from the training set itself, which we then combine with new inputs to obtain generations.
@@ -134,7 +134,7 @@ Modeling and anticipating the behavior of surrounding drivers can be framed as a
 \begin{figure}
   \centering
   \includegraphics[width=0.5\textwidth]{images/ae_train-crop.pdf}
-  \caption{Prediction Model. }
+  \caption{Target-Encoding Network}
 \end{figure}
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
@@ -278,7 +278,7 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
   \end{algorithmic}
 \end{algorithm}
 \end{minipage}
-\footnotetext{this refers to the probability density function of a Gaussian mixture model, i.e. $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
+\footnotetext{this refers to the likelihood of $z_t$ under a Gaussian mixture model with parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, i.e. $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
 
 
 
@@ -503,8 +503,8 @@ Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in Figure \r
 
 We see that all \modelname variants outperform the deterministic baseline.
 The KNN variant performs better than the uniform, supporting the smoothness assumption that underlies it, and the MDN version with the learned prior network performs best of all.
-Compared to variational-based approaches, \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings can be found in the Appendix.
-The fact that our model is able to achieve performance which is at least comparable to state-of-the-art approaches using a latent variable with only two dimensions also shows that this data set is in fact quite simple.
+Compared to variational-based approaches, \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR, for predictions further into the future the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings can be found in the Appendi.x
+The fact that our model is able to achieve performance which is similar or better than other state-of-the-art approaches using a latent variable with only two dimensions suggests that this data set is in fact quite simple.
 
 
 \subsection{NGSIM-I80 Dataset}
@@ -564,7 +564,7 @@ This process is described explicitly in Algorithm \ref{algo-critic}.
 
 
 
-
+\section{Conclusion}
 
 
 
@@ -599,6 +599,9 @@ This process is described explicitly in Algorithm \ref{algo-critic}.
 %\end{table}
 %
 %\section{Final instructions}
+
+
+
 
 
 \section{Appendix}
