@@ -256,45 +256,6 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
 
 
 
-\begin{minipage}[t]{7cm}
-  \vspace{0pt}
-
-  \begin{algorithm}[H]
-    \caption{Train Prior Network}
-    \begin{algorithmic}[1]
-    \State Initialize Mixture Density Network $f_\psi$
-    \While{not converged}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
-    \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-%    \State $\mathcal{L}_\text{MDN} = $
-      \State $\mathcal{L}_\text{MDN} = \text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnotemark
-    \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
-    \EndWhile
-  \end{algorithmic}
-  \end{algorithm}
-\end{minipage}%
-\begin{minipage}[t]{7cm}
-  \vspace{0pt}
-
-\begin{algorithm}[H]
-  \caption{Generate Sequence}\label{algo-sample}
-  \begin{algorithmic}[1]
-    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
-    \For{j = 1:T}
-    \State $z \gets \textsc{Sample}(\mathcal{Z})$
-    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
-    \EndFor
-    \Return $s_{1:(t+T)}$
-    \State
-    \State
-    \State
-    \State
-  \end{algorithmic}
-\end{algorithm}
-\end{minipage}
-\footnotetext{this refers to the likelihood of $z_t$ under a Gaussian mixture model with parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, i.e. $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
-
 
 
 
@@ -431,9 +392,9 @@ An autonomous vehicle equipped with an accurate predictive model of its surround
 A predictive model can also be used for model-based planning, and can be learned from observational data without interacting with the environment.
 
 Second, this data set reflects complex interactions between a large number of agents (in this case vehicle drivers), leading to a challenging prediction problem which can be useful for evaluating new methods more generally.
-Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of Synthetic Moving MNIST digits \citep{Denton2018}, BAIR robot manipulation videos \citep{Ebert17}, or videos of human movements \citep{Human}.
+Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of Synthetic Moving MNIST digits \citep{Denton2018}, BAIR robot manipulation videos \citep{Ebert17}, or videos of human movements \citep{Denton2018, Babaeizadeh2018}.
 These have the advantage of being able to evaluate specific model capabilities in a controlled setting, and have applications in robotics.
-However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (\emph{i.e.}\ the longitudinal and lateral position of the robot arm, which we demonstrate in our experiments).
+However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (i.e. the position of the robot arm, which we demonstrate in our experiments).
 In contrast, the NGSIM I-80 data set has a relatively large number of cars per context image, as shown in figure \ref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other data sets used in the literature.
 
@@ -650,6 +611,49 @@ In future work, we plan to apply our stochastic forward model for model-based pl
 
 
 \section{Appendix}
+
+
+\subsection{Algorithm Details}
+
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+  \begin{algorithm}[H]
+    \caption{Train Prior Network}
+    \begin{algorithmic}[1]
+    \State Initialize Mixture Density Network $f_\psi$
+    \While{not converged}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+    \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+%    \State $\mathcal{L}_\text{MDN} = $
+      \State $\mathcal{L}_\text{MDN} = \text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnotemark
+    \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
+    \EndWhile
+  \end{algorithmic}
+  \end{algorithm}
+\end{minipage}%
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+\begin{algorithm}[H]
+  \caption{Generate Sequence}\label{algo-sample}
+  \begin{algorithmic}[1]
+    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
+    \For{j = 1:T}
+    \State $z \gets \textsc{Sample}(\mathcal{Z})$
+    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
+    \EndFor
+    \Return $s_{1:(t+T)}$
+    \State
+    \State
+    \State
+    \State
+  \end{algorithmic}
+\end{algorithm}
+\end{minipage}
+\footnotetext{this refers to the likelihood of $z_t$ under a Gaussian mixture model with parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, i.e. $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
+
 
 \subsection{Details for BAIR Experiments}
 \label{bair-details}
