@@ -165,7 +165,7 @@ This is accomplished by setting the latent vector $z_t$ to zero with some probab
 This setting encourages the network to continue to extract as much information as possible from the input $s_{1:t}$, rather than simply trying to reconstruct the target, and only use the true target $s_{t+1}$ to reconstruct what cannot be predicted from the input.
 In our experiments, we train with $p=1$ for an initial fixed number of iterations, which corresponds to purely deterministic training, after which we reduce $p$ to incorporate the latent variables encoded from the targets.
 
-A second key point is that the dimension of the latent variable $z_t$ is much lower than the dimension of the states $s_t$. This has two benefits: first, it can further help limit the information content and prevent trivial reconstructions of the targets. Second, it allows us to use non-parametric estimates of the distribution over latent variables using a reasonable number of points, which we detail in the next section.
+A second key point is that the dimension of the latent variable $z_t$ is much lower than the dimension of the states $s_t$. This has two benefits: first, it can further help limit the information content and prevent trivial reconstructions of the targets. Second, it allows us to use non-parametric estimates of the distribution over latent variables using a reasonable number of points, which we detail in the next section. A transformation $f_\text{exp}$ transforms this low-dimensional latent variable to be the same size as the hidden representation, after which it is combined via addition. Note that in the case of a linear transformation, this simply corresponds to combining the latent variable and hidden state via concatenatation.
 
 %In our experiments we found setting the dimension of $z$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
 
@@ -230,8 +230,39 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
 \end{algorithm}
 \end{minipage}
 
-\begin{algorithm}[h]
-  \caption{Generate Sequence}\label{algo-gen}
+
+
+
+
+
+
+
+
+
+
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+  \begin{algorithm}[H]
+    \caption{Train Prior Network}
+    \begin{algorithmic}[1]
+    \State Initialize Mixture Density Network $f_\psi$
+    \While{not converged}
+    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+    \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State $\mathcal{L}_\text{MDN} = \sum_i \tau_i \frac{\text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]}{\sqrt{(2\pi)^k |\Sigma_i|}}$
+%      \State $\mathcal{L}_\text{MDN} = \text{pdf}_{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnote{this refers to the probability density function of a Gaussian mixture model with parameters ($\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, i.e. $\sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}}\text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
+    \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
+    \EndWhile
+  \end{algorithmic}
+  \end{algorithm}
+\end{minipage}%
+\begin{minipage}[t]{7cm}
+  \vspace{0pt}
+
+\begin{algorithm}[H]
+  \caption{Generate Sequence}\label{algo-sample}
   \begin{algorithmic}[1]
     \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
     \For{j = 1:T}
@@ -239,10 +270,13 @@ A second key point is that the dimension of the latent variable $z_t$ is much lo
     \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
     \EndFor
     \Return $s_{1:(t+T)}$
+    \State
+    \State
+    \State
+    \State
   \end{algorithmic}
 \end{algorithm}
-
-
+\end{minipage}
 
 
 
@@ -303,7 +337,7 @@ This approach can be implemented by constructing a $k$-nearest neighbor graph an
 
 \textbf{Learned Prior} \quad
 We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $s_{1:t}$.
-Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\sigma})$ of a Gaussian mixture model and is trained to maximize the likelihood of $z_t$ under this model.
+Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$ of a Gaussian mixture model (with diagonal covariances) and is trained to maximize the likelihood of $z_t$ under this model.
 Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions that can be represented with our approach.
 
 %Although they offer increased flexibility, non-parametric approaches to modeling distributions can also bring potential challenges, which we discuss here.
@@ -362,13 +396,11 @@ Several works have included latent variables as a means to model the uncertainty
 In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
 Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
 
-Our method is closely related to Gated and Relational AutoEncoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
-The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation for use in planning.
+Our model is related to Gated and Relational AutoEncoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
+The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation, and they do not consider sampling schemes for generation.
 
 \begin{itemize}
-\item Video Prediction \citep{mathieu-iclr-2016}, stochastic:  using the framework of Variational AutoEncoders \citep{VAE}.
-\item Mixture Density Networks \citep{mixture-density-networks}.
-\item VQ-VAE, GLO, Gated AutoEncoders
+\item VQ-VAE, GLO
 \end{itemize}
 
 
@@ -436,46 +468,80 @@ We also set the dimension of $z$ to be lower (2 dimensions) and trained the mode
   \centering
   \begin{subfigure}[b]{\textwidth}
     \centering
-  \includegraphics[width=0.45\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.45\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
+  \includegraphics[width=0.24\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.24\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
+  \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
   \caption{}
     \label{fig:gull}
   \end{subfigure}
-
-  \begin{subfigure}[b]{\textwidth}
-    \centering
-  \includegraphics[width=0.45\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.45\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
-    \label{fig:gull}
-  \caption{}
-  \end{subfigure}
-
-
   \caption{Best-of-$k$ performance on the BAIR data set, where the best PSNR and SSIM out of 100 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. a) Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network. b) Comparison to VAE-based approaches.}
   \label{bair}
 \end{figure}
+
+
+
+
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{\textwidth}
+    \centering
+  \includegraphics[width=0.8\textwidth]{images/robot_trajectory-crop.pdf}
+  \caption{Trajectory generated on the BAIR dataset. Top images are generated frames, bottom images show the latent 2-D codes extracted from the training set. The code sampled at each time step is marked in red.}
+    \label{robot-trajectory}
+  \end{subfigure}
+\end{figure}
+
 
 
 We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
 This method provides some measure of how well the stochastic model covers the space of possible futures, although it does not necessarily reflect the realism of all the generated samples.
 Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in Figure \ref{bair}.
 
-%To test the generality of our video prediction model, we also evaluated it on two other video prediction data sets used in the literature: Stochastic Moving MNIST introduced in \citep{Denton2018} and the BAIR robot pushing data set originally introduced in \citep{Ebert17} and used for video prediction in \citep{Babaeizadeh2018, Denton2018}.
-
-Our \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings as well as the uniform variant can be found in the Appendix.
-Interestingly, we found that the position of the $z_t$ closely reflected the position of the robotic arm.
-The fact that our model is able to achieve good performance using a latent variable of such small size (2 dimensions) also shows that this data set is in fact quite simple.
+We see that all \modelname variants outperform the deterministic baseline.
+The KNN variant performs better than the uniform, supporting the smoothness assumption that underlies it, and the MDN version with the learned prior network performs best of all.
+Compared to variational-based approaches, \modelname-LP variant performs best for the first few predicted timesteps according to both SSIM and PSNR. For predictions further into the future, the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric. Examples of video generations can be found at \url{url}. We found that the \modelname-KNN variant was relatively robust to the choice of the hyperparameter $k$, a comparison of different settings can be found in the Appendix.
+The fact that our model is able to achieve performance which is at least comparable to state-of-the-art approaches using a latent variable with only two dimensions also shows that this data set is in fact quite simple.
 
 
 \subsection{NGSIM-I80 Dataset}
 
 We next report results on the NGSIM-I80 Dataset. Here we again compared our \modelname architecture to a VAE-based model with an identical architecture except for the different loss function and sampling procedure.
 We conditioned the model on sequences of 10 initial states, provided it a sequence of 20 actions and trained it to predict the subsequent 20 states corresponding to those actions.
-This corresponds to a setting where the model is required to evaluated different candidate action sequences by generating predictions corresponding to those actions.
-We used an autoregressive model taking 10 consecutive states as input and producing a prediction for the next state as well as the cost at the following timestep; the predicted state is then concatenated with the 9 previous states and input back into the model; this procedure is repeated 20 times, resulting in 20 predicted states which are compared to the ground truth states to produce a loss.
+This corresponds to a setting where the model is required to evaluate different candidate action sequences by generating predictions corresponding to those actions.
+We used an autoregressive model taking 10 consecutive states as input and producing a prediction for the next state as well as the cost at the following timestep.
+The predicted state is then concatenated with the 9 previous states and input back into the model, and this procedure is repeated 20 times, resulting in 20 predicted states which are compared to the ground truth states to produce a loss. Further details of the loss and architecture used can be found in the Appendix.
 
-Results using the best-of-$k$ loss are shown in Figure \ref{best-of-k}.
+Results using the best-of-$k$ loss are shown in Figure \ref{best-of-k-i80}.
 Sampling using the KNN scheme offers a significant improvement over the uniform sampling, while using the learned prior network improves performance further, outperforming both the deterministic and VAE models.
+
+\begin{figure}[t!]
+  \centering
+  \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
+%  \fbox{\rule[-.5cm]{0cm}{4cm}
+%    \rule[-.5cm]{4cm}{0cm}}
+  \caption{Best-of-$k$ performance on the NGSIM-I80 data set, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
+  \label{best-of-k-i80}
+\end{figure}
+
+\begin{table}[t!]
+  \caption{Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds. $p$-value indicates whether the difference between cVAE and \modelname-LP scores is statistically significant according to a Wilcoxon rank-sum test.}
+  \label{critic-table}
+  \centering
+  \begin{tabular}{l|l|lll}
+    \toprule
+    Training iteration     & Deterministic & cVAE & \modelname-LP & $p$-value \\
+    \midrule
+    500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
+    1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
+    1500 & 0.00095 & 0.00168 & \textbf{0.00391} & 0.0068 \\
+    2000 & 0.00059 & 0.00074 & \textbf{0.00154} & 0.0002 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
 
 We note an interesting phenomenon: for timesteps further into the future, the performance of the deterministic model improves relative to the stochastic models according to the best-of-$k$ metric. It eventually even performs \textit{better}, even though it is clear from visual inspection that the deterministic predictions are actually becoming worse further into the future.
 Consider a stochastic prediction task where the future states are $n$ equidistant points (such as the corners of a hypercube).
@@ -495,34 +561,11 @@ The critic is trained on this binary classification problem, and after training 
 This process is described explicitly in Algorithm \ref{algo-critic}.
 
 
-\begin{figure}
-  \centering
-  \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
-%  \fbox{\rule[-.5cm]{0cm}{4cm}
-%    \rule[-.5cm]{4cm}{0cm}}
-  \caption{Best-of-$k$ performance on the NGSIM-I80 data set, where the best PSNR out of 200 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. }
-  \label{bair}
-\end{figure}
 
 
 
 
 
-\begin{table}
-  \caption{Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds. $p$-value indicates whether the difference between cVAE and \modelname-LP scores is statistically significant according to a Wilcoxon rank-sum test.}
-  \label{critic-table}
-  \centering
-  \begin{tabular}{l|l|lll}
-    \toprule
-    Training iteration     & Deterministic & cVAE & \modelname-LP & $p$-value \\
-    \midrule
-    500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
-    1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
-    1500 & 0.00095 & 0.00168 & \textbf{0.00391} & 0.0068 \\
-    2000 & 0.00059 & 0.00074 & \textbf{0.00154} & 0.0002 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
 
 
 
