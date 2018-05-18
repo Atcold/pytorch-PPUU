@@ -475,9 +475,14 @@ The main difference is that we did not use a prior network at training time, did
   \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
   \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
   \caption{}
-    \label{fig:gull}
   \end{subfigure}
-  \caption{Best-of-$k$ performance on the BAIR data set, where the best PSNR and SSIM out of 100 generated samples compared to the test sample is reported. Shading indicates $95\%$ confidence interval. a) Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network. b) Comparison to VAE-based approaches.}
+  \caption{
+    \textbf{Best-of-$k$ performance on the BAIR data set.}
+    The best PSNR and SSIM out of 100 generated samples compared to the test sample is reported.
+    Shading indicates $95\%$ confidence interval.
+    \textbf{(a)} Comparison between different \modelname latent variable sampling schemes: uniform, $k$-nearest neighbors or using a learned Mixture Density Network.
+    \textbf{(b)} Comparison to VAE-based approaches.
+  }
   \label{bair}
 \end{figure}
 
