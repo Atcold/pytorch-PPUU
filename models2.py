@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 from torch.autograd import Variable
-import random, pdb, copy, os, math, numpy, copy
+import random, pdb, copy, os, math, numpy, copy, time
 import utils
 
 
@@ -287,17 +287,17 @@ class PriorMDN(nn.Module):
         self.encoder = encoder(opt, opt.n_actions, opt.ncond)
 
         self.network = nn.Sequential(
-            nn.Linear(self.opt.hidden_size, opt.nfeature),
+            nn.Linear(self.opt.hidden_size, opt.n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.LeakyReLU(0.2, inplace=True)
         )
 
-        self.pi_net = nn.Linear(opt.nfeature, opt.n_mixture)
-        self.mu_net = nn.Linear(opt.nfeature, opt.n_mixture*opt.nz)
-        self.sigma_net = nn.Linear(opt.nfeature, opt.n_mixture*opt.nz)
+        self.pi_net = nn.Linear(opt.n_hidden, opt.n_mixture)
+        self.mu_net = nn.Linear(opt.n_hidden, opt.n_mixture*opt.nz)
+        self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*opt.nz)
 
 
     def forward(self, input_images, input_states, input_actions):
@@ -688,48 +688,28 @@ class FwdCNN_AE_FP(nn.Module):
                 z.append(self.p_z[random.choice(closest[:, b])])
             '''
             z = torch.stack(z).contiguous()            
-        elif method == 'dist':
-            h_x = self.encoder(input_images, input_states, action)
-            pi, mu, sigma = self.u_network(h_x)
-            k = torch.multinomial(pi, 1)
-            for b in range(bsize):
-                z.append(torch.randn(self.opt.nz).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
-            z = torch.stack(z).squeeze()
+
+
 
         elif method == 'pdf':
-            n_z = bsize*1000
-            if len(self.Z) == 0:
-                self.Z = self.sample_z(n_z)
-
-            h_x = self.encoder(input_images, input_states, action)
-            pi, mu, sigma = self.u_network(h_x)
-            mu = mu.contiguous()
-            sigma = sigma.contiguous()
-            Z_exp = self.Z.view(1, n_z, self.opt.nz).expand(bsize, n_z, self.opt.nz)
-            mu_exp = mu.view(bsize, 1, self.opt.n_mixture, self.opt.nz).expand(bsize, n_z, self.opt.n_mixture, self.opt.nz)
-            sigma_exp = sigma.view(bsize, 1, self.opt.n_mixture, self.opt.nz).expand(bsize, n_z, self.opt.n_mixture, self.opt.nz)
-            mu_exp = mu_exp.contiguous().view(-1, self.opt.n_mixture, self.opt.nz)
-            sigma_exp = sigma_exp.contiguous().view(-1, self.opt.n_mixture, self.opt.nz)
-            pi_exp = pi.view(bsize, 1, self.opt.n_mixture).expand(bsize, n_z, self.opt.n_mixture).contiguous().view(-1, self.opt.n_mixture)
-            Z_exp = Z_exp.clone().view(-1, self.opt.nz)
-            z_loss = utils.mdn_loss_fn(pi_exp, sigma_exp, mu_exp, Z_exp, avg=False)
-            z_loss = z_loss.view(bsize, -1)
-            _, z_ind = torch.topk(z_loss, self.opt.topz_sample, dim=1, largest=False)
-            z_top = Variable(self.Z.data.index(z_ind.data.view(-1))).view(bsize, self.opt.topz_sample, self.opt.nz)
-            z_ind = random.choice(z_ind.t())
-            z = self.Z.data.index(z_ind.data)
-            self.z_top_list.append(z_top.data)
-
-            if random.random() < 0.01 and False:
-                # save
-                print('[saving]')
-                hsh = random.randint(0, 10000)
-                Z = Z.data.cpu().numpy()
-                z_top = z_top.data.cpu().numpy()
-                embed = utils.embed(Z, z_top)
-                os.system('mkdir -p z_viz/pdf_{}samples'.format(n_sample))
-                torch.save(embed, 'z_viz/pdf_{}samples/{:05d}.pth'.format(n_sample, hsh))
-            del mu, sigma, Z_exp, mu_exp, sigma_exp
+            M = self.p_z.size(0)
+            nz = self.p_z.size(1)
+            if hasattr(self, 'u_network'):
+                h_x = self.encoder(input_images, input_states, action)
+                pi, mu, sigma = self.u_network(h_x)
+            elif hasattr(self, 'prior'):
+                pi, mu, sigma = self.prior(input_images, input_states, action)
+            bsize = mu.size(0)
+            tt = time.time()
+            pi_sample = torch.multinomial(pi, 1).squeeze()
+            mu_sample = torch.gather(mu, dim=1, index=pi_sample.view(bsize, 1, 1).expand(bsize, 1, nz)).squeeze()
+            sigma_sample = torch.gather(sigma, dim=1, index=pi_sample.view(bsize, 1, 1).expand(bsize, 1, nz)).squeeze()
+            z_sample = mu_sample.data + torch.randn(bsize, nz).cuda()*sigma_sample.data
+            dist = torch.norm(self.p_z.view(-1, 1, nz) - z_sample.view(1, -1, nz), 2, 2)
+            _, z_ind = torch.topk(dist, 1, dim=0, largest=False)
+            z = self.p_z.index(z_ind.squeeze().cuda())
+            tt = time.time() - tt
+#            print(f'NN search took {tt}s')
 
 
         if self.use_cuda: z = z.cuda()
@@ -750,8 +730,12 @@ class FwdCNN_AE_FP(nn.Module):
         self.z_top_list = []
 
         z = None
+        
         for t in range(npred):
+            tt = time.time()
             h_x = self.encoder(input_images, input_states, actions[:, t])
+            tt = time.time() - tt
+#            print(f'encoding took {tt}s')
             if (sampling is None) or t == 0:
                 target_images, target_states, target_costs = targets
                 # we are training or estimating z distribution
@@ -762,7 +746,7 @@ class FwdCNN_AE_FP(nn.Module):
                 if save_z:
                     self.save_z(z)
 
-                if self.opt.beta > 0:
+                if self.opt.beta > 0 and sampling is None:
                     pi, mu, sigma = self.u_network(h_x)
                     ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
                     if math.isnan(ploss.data[0]):
@@ -772,6 +756,7 @@ class FwdCNN_AE_FP(nn.Module):
                 z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=False)
 
             z_ = z if sampling is None else z[0]
+            tt = time.time()
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
@@ -786,6 +771,8 @@ class FwdCNN_AE_FP(nn.Module):
             pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            tt = time.time() - tt
+#            print(f'decoding took {tt}s')
             pred_images.append(pred_image)
             pred_states.append(pred_state)
             pred_costs.append(pred_cost)
@@ -821,9 +808,12 @@ class FwdCNN_AE_FP(nn.Module):
         if t == 'gpu':
             self.cuda()
             self.use_cuda = True
+            if len(self.p_z) > 0:
+                self.p_z = self.p_z.cuda()
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
+            self.p_z = self.p_z.cpu()
 
 
 
@@ -1133,29 +1123,30 @@ class FwdCNN_VAE_LP1(nn.Module):
 
 
 class LSTMCritic(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, batch_size=None):
         super(LSTMCritic, self).__init__()
         self.opt = copy.deepcopy(opt)
         self.opt.ncond = 1
+        if batch_size is None:
+            batch_size = opt.batch_size
         self.encoder = encoder(self.opt, 0, 1, state_input_size=6)
         self.input_size = opt.nfeature*opt.h_height*opt.h_width
         self.lstm = nn.LSTM(self.input_size, opt.nhidden)
         self.classifier = nn.Linear(opt.nhidden, 1)
-        self.hidden = (Variable(torch.randn(1, 2*opt.batch_size, opt.nhidden).cuda()),
-                       Variable(torch.randn(1, 2*opt.batch_size, opt.nhidden).cuda()))
+        self.hidden = (Variable(torch.randn(1, batch_size, opt.nhidden).cuda()),
+                       Variable(torch.randn(1, batch_size, opt.nhidden).cuda()))
 
 
     def forward(self, inputs):
-        self.hidden = (Variable(torch.randn(1, 2*self.opt.batch_size, self.opt.nhidden).cuda()),
-                       Variable(torch.randn(1, 2*self.opt.batch_size, self.opt.nhidden).cuda()))
         input_images, input_states = inputs
         input_images.detach()
         input_states.detach()        
         bsize = input_images.size(0)
+        self.hidden = (Variable(torch.randn(1, bsize, self.opt.nhidden).cuda()),Variable(torch.randn(1, bsize, self.opt.nhidden).cuda()))
         T = input_images.size(1)
         for t in range(T):
             enc = self.encoder(input_images[:, t].contiguous(), input_states[:, t].contiguous())
-            out, self.hidden = self.lstm(enc.view(1, 2*self.opt.batch_size, -1), self.hidden)
+            out, self.hidden = self.lstm(enc.view(1, bsize, -1), self.hidden)
         logits = self.classifier(out.squeeze())
         return logits.squeeze()
 

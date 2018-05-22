@@ -70,13 +70,15 @@ for episode in range(10):
             else:
                 if cntr >= action_seq.shape[0] or cntr > 5:
                     plan = True
+            plan = False
             if plan:
                 if len(images) > 0:
                     utils.save_movie('tmp/', torch.from_numpy(numpy.stack(images)))
                 action_seq = model.plan_actions_backprop(observation, opt, verbose=True)
                 cntr = 0
                 plan = False
-            action = action_seq[cntr]
+#            action = action_seq[cntr]
+
             cntr += 1
             print('t={}, cost={}, action=[{}, {}]'.format(t, reward[0][-1], action[0], action[1]))
             images.append(observation[0][-1])

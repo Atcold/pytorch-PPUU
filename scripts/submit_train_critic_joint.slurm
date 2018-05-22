@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=train_critic
+#SBATCH --job-name=train_critic_joint
 #SBATCH --output=train_critic.out
 #SBATCH --error=train_critic.err
 #SBATCH --time=48:00:00
@@ -15,4 +15,4 @@
 
 module load python-3.6
 cd ../
-srun python train_critic_joint.py -mfile $1 -batch_size 2 -npred 200 -lrt 0.0001 -sampling $2 -seed $3 -graph_density $4 -n_mixture $5
+srun python train_critic_joint.py -batch_size 2 -npred 200 -lrt 0.0001 -seed $1

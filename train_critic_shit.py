@@ -9,8 +9,7 @@ import torch.nn as nn
 from gym.envs.registration import register
 import scipy.misc
 from dataloader import DataLoader
-import utils
-import models2 as models
+import utils, models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
@@ -24,25 +23,21 @@ parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-n_episodes', type=int, default=1)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=200)
-parser.add_argument('-nfeature', type=int, default=128)
+parser.add_argument('-nfeature', type=int, default=64)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-nhidden', type=int, default=128)
-parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-n_samples', type=int, default=10)
-parser.add_argument('-graph_density', type=float, default=0.005)
-parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-sampling', type=str, default='pdf')
-parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics2/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model')
-
+parser.add_argument('-usphere', type=int, default=0)
+parser.add_argument('-eval_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/eval_critics/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-tieact=0-nz=32-warmstart=1.model')
 parser.add_argument('-cuda', type=int, default=1)
 opt = parser.parse_args()
 
 opt.eval_dir += opt.mfile
 os.system('mkdir -p ' + opt.eval_dir)
-opt.critic_file = opt.eval_dir + f'/critic-nfeature={opt.nfeature}-nhidden={opt.nhidden}-lrt={opt.lrt}-sampling={opt.sampling}-seed={opt.seed}.model'
+opt.critic_file = opt.eval_dir + f'/critic-nfeature={opt.nfeature}-nhidden={opt.nhidden}-lrt={opt.lrt}-sampling={opt.sampling}.model'
 
 if opt.dataset == 'simulator':
     opt.height = 97
@@ -55,13 +50,20 @@ elif opt.dataset == 'i80':
     opt.width = 24
     opt.h_height = 14
     opt.h_width = 3
-    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
+
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 
+opt.model_dir += f'/dataset_{opt.dataset}/models'
+if opt.dataset == 'simulator':
+    opt.model_dir += f'_{opt.nshards}-shards/'
+    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
+else:
+    data_file = None
+opt.model_dir += '/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
@@ -71,7 +73,7 @@ if opt.cuda == 1:
     model.intype('gpu')
     critic.cuda()
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(data_file, opt, opt.dataset)
 
 def compute_pz(nbatches):
     model.p_z = []
@@ -87,31 +89,23 @@ def compute_pz(nbatches):
 model.opt.npred = opt.npred
 
 if '-ae' in opt.mfile:
-    pzfile = opt.model_dir + opt.mfile + '_100000.pz'
-    if os.path.isfile(pzfile):
-        p_z = torch.load(pzfile)
-        graph = torch.load(pzfile + '.graph')
-        model.p_z = p_z
-        model.knn_indx = graph.get('knn_indx')
-        model.knn_dist = graph.get('knn_dist')
-        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)
-    if opt.sampling == 'knn':
-        opt.critic_file += f'-density={opt.graph_density}'
-    elif opt.sampling == 'pdf':
-        opt.critic_file += f'-nmixture={opt.n_mixture}'
-        mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature=128-lrt=0.0001-nmixture={opt.n_mixture}.prior'
-        print(f'[loading prior model: {mfile_prior}]')
-        model.prior = torch.load(mfile_prior).cuda()
-
-            
+    if opt.sampling != 'fp':
+        p_model_file = opt.model_dir + opt.mfile + f'-loss={opt.sampling}-usphere={opt.usphere}-nfeature=96.prior'
+        print(f'[loading prior model: {p_model_file}]')
+        model.q_network = torch.load(p_model_file)
+        if opt.cuda == 1:
+            model.q_network.cuda()
+    if not hasattr(model.opt, 'z_sphere'):
+            model.opt.z_sphere = 0
+    if not hasattr(model.opt, 'z_mult'):
+        model.opt.z_mult = 0
+    compute_pz(20)
     print('[done]')
 
-print(f'will save as {opt.critic_file}')
 n_batches = 200
 loss = torch.zeros(n_batches, opt.batch_size, opt.n_samples)
 if opt.cuda == 1:
     loss = loss.cuda()
-    model.intype('gpu')
 
 
 ones = Variable(torch.ones(opt.batch_size).cuda())
@@ -120,28 +114,17 @@ labels = torch.cat((ones, zeros), 0)
 optimizer = optim.Adam(critic.parameters(), opt.lrt)
 
 
-def prepare_batch(pred, targets):
-    p_images, p_states, p_costs = pred
-    t_images, t_states, t_costs = targets
-    images = torch.cat((p_images, t_images), 0)
-    states = torch.cat((p_states, t_states), 0)
-    costs = torch.cat((p_costs, t_costs), 0)
-    states_costs = torch.cat((states, costs), 2)
-    images.detach()
-    states_costs.detach()
-    return [images, states_costs]
-
 def train(n_batches):
     total_loss = 0
     for i in range(n_batches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred, cuda=(opt.cuda==1))
+        inputs = Variable(inputs)
         actions = Variable(actions)
-        pred, loss_p = model(inputs, actions, targets, sampling=opt.sampling)
-        batch = prepare_batch(pred, targets)
-        logits = critic(batch)
+        targets = Variable(targets)
+        pred, _ = model(inputs, actions, None, sampling=opt.sampling)
+        pred.detach()
+        logits = critic(torch.cat((targets, pred), 0))
         loss = F.binary_cross_entropy_with_logits(logits, labels)
         loss.backward()
         optimizer.step()
@@ -156,13 +139,12 @@ def test(n_batches):
     nskip = 0
     for i in range(n_batches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('valid', opt.npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid', opt.npred, cuda=(opt.cuda==1))
+        inputs = Variable(inputs)
         actions = Variable(actions)
-        pred, _ = model(inputs, actions, targets, sampling=opt.sampling)
-        batch = prepare_batch(pred, targets)
-        logits = critic(batch)
+        targets = Variable(targets)
+        pred, _ = model(inputs, actions, None, sampling=opt.sampling)
+        logits = critic(torch.cat((targets, pred), 0))
         loss = F.binary_cross_entropy_with_logits(logits, labels)
         if math.isnan(loss.data[0]):
             nskip += 1
@@ -176,14 +158,14 @@ train_loss_all = []
 valid_loss_all = []
 print('[training]')
 for i in range(100):
-    train_loss = train(100)
+    train_loss = train(20)
     valid_loss = test(100)
     train_loss_all.append(train_loss)
     valid_loss_all.append(valid_loss)
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
         torch.save(critic, opt.critic_file + '.model')
-    log_string = f'epoch: {i+1} | train loss: {train_loss:.5f}, valid loss: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
+    log_string = f'epoch: {i} | train loss: {train_loss:.5f}, valid loss: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.critic_file + '.log', log_string)
     torch.save({'train_loss': train_loss_all, 'valid_loss': valid_loss_all}, opt.critic_file + '.curves')

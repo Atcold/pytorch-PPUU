@@ -25,11 +25,12 @@ parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-n_batches', type=int, default=200)
 parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-sampling', type=str, default='fp')
-parser.add_argument('-topz_sample', type=int, default=100)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-bsize=16-ncond=10-npred=20-lrt=0.0002-nhidden=100-nfeature=96-decoder=0-combine=add-warmstart=0.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-lp-bsize=16-ncond=10-npred=20-lrt=0.0002-nhidden=100-nfeature=96-decoder=0-combine=add-nz=32-beta=0.0001-warmstart=1.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=96-decoder=0-combine=add-nz=32-beta=0.0001-nmix=100-warmstart=1.model')
+parser.add_argument('-n_mixture', type=int, default=20)
+parser.add_argument('-graph_density', type=float, default=0.001)
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0001-nmix=1-warmstart=1.model')
+
 
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
@@ -40,24 +41,35 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 opt.save_video = (opt.save_video == 1)
-opt.model_dir += f'/dataset_{opt.dataset}_costs2/models/'
-opt.eval_dir = opt.model_dir + f'/eval5/'
+opt.eval_dir = opt.model_dir + f'/eval/'
 
-if opt.dataset == 'simulator':
-    opt.model_dir += f'_{opt.nshards}-shards/'
-    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
-else:
-    data_file = None
-opt.model_dir += '/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
 
 model.eval()
-if opt.cuda == 1:
-    model.intype('gpu')
 
-dataloader = DataLoader(data_file, opt, opt.dataset)
+
+
+
+dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
+if '-ae' in opt.mfile:
+    dirname += f'-sampling={opt.sampling}'
+    if opt.sampling == 'knn':
+        dirname += f'-density={opt.graph_density}'
+    elif opt.sampling == 'pdf':
+        dirname += f'-nmixture={opt.n_mixture}'
+        mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature=128-lrt=0.0001-nmixture={opt.n_mixture}.prior'
+        print(f'[loading prior model: {mfile_prior}]')
+        model.prior = torch.load(mfile_prior).cuda()
+dirname += '.eval/'
+os.system('mkdir -p ' + dirname)
+
+
+
+
+
+dataloader = DataLoader(None, opt, opt.dataset)
 
 def compute_pz(nbatches):
     model.p_z = []
@@ -73,41 +85,33 @@ def compute_pz(nbatches):
 
 model.opt.npred = opt.npred
 
+
 if '-ae' in opt.mfile:
-    '''
-    if opt.sampling != 'fp':
-        p_model_file = opt.model_dir + opt.mfile + f'-loss={opt.sampling}-usphere={opt.usphere}-nfeature=96.prior'
-        print(f'[loading prior model: {p_model_file}]')
-        model.q_network = torch.load(p_model_file)
-        if opt.cuda == 1:
-            model.q_network.cuda()
-    '''
-    if opt.debug == 0:
-        compute_pz(200)
-    elif opt.debug == 1:
-        compute_pz(10)
-        
-        
+    pzfile = opt.model_dir + opt.mfile + '_100000.pz'
+    if os.path.isfile(pzfile):
+        p_z = torch.load(pzfile)
+        graph = torch.load(pzfile + '.graph')
+        model.p_z = p_z
+        model.knn_indx = graph.get('knn_indx')
+        model.knn_dist = graph.get('knn_dist')
+        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
+    else:
+        compute_pz(250)
+        torch.save(model.p_z, pzfile)
+        model.compute_z_graph()
+        torch.save({'knn_dist': model.knn_dist, 'knn_indx': model.knn_indx}, pzfile + '.graph')
     print('[done]')
 
-loss_i = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples)
-loss_s = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples)
-loss_c = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples)
+if opt.cuda == 1:
+    model.intype('gpu')
+
+loss_i = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
+loss_s = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
+loss_c = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
 true_costs = torch.zeros(opt.n_batches, opt.batch_size, opt.npred, 2)
 pred_costs = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred, 2)
 true_states = torch.zeros(opt.n_batches, opt.batch_size, opt.npred, 4)
 pred_states = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred, 4)
-
-dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
-
-if 'fwd-cnn-ae-' in opt.mfile:
-    dirname += f'-sampling={opt.sampling}'
-    if opt.sampling == 'pdf':
-        dirname += f'-topz={opt.topz_sample}'
-        model.opt.topz_sample = opt.topz_sample
-
-dirname += '.eval/'
-os.system('mkdir -p ' + dirname)
 
 
 def compute_loss(targets, predictions, r=True):
@@ -136,11 +140,11 @@ for i in range(opt.n_batches):
         targets = utils.make_variables(targets_)
         actions = utils.Variable(actions_)
 
-        pred_, _= model(inputs, actions, None, sampling=opt.sampling)
+        pred_, _= model(inputs, actions, targets, sampling=opt.sampling)
         loss_i_s, loss_s_s, loss_c_s = compute_loss(targets, pred_, r=False)
-        loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).mean(1).data.cpu()
-        loss_s[i, :, s] += loss_s_s.mean(2).mean(1).data.cpu()
-        loss_c[i, :, s] += loss_c_s.mean(2).mean(1).data.cpu()
+        loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).data.cpu()
+        loss_s[i, :, s] += loss_s_s.mean(2).data.cpu()
+        loss_c[i, :, s] += loss_c_s.mean(2).data.cpu()
         pred_costs[i, :, s].copy_(pred_[2].data)
         true_costs[i].copy_(targets[2].data)
         pred_states[i, :, s].copy_(pred_[1].data)

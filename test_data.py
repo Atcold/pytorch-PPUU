@@ -16,8 +16,8 @@ parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
 
-data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
-print(data_file)
+#data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
+#print(data_file)
 
 dataloader = DataLoader(None, opt, dataset='i80')
 for i in range(2):

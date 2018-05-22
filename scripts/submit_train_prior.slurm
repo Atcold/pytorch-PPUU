@@ -15,5 +15,5 @@
 
 module load python-3.6
 cd ../
-srun python train_prior.py -nfeature $1 -loss $2 -u_sphere $3
+srun python train_prior.py -nfeature $1 -n_mixture $2
 
