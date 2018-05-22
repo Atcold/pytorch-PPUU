@@ -420,12 +420,14 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
 
 \begin{figure}
   \centering
-  \begin{subfigure}[b]{\textwidth}
-    \centering
-  \includegraphics[width=0.24\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.24\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
-  \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.24\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
+  \begin{subfigure}[b]{0.49 \textwidth}
+  \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
+  \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.49 \textwidth}
+  \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
+  \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
   \caption{}
   \end{subfigure}
   \caption{
@@ -440,16 +442,14 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
 
 \begin{figure}
   \centering
-  \begin{subfigure}[b]{\textwidth}
     \centering
   \includegraphics[width=0.8\textwidth]{images/robot_trajectory-crop.pdf}
   \caption{
-    Trajectory generated on the BAIR data set.
+    \textbf{Trajectory generated on the BAIR data set.}
 Top images are generated frames, bottom images show the latent 2-D codes extracted from the training set.
 The code sampled at each time step is marked in red.
   }
     \label{robot-trajectory}
-  \end{subfigure}
 \end{figure}
 
 We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
