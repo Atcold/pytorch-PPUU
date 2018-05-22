@@ -30,24 +30,18 @@ class encoder(nn.Module):
         # frame encoder
         self.f_encoder = nn.Sequential(
             nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature)
         )
 
         if states:
             # state encoder
             self.s_encoder = nn.Sequential(
-#                nn.BatchNorm1d(state_input_size*opt.ncond),
                 nn.Linear(state_input_size*opt.ncond, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, self.opt.hidden_size)
             )
@@ -55,12 +49,9 @@ class encoder(nn.Module):
         if a_size > 0:
             # action or cost encoder
             self.a_encoder = nn.Sequential(
-                #nn.BatchNorm1d(a_size),
                 nn.Linear(a_size, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, self.opt.hidden_size)
             )
@@ -78,83 +69,7 @@ class encoder(nn.Module):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# encodes a sequence of input frames and states, and optionally a cost or action, to a hidden representation
-class encoder_cost_state(nn.Module):
-    def __init__(self, opt, a_size, n_inputs, states=True, state_input_size=6):
-        super(encoder_cost_state, self).__init__()
-        self.opt = opt
-        self.a_size = a_size
-        self.n_inputs = opt.ncond if n_inputs is None else n_inputs
-        # frame encoder
-        self.f_encoder = nn.Sequential(
-            nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            #nn.BatchNorm2d(opt.nfeature)
-        )
-
-        if states:
-            # state encoder
-            self.s_encoder = nn.Sequential(
-#                nn.BatchNorm1d(state_input_size*opt.ncond),
-                nn.Linear(state_input_size*opt.ncond, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.opt.hidden_size)
-            )
-
-        if a_size > 0:
-            # action or cost encoder
-            self.a_encoder = nn.Sequential(
-                #nn.BatchNorm1d(a_size),
-                nn.Linear(a_size, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
-                #nn.BatchNorm1d(opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.opt.hidden_size)
-            )
-
-    def forward(self, images, states=None, actions=None):
-        bsize = images.size(0)
-        h = self.f_encoder(images.view(bsize, self.n_inputs*3, self.opt.height, self.opt.width))
-        if states is not None:
-            h = utils.combine(h, self.s_encoder(states.contiguous().view(bsize, -1)).view(h.size()), self.opt.combine)
-        if actions is not None:
-            a = self.a_encoder(actions.contiguous().view(bsize, self.a_size))
-            h = utils.combine(h, a.view(h.size()), self.opt.combine)
-        return h
-
-
-
-
-
-
-
-
-
-
-# decodes a hidden state into a predicted frame and a set of predicted costs
+# decodes a hidden state into a predicted frame, a predicted state and a predicted cost vector
 class decoder(nn.Module):
     def __init__(self, opt, n_out=1):
         super(decoder, self).__init__()
@@ -164,10 +79,8 @@ class decoder(nn.Module):
         if self.opt.dataset == 'simulated':
             self.f_decoder = nn.Sequential(
                 nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1),
-                #nn.BatchNorm2d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)),
-                #nn.BatchNorm2d(opt.nfeature),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
             )
@@ -238,8 +151,29 @@ class decoder(nn.Module):
 
 
 
+# expands a latent variable to the size of the hidden representation
+class z_expander(nn.Module):
+    def __init__(self, opt, n_steps):
+        super(z_expander, self).__init__()
+        self.opt = opt
+        self.n_steps = n_steps
+        self.z_expander = nn.Sequential(
+            nn.Linear(opt.nz, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, n_steps * opt.nfeature * self.opt.h_height * self.opt.h_width)
+        )
 
-# encodes a sequence of frames or errors and produces a distribution over latent variables
+    def forward(self, z):
+        bsize = z.size(0)
+        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+        return z_exp
+
+
+
+# encodes a sequence of frames and states, and produces a distribution over latent variables. 
+# We use this for the VAE models. 
 class z_network_gaussian(nn.Module):
     def __init__(self, opt):
         super(z_network_gaussian, self).__init__()
@@ -278,7 +212,8 @@ class z_network_gaussian(nn.Module):
 
 
 
-# takes as input a sequence of frames, outputs the parameters of a GMM
+# takes as input a sequence of frames, states and actions, and outputs the parameters of a 
+# Gaussian Mixture Model. 
 class PriorMDN(nn.Module):
     def __init__(self, opt):
         super(PriorMDN, self).__init__()
@@ -311,7 +246,8 @@ class PriorMDN(nn.Module):
         return pi, mu, sigma
 
 
-    # first extract z vectors by passing inputs, actions and targets through an external model, use these as targets
+    # first extract z vectors by passing inputs, actions and targets through an external model, and uses these as targets. 
+    # Useful for training the prior network to predict the z vectors inferred by a previously trained forward model. 
     def forward_thru_model(self, model, inputs, actions, targets):
         input_images, input_states = inputs
         bsize = input_images.size(0)
@@ -325,6 +261,7 @@ class PriorMDN(nn.Module):
             h_y = model.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
             z = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1))
             pi, mu, sigma = self(input_images, input_states, actions[:, t])
+            # prior loss
             ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
             z_exp = model.z_expander(z).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
             h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
@@ -353,7 +290,7 @@ class PriorMDN(nn.Module):
 
 
 
-# Mixture Density network (fully-connected)
+# Mixture Density network (fully-connected). 
 class u_network_mdn_fc(nn.Module):
     def __init__(self, opt, n_outputs):
         super(u_network_mdn_fc, self).__init__()
@@ -388,32 +325,7 @@ class u_network_mdn_fc(nn.Module):
 
 
 
-
-
-
-
-# expands a latent variable to the size of the hidden representation
-class z_expander(nn.Module):
-    def __init__(self, opt, n_steps):
-        super(z_expander, self).__init__()
-        self.opt = opt
-        self.n_steps = n_steps
-        self.z_expander = nn.Sequential(
-            nn.Linear(opt.nz, opt.nfeature),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, opt.nfeature),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, n_steps * opt.nfeature * self.opt.h_height * self.opt.h_width)
-        )
-
-    def forward(self, z):
-        bsize = z.size(0)
-        z_exp = self.z_expander(z).view(bsize, self.n_steps, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-        return z_exp
-
-
-
-# combines a sequence of images with the state representing absolute speed
+# combines a sequence of images with the state vector. 
 class policy_encoder(nn.Module):
     def __init__(self, opt):
         super(policy_encoder, self).__init__()
@@ -467,6 +379,8 @@ class FwdCNN(nn.Module):
     def __init__(self, opt, mfile):
         super(FwdCNN, self).__init__()
         self.opt = opt
+        # If we are given a model file, use it to initialize this model. 
+        # otherwise initialize from scratch
         if mfile == '':
             self.encoder = encoder(opt, opt.n_actions, opt.ncond)
             self.decoder = decoder(opt)
@@ -508,7 +422,7 @@ class FwdCNN(nn.Module):
 
 
 
-# forward model, Mixture Density Network.
+# forward model, Mixture Density Network. (tried this for comparison, but it's really hard to train). 
 class FwdCNN_MDN(nn.Module):
     def __init__(self, opt, mfile):
         super(FwdCNN_MDN, self).__init__()
@@ -552,9 +466,6 @@ class FwdCNN_MDN(nn.Module):
             pred_state_sigma = F.softplus(pred_state_sigma)
             pred_cost_sigma = F.softplus(pred_cost_sigma)
 
-#            pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-#            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
-#            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
             if targets is not None:
                 target_images, target_states, target_costs = targets
                 input_images = torch.cat((input_images[:, 1:], target_images[:, t].unsqueeze(1)), 1)
@@ -598,7 +509,7 @@ class FwdCNN_MDN(nn.Module):
 
 
 
-# forward AE model with a fixed prior
+# forward TENet model
 class FwdCNN_AE_FP(nn.Module):
     def __init__(self, opt, mfile=''):
         super(FwdCNN_AE_FP, self).__init__()
@@ -626,24 +537,27 @@ class FwdCNN_AE_FP(nn.Module):
             nn.Linear(opt.nfeature, opt.nz)
         )
 
+        # if beta > 0, it means we are training a prior network jointly
         if self.opt.beta > 0:
             self.u_network = u_network_mdn_fc(opt, opt.nz)
 
         self.z_expander = nn.Linear(opt.nz, opt.hidden_size)
+        # this will store the non-parametric estimate of p(z)
         self.p_z = []
 
+    # save a z vector in the memory buffer
     def save_z(self, z):
         if len(self.p_z) == 0:
             self.p_z = z.data.cpu()
         else:
             self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
 
-
+    # compute the nearest-neighbor graph among z vectors
     def compute_z_graph(self):
         m = self.p_z.size(0)
         # do this in CUDA...
-        self.knn_indx = torch.zeros(m, 4000).cuda()
-        self.knn_dist = torch.zeros(m, 4000).cuda()
+        self.knn_indx = torch.zeros(m, 4000).cuda() # indices
+        self.knn_dist = torch.zeros(m, 4000).cuda() # distances
         self.p_z = self.p_z.cuda()
         for i in range(m):
             print('[computing z graph {}]'.format(float(i)/m), end="\r")
@@ -653,19 +567,18 @@ class FwdCNN_AE_FP(nn.Module):
             self.knn_dist[i].copy_(nb_dist)
         self.knn_dist = self.knn_dist.cpu()
         self.knn_indx = self.knn_indx.cpu().long()
-
-
-
-
             
+    # sample a latent z vector, using uniform, KNN or learned prior methods. 
     def sample_z(self, bsize, method='fp', input_images=None, input_states=None, action=None, z_prev=None, t0=False):
         z_indx = None
         if method != 'knn':
             z = []
-        if method == 'fp':
+        # fixed prior, i.e. uniform
+        if method == 'fp': 
             for b in range(bsize):
                 z.append(random.choice(self.p_z))
             z = torch.stack(z).contiguous()
+        # at each timestep, sample on of the K nearest neighbors of the current z vector
         elif method == 'knn':
             if t0:
                 # we only have the initial z vector, so quantize it first to one in the training set
@@ -679,38 +592,31 @@ class FwdCNN_AE_FP(nn.Module):
                 indx = random.choice(self.knn_indx[z_prev_indx[b]][:self.opt.topz_sample])
                 z_indx.append(indx)
                 z.append(self.p_z[indx])
-
-            '''
-            d = torch.norm(self.p_z.view(-1, 1, self.opt.nz) - z.view(1, -1, self.opt.nz).data.cpu(), 2, 2)
-            closest = torch.topk(d, self.opt.topz_sample, dim=0, largest=False)[1]
-            z = []
-            for b in range(bsize):
-                z.append(self.p_z[random.choice(closest[:, b])])
-            '''
             z = torch.stack(z).contiguous()            
-
-
-
+        # use a learned likelihood model
         elif method == 'pdf':
             M = self.p_z.size(0)
             nz = self.p_z.size(1)
             if hasattr(self, 'u_network'):
+                # this is if the likelihood network has been trained jointly
                 h_x = self.encoder(input_images, input_states, action)
                 pi, mu, sigma = self.u_network(h_x)
             elif hasattr(self, 'prior'):
+                # this is if the likelihood network has been trained separately
                 pi, mu, sigma = self.prior(input_images, input_states, action)
             bsize = mu.size(0)
             tt = time.time()
+            # sample a z vector from the likelihood model
             pi_sample = torch.multinomial(pi, 1).squeeze()
             mu_sample = torch.gather(mu, dim=1, index=pi_sample.view(bsize, 1, 1).expand(bsize, 1, nz)).squeeze()
             sigma_sample = torch.gather(sigma, dim=1, index=pi_sample.view(bsize, 1, 1).expand(bsize, 1, nz)).squeeze()
             z_sample = mu_sample.data + torch.randn(bsize, nz).cuda()*sigma_sample.data
+            # quantize it to its nearest neighbor
             dist = torch.norm(self.p_z.view(-1, 1, nz) - z_sample.view(1, -1, nz), 2, 2)
             _, z_ind = torch.topk(dist, 1, dim=0, largest=False)
             z = self.p_z.index(z_ind.squeeze().cuda())
             tt = time.time() - tt
 #            print(f'NN search took {tt}s')
-
 
         if self.use_cuda: z = z.cuda()
         return [Variable(z), z_indx]
@@ -720,7 +626,6 @@ class FwdCNN_AE_FP(nn.Module):
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
-
         ploss = Variable(torch.zeros(1))
         if self.use_cuda:
             ploss = ploss.cuda()
@@ -730,22 +635,24 @@ class FwdCNN_AE_FP(nn.Module):
         self.z_top_list = []
 
         z = None
-        
         for t in range(npred):
             tt = time.time()
+            # encode the inputs
             h_x = self.encoder(input_images, input_states, actions[:, t])
             tt = time.time() - tt
 #            print(f'encoding took {tt}s')
-            if (sampling is None) or t == 0:
-                target_images, target_states, target_costs = targets
+            if (sampling is None) or t == 0: )
                 # we are training or estimating z distribution
+                # t == 0 condition applies when we are inferring the first z vector, which is necessary for KNN. 
+                # we do this for all methods for consistency and discard the first sampled step in the loss computation at evaluation time 
+                target_images, target_states, target_costs = targets
+                # encode the targets into z
                 h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
                 z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
                 if sampling is not None:
                     z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=True)
                 if save_z:
                     self.save_z(z)
-
                 if self.opt.beta > 0 and sampling is None:
                     pi, mu, sigma = self.u_network(h_x)
                     ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
@@ -765,7 +672,7 @@ class FwdCNN_AE_FP(nn.Module):
             if sampling is not None:
                 pred_image.detach()
                 pred_state.detach()
-#                pred_cost.detach()
+                pred_cost.detach()
             pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
             # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
             pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
@@ -802,8 +709,6 @@ class FwdCNN_AE_FP(nn.Module):
                 print('[iter {} | mean cost = {}], grad = {}'.format(i, loss.data[0], 0))
             optimizer_a.step()
 
-
-
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
@@ -819,7 +724,7 @@ class FwdCNN_AE_FP(nn.Module):
 
 
 
-# forward VAE model with a learned prior
+# forward VAE model with a fixed prior
 class FwdCNN_VAE_FP(nn.Module):
     def __init__(self, opt, mfile=''):
         super(FwdCNN_VAE_FP, self).__init__()
