@@ -60,8 +60,8 @@
 
 \author{
   David S.~Hippocampus\thanks{Use footnote for providing further
-    information about author (webpage, alternative
-    address)---\emph{not} for acknowledging funding agencies.} \\
+  information about author (webpage, alternative
+  address)---\emph{not} for acknowledging funding agencies.} \\
   Department of Computer Science\\
   Cranberry-Lemon University\\
   Pittsburgh, PA 15213 \\
@@ -96,7 +96,7 @@
 
 \begin{abstract}
   We propose a new model for stochastic prediction called the Target Encoding Network (TENet), in which the latent variable is a deterministic function of the input and target.
-The TENet model relies on three key ideas: i) the information content of the latent variable is limited by making it low dimensional, ii) the latent variable is set to zero some proportion of the time during training, forcing the model to also make use of the input, and iii) a non-parametric sampling scheme is used at generation time to naturally obtain samples which are on the manifold of latent variables.
+  The TENet model relies on three key ideas: i) the information content of the latent variable is limited by making it low dimensional, ii) the latent variable is set to zero some proportion of the time during training, forcing the model to also make use of the input, and iii) a non-parametric sampling scheme is used at generation time to naturally obtain samples which are on the manifold of latent variables.
   We evaluate this method on two challenging real-world data sets, where it matches or outperforms existing approaches for stochastic prediction.
   We also introduce a new challenging real-world data set with applications to autonomous driving for use by the research community.
 \end{abstract}
@@ -130,7 +130,7 @@ The TEN model relies on three key ideas:
     The information content of the latent variable is limited by making it low dimensional.
   \item
     At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $f_\phi$ that takes as input the target to be predicted as input.
-  This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
+    This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
   \item
     To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $f_\phi$ function on ``future'' target values).
     This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from.
@@ -198,84 +198,84 @@ Note that in the case of a linear transformation, this simply corresponds to com
 
   \begin{algorithm}[H]
     \caption{Build Stochastic Model}
-  \begin{algorithmic}[1]
-    \State \textbf{input} training set $\mathcal{D}$
-    \State initialize networks $f_\theta, f_\phi$
-    \While{not converged}
-    \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1}) \cdot u$
-    \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \State $J(\theta, \phi) = \|\hat{s}_{t+1} - s_{t+1} \|_2^2$
-    \State $\theta \leftarrow \theta - \eta \nabla_\theta J$
-    \State $\phi \leftarrow \phi - \eta \nabla_\phi J$
-    \EndWhile
-    \State $\mathcal{Z} \leftarrow \varnothing$
-    \For{$n = 1:N$}
-    \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
-    \EndFor
-    \State \textbf{return} $f_\theta, \mathcal{Z}$
-    %\State
-  \end{algorithmic}
+    \begin{algorithmic}[1]
+      \State \textbf{input} training set $\mathcal{D}$
+      \State initialize networks $f_\theta, f_\phi$
+      \While{not converged}
+      \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
+      \State $z_t = f_{\phi}(s_{1:t}, s_{t+1}) \cdot u$
+      \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+      \State $J(\theta, \phi) = \|\hat{s}_{t+1} - s_{t+1} \|_2^2$
+      \State $\theta \leftarrow \theta - \eta \nabla_\theta J$
+      \State $\phi \leftarrow \phi - \eta \nabla_\phi J$
+      \EndWhile
+      \State $\mathcal{Z} \leftarrow \varnothing$
+      \For{$n = 1:N$}
+      \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
+      \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+      \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
+      \EndFor
+      \State \textbf{return} $f_\theta, \mathcal{Z}$
+      %\State
+    \end{algorithmic}
   \end{algorithm}
 \end{minipage}%
 \begin{minipage}[t]{7cm}
   \vspace{0pt}
 
-\begin{algorithm}[H]
-  \caption{Sampling Procedures}\label{algo-sample}
-  \begin{algorithmic}[1]
-    \Procedure{SampleUniform}{$\mathcal{Z}$}
-    \State sample $z \sim \mathcal{Z}$ uniformly at random
-    \State \textbf{return} $z$
-    \EndProcedure
+  \begin{algorithm}[H]
+    \caption{Sampling Procedures}\label{algo-sample}
+    \begin{algorithmic}[1]
+      \Procedure{SampleUniform}{$\mathcal{Z}$}
+      \State sample $z \sim \mathcal{Z}$ uniformly at random
+      \State \textbf{return} $z$
+      \EndProcedure
 
-    \Procedure{KNN}{$\mathcal{Z}, z, k$}
-    \State $\mathcal{S} \gets $ set of $k$ nearest neighbors of $z$ in $\mathcal{Z}$
-    \State \textbf{return} $\mathcal{S}$
-    \EndProcedure
+      \Procedure{KNN}{$\mathcal{Z}, z, k$}
+      \State $\mathcal{S} \gets $ set of $k$ nearest neighbors of $z$ in $\mathcal{Z}$
+      \State \textbf{return} $\mathcal{S}$
+      \EndProcedure
 
-    \Procedure{SampleKNN}{$\mathcal{Z}, z, k$}
-    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, k)$
-    \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
-    \State \textbf{return} $z$
-    \EndProcedure
+      \Procedure{SampleKNN}{$\mathcal{Z}, z, k$}
+      \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, k)$
+      \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
+      \State \textbf{return} $z$
+      \EndProcedure
 
-    \Procedure{SampleMDN}{$\mathcal{Z}, f_\psi, s_{1:t}$}
-    \State $(\bm{\tau}, \bm{\mu}, \bm{\sigma}) = f_\psi(s_{1:t})$
-    \State $z^* \sim \mbox{GMM}(\bm{\tau}, \bm{\mu}, \bm{\sigma})$
-    \State $z \gets \textsc{SampleKNN}(\mathcal{Z}, z^*, 1)$
-    \State \textbf{return} $z$
-    \EndProcedure
-  \end{algorithmic}
-\vspace{5.7pt}
-\end{algorithm}
+      \Procedure{SampleMDN}{$\mathcal{Z}, f_\psi, s_{1:t}$}
+      \State $(\bm{\tau}, \bm{\mu}, \bm{\sigma}) = f_\psi(s_{1:t})$
+      \State $z^* \sim \mbox{GMM}(\bm{\tau}, \bm{\mu}, \bm{\sigma})$
+      \State $z \gets \textsc{SampleKNN}(\mathcal{Z}, z^*, 1)$
+      \State \textbf{return} $z$
+      \EndProcedure
+    \end{algorithmic}
+    \vspace{5.7pt}
+  \end{algorithm}
 \end{minipage}
 
 \begin{comment}
-\begin{algorithm}[t]
-  \caption{Build Stochastic Model}\label{algo-train}
-  \begin{algorithmic}[1]
-    \State \textbf{Input} Training set $\mathcal{D}$.
-    \State Initialize networks $f_\theta, f_\phi$
-    \While{not converged} \Comment{Train networks}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \State $\ell(\theta, \phi) = \|s_{t+1} - \hat{s}_{t+1} \|_2^2$
-    \State $\theta \leftarrow \theta - \eta \nabla \theta$
-    \State $\phi \leftarrow \phi - \eta \nabla \phi$
-    \EndWhile
-    \State $\mathcal{Z} \leftarrow \varnothing$     \Comment{Estimate latent distribution}
-    \For{$i = 1:N_Z$}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-    \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
-    \EndFor
-    \Return $f_\theta, \mathcal{Z}$
-  \end{algorithmic}
-\end{algorithm}
+  \begin{algorithm}[t]
+    \caption{Build Stochastic Model}\label{algo-train}
+    \begin{algorithmic}[1]
+      \State \textbf{Input} Training set $\mathcal{D}$.
+      \State Initialize networks $f_\theta, f_\phi$
+      \While{not converged} \Comment{Train networks}
+      \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+      \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+      \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
+      \State $\ell(\theta, \phi) = \|s_{t+1} - \hat{s}_{t+1} \|_2^2$
+      \State $\theta \leftarrow \theta - \eta \nabla \theta$
+      \State $\phi \leftarrow \phi - \eta \nabla \phi$
+      \EndWhile
+      \State $\mathcal{Z} \leftarrow \varnothing$     \Comment{Estimate latent distribution}
+      \For{$i = 1:N_Z$}
+      \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+      \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+      \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
+      \EndFor
+      \Return $f_\theta, \mathcal{Z}$
+    \end{algorithmic}
+  \end{algorithm}
 \end{comment}
 
 \subsection{Sampling} \label{sec:sampling}
@@ -317,34 +317,34 @@ In our experiments, we found that the cost of exact nearest neighbor searches re
 %A possible issue in modeling distributions using non-parametric approaches is that they can trade flexibility for increased memory and computational cost.
 
 \begin{comment}
-\begin{algorithm}[t]
-  \caption{Sampling Procedures}\label{algo-sample}
-  \begin{algorithmic}[1]
+  \begin{algorithm}[t]
+    \caption{Sampling Procedures}\label{algo-sample}
+    \begin{algorithmic}[1]
 
-    \Procedure{KNN}{$\mathcal{Z}, z, K$}
-    \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
-    \State \textbf{return} $\mathcal{S}$
-    \EndProcedure
+      \Procedure{KNN}{$\mathcal{Z}, z, K$}
+      \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
+      \State \textbf{return} $\mathcal{S}$
+      \EndProcedure
 
-    \Procedure{SampleUniform}{$\mathcal{Z}$}
-    \State Sample $z \sim \mathcal{Z}$ uniformly at random
-    \State \textbf{return} $z$
-    \EndProcedure
+      \Procedure{SampleUniform}{$\mathcal{Z}$}
+      \State Sample $z \sim \mathcal{Z}$ uniformly at random
+      \State \textbf{return} $z$
+      \EndProcedure
 
-    \Procedure{SampleKNN}{$\mathcal{Z}, z, K$}
-    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, K)$
-    \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
-    \State \textbf{return} $z$
-    \EndProcedure
+      \Procedure{SampleKNN}{$\mathcal{Z}, z, K$}
+      \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, K)$
+      \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
+      \State \textbf{return} $z$
+      \EndProcedure
 
-    \Procedure{SampleLearnedPrior}{$\mathcal{Z}, f_\psi, s_{1:t}$}
-    \State $(\pi, \mu, \sigma) = f_\psi(s_{1:t})$
-    \State $z^* \sim \mbox{GMM}(\pi, \mu, \sigma)$
-    \State $\{z\} \gets \textsc{KNN}(\mathcal{Z}, z^*, 1)$
-    \State \textbf{return} $z$
-    \EndProcedure
-  \end{algorithmic}
-\end{algorithm}
+      \Procedure{SampleLearnedPrior}{$\mathcal{Z}, f_\psi, s_{1:t}$}
+      \State $(\pi, \mu, \sigma) = f_\psi(s_{1:t})$
+      \State $z^* \sim \mbox{GMM}(\pi, \mu, \sigma)$
+      \State $\{z\} \gets \textsc{KNN}(\mathcal{Z}, z^*, 1)$
+      \State \textbf{return} $z$
+      \EndProcedure
+    \end{algorithmic}
+  \end{algorithm}
 \end{comment}
 
 \section{Related Work}
@@ -384,7 +384,7 @@ We therefore believe this prediction tasks offers unique features which compleme
 
 \begin{figure}
   \centering
-    \includegraphics[width=\textwidth]{images/I-80}
+  \includegraphics[width=\textwidth]{images/I-80}
   \caption{
     \textbf{Preprocessing pipeline for the NGSIM-I80 data set.}
     \textcolor{Orange}{Orange arrows} show same vehicles across stages.
@@ -394,11 +394,11 @@ We therefore believe this prediction tasks offers unique features which compleme
     \textbf{(c)} Every vehicle in the simulator is initialised with starting position, initial velocity, dimensions, and ID number.
     At every time step, we use the tracked trajectories and a simplified kinematic model of a car to compute the agent actions $(a, b)$, corresponding to acceleration and tangential deviation.
     The vehicle internal state is then updated with one step of the Euler method.
-%    A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
+    %    A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
     Finally, the vehicles are drawn onto the screen canvas and displayed with their corresponding ID number.
     \textbf{(d)} Lanes and vehicles are also drawn on a secondary canvas, from which the context states are extracted.
     Rectangular regions around each vehicle constitute the context states.
-%    At this stage, the lane-crossing cost is computed using a modified morphological distance transform between each vehicle and the lane channel.
+    %    At this stage, the lane-crossing cost is computed using a modified morphological distance transform between each vehicle and the lane channel.
     \textbf{(e)} Five examples of context states extracted at the previous stage.
     Notice how vehicles oriented slightly to the left (2nd and 3rd examples) have lane markings rotated to the right.
   }
@@ -421,14 +421,14 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
 \begin{figure}
   \centering
   \begin{subfigure}[b]{0.49 \textwidth}
-  \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
-  \caption{}
+    \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_ssim-crop.pdf}
+    \includegraphics[width=0.49\textwidth]{images/bair_tenet_comparison_psnr-crop.pdf}
+    \caption{}
   \end{subfigure}
   \begin{subfigure}[b]{0.49 \textwidth}
-  \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
-  \caption{}
+    \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_ssim-crop.pdf}
+    \includegraphics[width=0.49\textwidth]{images/bair_all_comparison_psnr-crop.pdf}
+    \caption{}
   \end{subfigure}
   \caption{
     \textbf{Best-of-$k$ performance on the BAIR data set.}
@@ -442,14 +442,14 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
 
 \begin{figure}
   \centering
-    \centering
+  \centering
   \includegraphics[width=0.8\textwidth]{images/robot_trajectory-crop.pdf}
   \caption{
     \textbf{Trajectory generated on the BAIR data set.}
-Top images are generated frames, bottom images show the latent 2-D codes extracted from the training set.
-The code sampled at each time step is marked in red.
+    Top images are generated frames, bottom images show the latent 2-D codes extracted from the training set.
+    The code sampled at each time step is marked in red.
   }
-    \label{robot-trajectory}
+  \label{robot-trajectory}
 \end{figure}
 
 We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
@@ -460,7 +460,7 @@ Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in \cref{bai
 We see that all \modelname variants outperform the deterministic baseline.
 The KNN variant performs better than the uniform, supporting the smoothness assumption that underlies it, and the MDN version with the learned prior network performs best of all.
 Compared to variational-based approaches, \modelname-MDN performs best for the first few predicted timesteps according to both SSIM and PSNR, and for predictions further into the future the performance of \modelname-MDN, \modelname-KNN and SVG-MDN becomes statistically equivalent.
- Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric.
+Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric.
 The fact that our model is able to achieve performance which is similar or better than other state-of-the-art approaches using a latent variable with only two dimensions suggests that this data set is in fact quite simple.
 Please refer to the URL for videos.
 
@@ -495,7 +495,7 @@ In particular, this number can grow exponentially with the number of time steps 
   \end{minipage} \quad%
   \begin{minipage}[t]{0.49 \textwidth}
     \centering
-      \includegraphics[width=\textwidth]{images/car_statistics}
+    \includegraphics[width=\textwidth]{images/car_statistics}
     \caption{
       \textbf{Cars per context state.}
       Most of the time there are 13 vehicles in the context state, and at most 30.
@@ -505,9 +505,9 @@ In particular, this number can grow exponentially with the number of time steps 
 \end{figure}
 
 \begin{table}[t!]
-    \caption{
+  \caption{
     Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 data set, averaged over 20 random seeds.
-$p$-value indicates whether the difference between cVAE and \modelname-MDN scores is statistically significant according to a Wilcoxon rank-sum test.
+    $p$-value indicates whether the difference between cVAE and \modelname-MDN scores is statistically significant according to a Wilcoxon rank-sum test.
   }
   \label{critic-table}
   \centering
@@ -538,8 +538,8 @@ $p$-value indicates whether the difference between cVAE and \modelname-MDN score
     \textcolor{ProcessBlue}{\textbf{Blue box:}} in future 1 the two vehicles (\textcolor{LimeGreen}{green}) move in opposite relative direction wrt GT (\textcolor{Mulberry}{purple}), in future 2 both vehicles (\textcolor{LimeGreen}{green}) are slower than GT (\textcolor{Mulberry}{purple}).
     \textcolor{Red}{\textbf{Red boxes:}} the ego car, turning to the right, makes appear \textcolor{OrangeRed}{red}-\textcolor{PineGreen}{green} lanes on the top, and \textcolor{PineGreen}{green}-\textcolor{OrangeRed}{red} lanes on the bottom.
     \textcolor{LimeGreen}{\textbf{Green box:}} a new car (\textcolor{LimeGreen}{green}) appears in the context state.
-  }
-  \label{I-80_qual}
+    }
+    \label{I-80_qual}
 \end{figure}
 
 Since we are also interested in measuring the ability of models to generate predictions over long time horizons, we provide a complementary measure where we train an separate classifier to distinguish between real and generated images after the stochastic model has been trained.
@@ -599,295 +599,293 @@ In future work, we plan to apply our stochastic forward model for model-based pl
 \newpage
 
 \begin{appendices}
-\crefalias{subsection}{appsec}
-\section{Appendix}
+  \crefalias{subsection}{appsec}
+  \section{Appendix}
 
-\subsection{Algorithm Details}
+  \subsection{Algorithm Details}
 
-\begin{minipage}[t]{7cm}
-  \vspace{0pt}
+  \begin{minipage}[t]{7cm}
+    \vspace{0pt}
 
-  \begin{algorithm}[H]
-    \caption{Train Prior Network}
-    \begin{algorithmic}[1]
-    \State Initialize Mixture Density Network $f_\psi$
-    \While{not converged}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
-    \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
-%    \State $\mathcal{L}_\text{MDN} = $
-      \State $\mathcal{L}_\text{MDN} = \text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnotemark
-    \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
-    \EndWhile
-  \end{algorithmic}
-  \end{algorithm}
-\end{minipage}%
-\begin{minipage}[t]{7cm}
-  \vspace{0pt}
+    \begin{algorithm}[H]
+      \caption{Train Prior Network}
+      \begin{algorithmic}[1]
+        \State Initialize Mixture Density Network $f_\psi$
+        \While{not converged}
+        \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+        \State $(\bm{\tau}, \bm{\mu}, \bm{\Sigma}) = f_{\psi}(s_{1:t})$
+        \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+        %    \State $\mathcal{L}_\text{MDN} = $
+        \State $\mathcal{L}_\text{MDN} = \text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma})$\footnotemark
+        \State $\psi \gets \psi - \eta \nabla \mathcal{L}_\text{MDN}$
+        \EndWhile
+      \end{algorithmic}
+    \end{algorithm}
+  \end{minipage}%
+  \begin{minipage}[t]{7cm}
+    \vspace{0pt}
 
-\begin{algorithm}[H]
-  \caption{Generate Sequence}\label{algo-sample}
-  \begin{algorithmic}[1]
-    \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
-    \For{j = 1:T}
-    \State $z \gets \textsc{Sample}(\mathcal{Z})$
-    \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
-    \EndFor
-    \Return $s_{1:(t+T)}$
-    \State
-    \State
-    \State
-    \State
-  \end{algorithmic}
-\end{algorithm}
-\end{minipage}
+    \begin{algorithm}[H]
+      \caption{Generate Sequence}\label{algo-sample}
+      \begin{algorithmic}[1]
+        \State \textbf{Input} Initial sequence $s_{1:t}$, $\mathcal{Z}$.
+        \For{j = 1:T}
+        \State $z \gets \textsc{Sample}(\mathcal{Z})$
+        \State $s_{t+j} = f_\theta(s_{1:(t+j-1)}, z)$
+        \EndFor
+        \Return $s_{1:(t+T)}$
+        \State
+        \State
+        \State
+        \State
+      \end{algorithmic}
+    \end{algorithm}
+  \end{minipage}
   \footnotetext{this refers to the likelihood of $z_t$ under a Gaussian mixture model with parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, \emph{i.e.}\ $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
 
-\subsection{Details for BAIR Experiments}
-\label{bair-details}
+  \subsection{Details for BAIR Experiments}
+  \label{bair-details}
 
-This architecture consists of a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units.
-Our models were trained using ADAM \citep{ADAM} with a learning rate of 0.002.
-For the \modelname we also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p = 0$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p = 0.5$.
+  This architecture consists of a VGG16 frame encoder and decoder combined with a 2-layer LSTM network with 128 hidden units.
+  Our models were trained using ADAM \citep{ADAM} with a learning rate of 0.002.
+  For the \modelname we also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p = 0$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p = 0.5$.
 
-\subsection{Details for NGSIM-I80 Dataset Experiments}
+  \subsection{Details for NGSIM-I80 Dataset Experiments}
 
-We first give some additional data set details.
-After preprocessing, at every time step we have the following items for each car in the video frame:
+  We first give some additional data set details.
+  After preprocessing, at every time step we have the following items for each car in the video frame:
 
-\begin{itemize}
-\item A context image $i_t$ of size $2 \times 120 \times 24$, capturing lane and neighboring car information
-\item A 4-dimensional vector $p_t$ encoding the car's position and velocity
-\item A 2-dimensional action $a_t$ encoding the car's acceleration and change in angle
-\item A 2-dimensional cost vector $c_t$ encoding two different cost functions: one reflecting its proximity to other cars and a second its overlap with lanes.
-\end{itemize}
+  \begin{itemize}
+    \item A context image $i_t$ of size $2 \times 120 \times 24$, capturing lane and neighboring car information
+    \item A 4-dimensional vector $p_t$ encoding the car's position and velocity
+    \item A 2-dimensional action $a_t$ encoding the car's acceleration and change in angle
+    \item A 2-dimensional cost vector $c_t$ encoding two different cost functions: one reflecting its proximity to other cars and a second its overlap with lanes.
+  \end{itemize}
 
-The state $s_t$ at a given time step is a list $(i_t, p_t)$.
-In addition to predicting the future state, models are also trained to predict future costs.
-The per-timestep prediction loss which all the models optimize is given by:
+  The state $s_t$ at a given time step is a list $(i_t, p_t)$.
+  In addition to predicting the future state, models are also trained to predict future costs.
+  The per-timestep prediction loss which all the models optimize is given by:
 
-\begin{equation}
-\ell(\hat{s}_t, s_t) = \|\hat{i}_t - i_t \|_2^2 + \| \hat{p}_t - p_t \|_2^2 + \| \hat{c}_t - c_t \|_2^2
-\end{equation}
+  \begin{equation}
+    \ell(\hat{s}_t, s_t) = \|\hat{i}_t - i_t \|_2^2 + \| \hat{p}_t - p_t \|_2^2 + \| \hat{c}_t - c_t \|_2^2
+  \end{equation}
 
-The architectural components used by the models are listed in the table below.
+  The architectural components used by the models are listed in the table below.
 
-\begin{table}[h]
-  \caption{Architecture Details for NGSIM-I80 experiments}
-  \label{sample-table}
-  \centering
-  \begin{tabular}{lll}
-    \toprule
-    Network & Sub-Networks     & Architecture    \\
-    \midrule
-    \multirow{3}{*}{$f_\text{enc}$} & Image Encoder & 3-layer convnet with 128 feature maps, reshaped output size 5376 \\
-    & State Encoder & 2-layer MLP with 128 hidden units, size 4-128-128-5376 \\
-    & Action Encoder & 2-layer MLP with 128 hidden units, size 2-128-128-5376  \\
-    \hline
-        \multirow{3}{*}{$f_\text{dec}$} & Image Decoder & 3-layer deconvnet with 128 feature maps \\
-    & State Decoder & 2-layer MLP with 128 hidden units, size 5376-128-128-4 \\
-        & Cost Predictor & 2-layer MLP with 128 hidden units, size 5376-128-128-1 \\
-    \hline
-    $f_\phi$ & Frame Encoder & 3-layer convnet with 128 feature maps followed by 2-layer MLP \\ & & with 128 hidden units, size 5376-128-128-$|z|$ (for \modelname) \\
-    &               & or 5376-128-128 (for V\modelname) \\
-    \hline
-    $f_\text{exp}$ & Expansion Network & 2-layer MLP with 128 hidden units, size $|z|$-128-128-5376\\
-    \hline
-    \bottomrule
-  \end{tabular}
-\end{table}
+  \begin{table}[h]
+    \caption{Architecture Details for NGSIM-I80 experiments}
+    \label{sample-table}
+    \centering
+    \begin{tabular}{lll}
+      \toprule
+      Network & Sub-Networks     & Architecture    \\
+      \midrule
+      \multirow{3}{*}{$f_\text{enc}$} & Image Encoder & 3-layer convnet with 128 feature maps, reshaped output size 5376 \\
+      & State Encoder & 2-layer MLP with 128 hidden units, size 4-128-128-5376 \\
+      & Action Encoder & 2-layer MLP with 128 hidden units, size 2-128-128-5376  \\
+      \hline
+      \multirow{3}{*}{$f_\text{dec}$} & Image Decoder & 3-layer deconvnet with 128 feature maps \\
+      & State Decoder & 2-layer MLP with 128 hidden units, size 5376-128-128-4 \\
+      & Cost Predictor & 2-layer MLP with 128 hidden units, size 5376-128-128-1 \\
+      \hline
+      $f_\phi$ & Frame Encoder & 3-layer convnet with 128 feature maps followed by 2-layer MLP \\ & & with 128 hidden units, size 5376-128-128-$|z|$ (for \modelname) \\
+      &               & or 5376-128-128 (for V\modelname) \\
+      \hline
+      $f_\text{exp}$ & Expansion Network & 2-layer MLP with 128 hidden units, size $|z|$-128-128-5376\\
+      \hline
+      \bottomrule
+    \end{tabular}
+  \end{table}
 
-The deterministic model only uses $f_\text{enc}$ and $f_\text{dec}$.
-For the \modelname, $f_\phi$ represents the network in \cref{eq:update-eqn}.
-For the VAE, $f_\phi$ represent the posterior network and outputs the parameters $(\mu, \sigma)$ of a diagonal Gaussian which the latent vector $z$ is sampled from.
-All models are trained with ADAM \citep{ADAM} using a learning rate of 0.0001.
-The \modelname and VAE models have their encoder and decoder initialized with the encoder and decoder of the deterministic model to speed up training, and both have a latent code size of $|z|=32$.
-The \modelname is trained to optimize the loss $\ell(s_t, \hat{s}_t)$.
-The VAE additionally includes a KL term and is trained to minimize the following loss:
+  The deterministic model only uses $f_\text{enc}$ and $f_\text{dec}$.
+  For the \modelname, $f_\phi$ represents the network in \cref{eq:update-eqn}.
+  For the VAE, $f_\phi$ represent the posterior network and outputs the parameters $(\mu, \sigma)$ of a diagonal Gaussian which the latent vector $z$ is sampled from.
+  All models are trained with ADAM \citep{ADAM} using a learning rate of 0.0001.
+  The \modelname and VAE models have their encoder and decoder initialized with the encoder and decoder of the deterministic model to speed up training, and both have a latent code size of $|z|=32$.
+  The \modelname is trained to optimize the loss $\ell(s_t, \hat{s}_t)$.
+  The VAE additionally includes a KL term and is trained to minimize the following loss:
 
-\begin{equation}
-  \ell_{\text{VAE}} = \ell(s_t, \hat{s_t}) + \beta \cdot \mbox{KL}(\mathcal{N}(0, I), \mathcal{N}(\mu, \sigma))
-\end{equation}
+  \begin{equation}
+    \ell_{\text{VAE}} = \ell(s_t, \hat{s_t}) + \beta \cdot \mbox{KL}(\mathcal{N}(0, I), \mathcal{N}(\mu, \sigma))
+  \end{equation}
 
-We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001, 0.00001 \}$ in an initial search, and found that values greater than $0.0001$ yielded image predictions which resembled those of the baseline model.
-We therefore used $0.0001$ in subsequent experiments.
+  We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001, 0.00001 \}$ in an initial search, and found that values greater than $0.0001$ yielded image predictions which resembled those of the baseline model.
+  We therefore used $0.0001$ in subsequent experiments.
 
-\begin{table}
-  \caption{NGSIM-I80 data set statistics}
-  \label{i80-stats}
-  \centering
-  \begin{tabular}{ll}
-    \toprule
-    Training Sequences     & 10454 \\
-    Validation Sequences & 579 \\
-    Testing Sequences & 579 \\
-    Average Sequence Length & 348.7 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+  \begin{table}
+    \caption{NGSIM-I80 data set statistics}
+    \label{i80-stats}
+    \centering
+    \begin{tabular}{ll}
+      \toprule
+      Training Sequences     & 10454 \\
+      Validation Sequences & 579 \\
+      Testing Sequences & 579 \\
+      Average Sequence Length & 348.7 \\
+      \bottomrule
+    \end{tabular}
+  \end{table}
 
-\subsection{A note on evaluation} \label{proof}
+  \subsection{A note on evaluation} \label{proof}
 
-We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
-Here we argue that the best-of-$k$ metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} becomes less meaningful as the number of possible futures becomes large.
-Consider the task of modeling a distribution of one-hot vectors, where each sample is a binary vector with all zeros except for a single $1$, whose index is chosen uniformly between $1$ and $n$.
-A baseline model which always predicts the average $\hat{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$.
-A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p = (n-1)/n$ (proofs can be found in the Appendix).
-Curves of both of these loss functions for different $n$ are shown in \cref{expected-loss}.
-These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the deterministic baseline according to this metric.
+  We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
+  Here we argue that the best-of-$k$ metric used in previous work \citep{Walker2016, Babaeizadeh2018, Denton2018} becomes less meaningful as the number of possible futures becomes large.
+  Consider the task of modeling a distribution of one-hot vectors, where each sample is a binary vector with all zeros except for a single $1$, whose index is chosen uniformly between $1$ and $n$.
+  A baseline model which always predicts the average $\hat{y} = (1/n, 1/n, ..., 1/n)$ (which is clearly not a valid sample in the target distribution) will have an expected loss of $\sqrt{(n-1)/n}$.
+  A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p = (n-1)/n$ (proofs can be found in the Appendix).
+  Curves of both of these loss functions for different $n$ are shown in \cref{expected-loss}.
+  These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the deterministic baseline according to this metric.
 
-The baseline model always produces the same prediction $\hat{y} = (\frac{1}{n}, ..., \frac{1}{n})$.
-Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
-\begin{align}
-  \mathbb{E}[\mathcal{L}_{\mbox{baseline}}] &= \sqrt{\sum_{i=1}^n (\hat{y}_i - y_i)^2} \\
-  &= \sqrt{(1-\frac{1}{n})^2 + (n-1)\Big ( \frac{1}{n} \Big )^2} \\
-  &= \sqrt{\frac{(n-1)^2 + (n-1)}{n^2}} \\
-  &= \sqrt{\frac{n-1}{n}}
-\end{align}
+  The baseline model always produces the same prediction $\hat{y} = (\frac{1}{n}, ..., \frac{1}{n})$.
+  Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
+  \begin{align}
+    \mathbb{E}[\mathcal{L}_{\mbox{baseline}}] &= \sqrt{\sum_{i=1}^n (\hat{y}_i - y_i)^2} \\
+    &= \sqrt{(1-\frac{1}{n})^2 + (n-1)\Big ( \frac{1}{n} \Big )^2} \\
+    &= \sqrt{\frac{(n-1)^2 + (n-1)}{n^2}} \\
+    &= \sqrt{\frac{n-1}{n}}
+  \end{align}
 
-To compute the best-of-$k$ loss, the true stochastic model produces $k$ samples of the same form as the one drawn from the true distribution, \emph{i.e.}\ $\hat{y}_k = (0, ..., 0, 1, 0, ..., 0)$, where the non-zero index is chosen uniformly from $1$ to $n$.
-Let $j$ denote the non-zero index of the sample drawn from the true distribution and $i_1, i_2, ..., i_k$ non-zero indices of the samples output by the stochastic model.
-The probability of each sample \emph{not} matching $y_j$ is equal to $p = \frac{n-1}{n}$.
-Therefore, the probability of none of the generated samples matching $y_j$ is equal to the cumulative distribution function of a binomial random variable $B(k, p)$, denoted $F(k, k, p)$.
-In the case of a generated sample matching $y_j$, the best-of-$k$ loss will equal 0, otherwise it will equal $\sqrt{2}$.
+  To compute the best-of-$k$ loss, the true stochastic model produces $k$ samples of the same form as the one drawn from the true distribution, \emph{i.e.}\ $\hat{y}_k = (0, ..., 0, 1, 0, ..., 0)$, where the non-zero index is chosen uniformly from $1$ to $n$.
+  Let $j$ denote the non-zero index of the sample drawn from the true distribution and $i_1, i_2, ..., i_k$ non-zero indices of the samples output by the stochastic model.
+  The probability of each sample \emph{not} matching $y_j$ is equal to $p = \frac{n-1}{n}$.
+  Therefore, the probability of none of the generated samples matching $y_j$ is equal to the cumulative distribution function of a binomial random variable $B(k, p)$, denoted $F(k, k, p)$.
+  In the case of a generated sample matching $y_j$, the best-of-$k$ loss will equal 0, otherwise it will equal $\sqrt{2}$.
 
-Putting this together, the expected best-of-$k$ loss is given by:
+  Putting this together, the expected best-of-$k$ loss is given by:
 
-\begin{align}
-  \mathbb{E}[\mathcal{L}_{\mbox{best-of-$k$}}] &= \mbox{P(at least one sample matches)}\cdot 0 + \mbox{P(none of the samples match)} \cdot \sqrt{2} \\
-  &= \sqrt{2} \cdot F\Big (k, k, \frac{n-1}{n} \Big) \\
-\end{align}
+  \begin{align}
+    \mathbb{E}[\mathcal{L}_{\mbox{best-of-$k$}}] &= \mbox{P(at least one sample matches)}\cdot 0 + \mbox{P(none of the samples match)} \cdot \sqrt{2} \\
+    &= \sqrt{2} \cdot F\Big (k, k, \frac{n-1}{n} \Big) \\
+  \end{align}
 
-\begin{figure}
-  \centering
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n50.pdf}
-    \caption{$n=50$}
-    \label{fig:gull}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n200.pdf}
-    \caption{$n=200$}
-    \label{fig:tiger}
-  \end{subfigure}
-  ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
-  %(or a blank line to force the subfigure onto a new line)
-  \begin{subfigure}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{images/best_of_k_toy_n1000.pdf}
-    \caption{$n=1000$}
-    \label{fig:mouse}
-  \end{subfigure}
-  \caption{
-    \textbf{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$.}
-    As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}
-  \label{expected-loss}
-\end{figure}
+  \begin{figure}
+    \centering
+    \begin{subfigure}[b]{0.3\textwidth}
+      \includegraphics[width=\textwidth]{images/best_of_k_toy_n50.pdf}
+      \caption{$n=50$}
+      \label{fig:gull}
+    \end{subfigure}
+    ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+    %(or a blank line to force the subfigure onto a new line)
+    \begin{subfigure}[b]{0.3\textwidth}
+      \includegraphics[width=\textwidth]{images/best_of_k_toy_n200.pdf}
+      \caption{$n=200$}
+      \label{fig:tiger}
+    \end{subfigure}
+    ~ %add desired spacing between images, e. g. ~, \quad, \qquad, \hfill etc.
+    %(or a blank line to force the subfigure onto a new line)
+    \begin{subfigure}[b]{0.3\textwidth}
+      \includegraphics[width=\textwidth]{images/best_of_k_toy_n1000.pdf}
+      \caption{$n=1000$}
+      \label{fig:mouse}
+    \end{subfigure}
+    \caption{
+      \textbf{Best-of-$k$ performance of average baseline model and true model for different numbers of possible futures $n$.}
+      As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}
+    \label{expected-loss}
+  \end{figure}
 
-\subsection{Critic Evaluation Details}
-\label{critic-details}
+  \subsection{Critic Evaluation Details}
+  \label{critic-details}
 
-To help control for factors of variation inherent in the stochastic optimization process of training the critic (such as the order in which samples are presented, weight initialization and gradient noise due to small minibatches), we train the critic on all three models we wish to evaluate (deterministic, cVAE and \modelname) jointly.
-More specifically, we construct minibatches where the negatively labeled sequences are produced by the three generative models in equal proportion, and the positively labeled sequences are drawn from the training set.
-The critic is trained on this binary classification problem, and after training produces scores for each of the three generative models.
-This process is described explicitly in \cref{algo-critic}.
+  To help control for factors of variation inherent in the stochastic optimization process of training the critic (such as the order in which samples are presented, weight initialization and gradient noise due to small minibatches), we train the critic on all three models we wish to evaluate (deterministic, cVAE and \modelname) jointly.
+  More specifically, we construct minibatches where the negatively labeled sequences are produced by the three generative models in equal proportion, and the positively labeled sequences are drawn from the training set.
+  The critic is trained on this binary classification problem, and after training produces scores for each of the three generative models.
+  This process is described explicitly in \cref{algo-critic}.
 
-\begin{algorithm}[h]
-  \caption{Compare Generative Models using an Offline Critic}\label{algo-critic}
-  \begin{algorithmic}[1]
-    \State \textbf{Input} Trained generative models $M_1, M_2, ..., M_{N_{models}}$ we wish to evaluate.
-    \State Initialize critic model $f_{critic}$
-    \For{$j = 1:N_{train}$}
-    \State Sample a sequence $\{s_1, ..., s_T\}$ from the training set.
-    \State $\mathcal{B} \gets \{\}$ \Comment{Initialize minibatch}
-    \State $\mathcal{B}[1] \gets \{s_{t+1}, ..., s_T\}$ \Comment{True Sequence}
-    \For{$i = 1:N_{models}$}
-    \State $\mathcal{B}[i+1] \gets \textsc{Generate}(M_i, \{s_1, ..., s_t\})$ \Comment{Sequence generated by model $M_i$}
-    \EndFor
-    \State $p \gets [ ]$
-    \For{$i = 1:(N+1)$}
-    \State $p[i] \gets f_{critic}(\mathcal{B}[i])$ \Comment{Compute critic predictions}
-    \EndFor
-    \State $t \gets [1, 0, 0, ..., 0]$ \Comment{True/False labels}
-    \State $\mathcal{L}_{critic} \gets $ BinaryCrossEntropy($p, t$)
-    \State $f_{critic} \gets f_{critic} - \eta \nabla{\mathcal{L}_{critic}}$
-    \EndFor
-    \State $S\gets []$ \Comment{Initialize model scores}
-    \For{$j = 1:N_{test}$}
-    \State Sample a sequence $\{s_1, ..., s_T\}$ from the testing set.
-    \For{$i = 1:N_{models}$} \Comment{Score sequence generated by each model}
-    \State $S[i] \gets S[i] + f_{critic}(\textsc{Generate}(M_i, \{s_1, ..., s_t\}))$
-    \EndFor
-    \State $S \gets S / N_{test}$
-    \EndFor
-    \Return $S$ \Comment{Return model scores}
-  \end{algorithmic}
-\end{algorithm}
+  \begin{algorithm}[h]
+    \caption{Compare Generative Models using an Offline Critic}\label{algo-critic}
+    \begin{algorithmic}[1]
+      \State \textbf{Input} Trained generative models $M_1, M_2, ..., M_{N_{models}}$ we wish to evaluate.
+      \State Initialize critic model $f_{critic}$
+      \For{$j = 1:N_{train}$}
+      \State Sample a sequence $\{s_1, ..., s_T\}$ from the training set.
+      \State $\mathcal{B} \gets \{\}$ \Comment{Initialize minibatch}
+      \State $\mathcal{B}[1] \gets \{s_{t+1}, ..., s_T\}$ \Comment{True Sequence}
+      \For{$i = 1:N_{models}$}
+      \State $\mathcal{B}[i+1] \gets \textsc{Generate}(M_i, \{s_1, ..., s_t\})$ \Comment{Sequence generated by model $M_i$}
+      \EndFor
+      \State $p \gets [ ]$
+      \For{$i = 1:(N+1)$}
+      \State $p[i] \gets f_{critic}(\mathcal{B}[i])$ \Comment{Compute critic predictions}
+      \EndFor
+      \State $t \gets [1, 0, 0, ..., 0]$ \Comment{True/False labels}
+      \State $\mathcal{L}_{critic} \gets $ BinaryCrossEntropy($p, t$)
+      \State $f_{critic} \gets f_{critic} - \eta \nabla{\mathcal{L}_{critic}}$
+      \EndFor
+      \State $S\gets []$ \Comment{Initialize model scores}
+      \For{$j = 1:N_{test}$}
+      \State Sample a sequence $\{s_1, ..., s_T\}$ from the testing set.
+      \For{$i = 1:N_{models}$} \Comment{Score sequence generated by each model}
+      \State $S[i] \gets S[i] + f_{critic}(\textsc{Generate}(M_i, \{s_1, ..., s_t\}))$
+      \EndFor
+      \State $S \gets S / N_{test}$
+      \EndFor
+      \Return $S$ \Comment{Return model scores}
+    \end{algorithmic}
+  \end{algorithm}
 
-\subsection{Timing of Nearest Neighbor Search}
-\label{computational-cost}
+  \subsection{Timing of Nearest Neighbor Search}
+  \label{computational-cost}
 
-All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
-In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
-The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
-The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
-In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see \cref{nn-search-timing}).
-If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
+  All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
+  In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
+  The second approach allows us to construct the nearest-neighbor graph offline, since it is input-independent, hence sampling is also $\mathcal{O}(1)$ at runtime.
+  The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
+  In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see \cref{nn-search-timing}).
+  If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
 
-\begin{table}
-  \caption{
-    Timing for different operations.
-    Timing for different operations.
-The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM-I80.
-  }
-  \label{nn-search-timing}
-  \centering
-  \begin{tabular}{lcc}
-    \toprule
-    Operation     & BAIR [ms] & NGSIM-I80 [ms] \\
-    \midrule
-    Encoding  & 1.2 & 1.4 \\
-    Decoding  & 2.8 & 2.4 \\
-    NN search & 0.7 & 0.5 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+  \begin{table}
+    \caption{
+      Timing for different operations.
+      Timing for different operations.
+      The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM-I80.
+    }
+    \label{nn-search-timing}
+    \centering
+    \begin{tabular}{lcc}
+      \toprule
+      Operation     & BAIR [ms] & NGSIM-I80 [ms] \\
+      \midrule
+      Encoding  & 1.2 & 1.4 \\
+      Decoding  & 2.8 & 2.4 \\
+      NN search & 0.7 & 0.5 \\
+      \bottomrule
+    \end{tabular}
+  \end{table}
 
-\begin{comment}
-\subsection{Additional Video Prediction Results}
+  % \subsection{Additional Video Prediction Results}
+  %
+  % \begin{figure}
+  %   \centering
+  %   \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_ssim-crop.pdf}
+  %   \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_psnr-crop.pdf}
+  %   \caption{}
+  %   \label{bair}
+  % \end{figure}
 
-\begin{figure}
-  \centering
-  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_ssim-crop.pdf}
-  \includegraphics[width=0.4\textwidth]{images/bair_ae_comparison_psnr-crop.pdf}
-  \caption{}
-  \label{bair}
-\end{figure}
-\end{comment}
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/distance_histograms.pdf}
+    %  \fbox{\rule[-.5cm]{0cm}{4cm}
+    %    \rule[-.5cm]{4cm}{0cm}}
+    \caption{
+      Distribution of distances between consecutive $z$ and random pairs of $z$ vectors extracted from the I-80 training set.
+      Consecutive vectors are closer on average, which supports the smoothness assumption underlying \cref{knn-algo}.
+    }
+  \end{figure}
 
-\begin{figure}
-  \centering
-  \includegraphics[width=0.5\textwidth]{images/distance_histograms.pdf}
-%  \fbox{\rule[-.5cm]{0cm}{4cm}
-%    \rule[-.5cm]{4cm}{0cm}}
-  \caption{
-    Distribution of distances between consecutive $z$ and random pairs of $z$ vectors extracted from the I-80 training set.
-Consecutive vectors are closer on average, which supports the smoothness assumption underlying \cref{knn-algo}.
-  }
-\end{figure}
-
-% \section*{References}
-%
-% References follow the acknowledgments. Use unnumbered first-level
-% heading for the references. Any choice of citation style is acceptable
-% as long as you are consistent. It is permissible to reduce the font
-% size to \verb+small+ (9 point) when listing the references. {\bf
-%   Remember that you can use more than eight pages as long as the
-%   additional pages contain \emph{only} cited references.}
-% \medskip
-%
-% \small
+  % \section*{References}
+  %
+  % References follow the acknowledgments. Use unnumbered first-level
+  % heading for the references. Any choice of citation style is acceptable
+  % as long as you are consistent. It is permissible to reduce the font
+  % size to \verb+small+ (9 point) when listing the references. {\bf
+  %   Remember that you can use more than eight pages as long as the
+  %   additional pages contain \emph{only} cited references.}
+  % \medskip
+  %
+  % \small
 
 \end{appendices}
 \end{document}
