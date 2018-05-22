@@ -46,7 +46,6 @@
 
 \newcommand{\modelname}{TENet }
 
-
 \title{Target Encoding Networks}
 
 % The \author macro works with any number of authors. There are two
@@ -102,7 +101,6 @@ The TENet model relies on three key ideas: i) the information content of the lat
   We also introduce a new challenging real-world data set with applications to autonomous driving for use by the research community.
 \end{abstract}
 
-
 \section{Introduction}
 
 Learning to predict future states of a complex time series, such as sensory inputs, is an important research problem with applications in unsupervised representation learning, planning, model-based reinforcement learning, and compression.
@@ -134,20 +132,21 @@ The TEN model relies on three key ideas:
     At training time, the latent variable is given the value zero some proportion of the time, and otherwise computed by a trainable deterministic function $f_\phi$ that takes as input the target to be predicted as input.
   This causes the model to make perfect predictions with the latent variable equal to zero when the data is fully predictable.
   \item
-    To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $f_\phi$ function on ``future'' values).
+    To generate samples after training, a sequence of latent variables is first computed from the training set (by applying the $f_\phi$ function on ``future'' target values).
     This sequence is then used to train a simple non-parametric or semi-parametric density model that can easily be sampled from.
     This is made easy because the latent variable is low dimensional and because the ``predictable'' component of the target has been taken out.
     Through this sampling procedure, we naturally obtain samples which are on the manifold of latent variables and, when fed to the decoder, produce samples in the regions of high data density.
 \end{itemize}
 
-This method does away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk mode collapse.
+This method does away with the need for a regularization term at training time which enforces a match between prior and posterior distributions, leading to a simple and easy to optimize loss which does not run the risk of mode collapse.
 If the latent variable distribution is dependent on the input, it may additionally be necessary to condition the density model of the latent variables on previous values of the latent variable or directly on the input.
-We therefore propose and empirically investigate two ways of achieving this: (1) through non-parametric density model with a smoothness assumption on the trajectories in the space of latent variables, which translates into a nearest-neighbor based sampling scheme, and (2) by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold conditioned on the input.
+We therefore propose and empirically investigate two ways of achieving this:
+(1) through a non-parametric density model with a smoothness assumption on the trajectories in the space of latent variables, which translates into a nearest-neighbor based sampling scheme, and
+(2) by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold conditioned on the input.
 
 In addition to the proposed model, which we show performs comparably or better to existing approaches on a standard video prediction data set, we also introduce a new real-world data set with applications to autonomous driving.
 This data set consists of a large number of driving trajectories taken from mounted traffic cameras, which we preprocess to form a representation consistent with radar or lidar readings received by autonomous vehicle sensors.
 Modeling and anticipating the behavior of surrounding drivers can be framed as a stochastic prediction problem, whose solution can allow an autonomous vehicle to anticipate or avoid unsafe situations as well as perform model-based planning.
-
 
 \section{Predictive Model}
 
@@ -162,16 +161,12 @@ Modeling and anticipating the behavior of surrounding drivers can be framed as a
 \end{figure}
 
 Our stochastic prediction model can be viewed as a conditional autoencoder paired with a non-parametric  or semi-parametric sampling procedure.
-The architecture consists of three neural networks: an encoder $f_\text{enc}$, a decoder $f_\text{dec}$ and a latent variable network $f_\phi$.
+The architecture consists of three neural networks: an encoder $f_\text{enc}$, a decoder $f_\text{dec}$, and a latent variable network $f_\phi$.
 For each input $s_{1:t}$ (\emph{i.e.}\ a sequence of $t$ consecutive states) and a target $s_{t+1}$ (\emph{i.e.}\ the following state), the update equations are given by:
 %
 \begin{align}
   \label{eq:update-eqn}
-  z_t &=
-  \begin{cases}
-    0 & \mbox{   if   } u = 1, \mbox{   } u \sim \mathcal{B}(p) \\
-    f_\phi(s_{1:t}, s_{t+1}) & \mbox{   otherwise}
-  \end{cases} \\
+  z_t &= f_\phi(s_{1:t}, s_{t+1}) \cdot u, u \in \{0, 1\} \sim \mathcal{B}(p) \\
   \hat{s}_{t+1} &= f_\text{dec}(f_\text{enc}(s_{1:t}), z_t) = f_\theta(s_{1:t}, z_t)
 \end{align}
 %
@@ -197,7 +192,6 @@ A transformation $f_\text{exp}$ transforms this low-dimensional latent variable 
 Note that in the case of a linear transformation, this simply corresponds to combining the latent variable and hidden state via concatenatation.
 
 %In our experiments we found setting the dimension of $z$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
-
 
 \begin{minipage}[t]{7cm}
   \vspace{0pt}
@@ -255,24 +249,9 @@ Note that in the case of a linear transformation, this simply corresponds to com
     \State \textbf{return} $z$
     \EndProcedure
   \end{algorithmic}
+\vspace{5pt}
 \end{algorithm}
 \end{minipage}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 \begin{comment}
 \begin{algorithm}[t]
@@ -298,7 +277,6 @@ Note that in the case of a linear transformation, this simply corresponds to com
   \end{algorithmic}
 \end{algorithm}
 \end{comment}
-
 
 \subsection{Sampling} \label{sec:sampling}
 
@@ -338,8 +316,6 @@ In our experiments, we found that the cost of exact nearest neighbor searches re
 
 %A possible issue in modeling distributions using non-parametric approaches is that they can trade flexibility for increased memory and computational cost.
 
-
-
 \begin{comment}
 \begin{algorithm}[t]
   \caption{Sampling Procedures}\label{algo-sample}
@@ -349,7 +325,6 @@ In our experiments, we found that the cost of exact nearest neighbor searches re
     \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
     \State \textbf{return} $\mathcal{S}$
     \EndProcedure
-
 
     \Procedure{SampleUniform}{$\mathcal{Z}$}
     \State Sample $z \sim \mathcal{Z}$ uniformly at random
@@ -372,10 +347,6 @@ In our experiments, we found that the cost of exact nearest neighbor searches re
 \end{algorithm}
 \end{comment}
 
-
-
-
-
 \section{Related Work}
 
 In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016,canziani2017cortexnet, VPN}.
@@ -391,8 +362,6 @@ Our model is also related to Generative Latent Optimization \citep{GLO}, which a
 Our method computes latent variables using a learned parametric function, and we also investigate sampling schemes at generation time.
 Also related to our method is the Vector-Quantized VAE \citep{VQVAE}, where the latent variable is discrete.
 Our model could be seen as a form of VQ-VAE where the are as many discrete latent variables as there are training samples.
-
-
 
 \section{Data sets}
 
@@ -412,9 +381,6 @@ These have the advantage of being able to evaluate specific model capabilities i
 However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (\emph{i.e.}\ the position or velocity of the robot arm, which we demonstrate in our experiments).
 In contrast, the NGSIM I-80 data set has a relatively large number of cars per context image, as shown in \cref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other data sets used in the literature.
-
-
-
 
 \begin{figure}
   \centering
@@ -438,12 +404,10 @@ We therefore believe this prediction tasks offers unique features which compleme
   }
 \end{figure}
 
-
 \section{Experiments}
 
 We now describe our experimental results on two real-world data sets.
 We also encourage the reader to view videos at \url{https://sites.google.com/view/targetencodingnetworks/home}.
-
 
 \subsection{BAIR Results}
 
@@ -474,10 +438,6 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
   \label{bair}
 \end{figure}
 
-
-
-
-
 \begin{figure}
   \centering
   \begin{subfigure}[b]{\textwidth}
@@ -492,8 +452,6 @@ The code sampled at each time step is marked in red.
   \end{subfigure}
 \end{figure}
 
-
-
 We follow the evaluation protocol used in previous works on stochastic generation \citep{Walker2016, Babaeizadeh2018, Denton2018}, where we generate a fixed number of samples (in this case 100) using the stochastic model, compare each sample to the ground truth sample in the test set, and report the error of the best match.
 We refet to this metric in the rest of the paper as the ``best-of-$k$'' metric.
 This method provides some measure of how well the stochastic model covers the space of possible futures, although it does not necessarily reflect the realism of all the generated samples.
@@ -505,7 +463,6 @@ Compared to variational-based approaches, \modelname-LP performs best for the fi
  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric.
 The fact that our model is able to achieve performance which is similar or better than other state-of-the-art approaches using a latent variable with only two dimensions suggests that this data set is in fact quite simple.
 Please refer to the URL for videos.
-
 
 \subsection{NGSIM-I80 Dataset}
 
@@ -524,7 +481,6 @@ It eventually even performs \emph{better}, even though it is clear from visual i
 We provide an explanation of this in \cref{proof}, along with a proof that the best-of-$k$ metric does indeed favor a deterministic averaging model over an exact model as the number of futures gets large in the case of a simple uniform distribution over one-hot vectors.
 This is evidence that the best-of-$k$ metric should be interpreted with caution when the number of possible futures becomes large.
 In particular, this number can grow exponentially with the number of time steps into the future which are predicted.
-
 
 \begin{figure}[t!]
   \centering
@@ -558,8 +514,6 @@ $p$-value indicates whether the difference between cVAE and \modelname-LP scores
   \end{tabular}
 \end{table}
 
-
-
 \begin{figure}[t!]
   \centering
   \includegraphics[width=\textwidth]{images/qualitative_I-80}
@@ -589,24 +543,12 @@ Resulting scores are shown in \cref{critic-table}.
 The deterministic model has the lowest score, the VAE has a higher score, which agrees with its improved perceptual quality, and the \modelname-LP has the highest.
 This provides further evidence that it is able to generate high-quality predictions far into the future.
 
-
-
-
 \section{Conclusion}
 
 In this work, we have made two contributions towards research in stochastic prediction: a new model architecture which is simple to train and does not suffer from mode collapse or posterior mismatch, and a challenging large-scale data set with real-world applications in autonomous driving.
 We will make this data set publicly available to the research community in an effort to encourage more research in this area.
 In future work, we plan to apply our stochastic forward model for model-based planning under uncertainty, by backpropagating gradient of predicted costs with respect to input actions.
 %Our preparation of this data set also makes it straightforward to use for planning, by having agents execute actions which are rendered in the simulator.
-
-
-
-
-
-
-
-
-
 
 %\subsection{Figures}
 %
@@ -634,12 +576,6 @@ In future work, we plan to apply our stochastic forward model for model-based pl
 %
 %\section{Final instructions}
 
-
-
-
-
-
-
 % \subsubsection*{Acknowledgments}
 %
 % Use unnumbered third level headings for the acknowledgments. All
@@ -656,7 +592,6 @@ In future work, we plan to apply our stochastic forward model for model-based pl
 \begin{appendices}
 \crefalias{subsection}{appsec}
 \section{Appendix}
-
 
 \subsection{Algorithm Details}
 
@@ -699,7 +634,6 @@ In future work, we plan to apply our stochastic forward model for model-based pl
 \end{minipage}
   \footnotetext{this refers to the likelihood of $z_t$ under a Gaussian mixture model with parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$, \emph{i.e.}\ $\text{pdf}_\text{GMM}(z_t | \bm{\tau}, \bm{\mu}, \bm{\Sigma}) = \sum_i \tau_i \frac{1}{\sqrt{(2\pi)^k |\Sigma_i|}} \text{exp}\Big[-(z_t - \mu_i)^\top\Sigma_i^{-1}(z_t - \mu_i)\Big]$}
 
-
 \subsection{Details for BAIR Experiments}
 \label{bair-details}
 
@@ -707,14 +641,10 @@ This architecture consists of a VGG16 frame encoder and decoder combined with a 
 Our models were trained using ADAM \citep{ADAM} with a learning rate of 0.002.
 For the \modelname we also set the dimension of $z$ to be lower (2 dimensions) and trained the model with dropout parameter $p=1$ on the latent code (corresponding to purely deterministic mode) until the loss stopped decreasing, after which we set $p=0.5$.
 
-
-
-
 \subsection{Details for NGSIM-I80 Dataset Experiments}
 
 We first give some additional data set details.
 After preprocessing, at every time step we have the following items for each car in the video frame:
-
 
 \begin{itemize}
 \item A context image $i_t$ of size $2 \times 120 \times 24$, capturing lane and neighboring car information
@@ -758,7 +688,6 @@ The architectural components used by the models are listed in the table below.
   \end{tabular}
 \end{table}
 
-
 The deterministic model only uses $f_\text{enc}$ and $f_\text{dec}$.
 For the \modelname, $f_\phi$ represents the network in \cref{eq:update-eqn}.
 For the VAE, $f_\phi$ represent the posterior network and outputs the parameters $(\mu, \sigma)$ of a diagonal Gaussian which the latent vector $z$ is sampled from.
@@ -774,7 +703,6 @@ The VAE additionally includes a KL term and is trained to minimize the following
 We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001, 0.00001 \}$ in an initial search, and found that values greater than $0.0001$ yielded image predictions which resembled those of the baseline model.
 We therefore used $0.0001$ in subsequent experiments.
 
-
 \begin{figure}
   \centering
   \begin{subfigure}[b]{0.5\textwidth}
@@ -783,7 +711,6 @@ We therefore used $0.0001$ in subsequent experiments.
   \caption{Cars per context state}
   \label{car-statistics}
 \end{figure}
-
 
 \begin{table}
   \caption{NGSIM-I80 data set statistics}
@@ -799,8 +726,6 @@ We therefore used $0.0001$ in subsequent experiments.
   \end{tabular}
 \end{table}
 
-
-
 \subsection{A note on evaluation} \label{proof}
 
 We provide a discussion of evaluation metrics, and their relationship to the stochasticity of the prediction task.
@@ -810,7 +735,6 @@ A baseline model which always predicts the average $\hat{y} = (1/n, 1/n, ..., 1/
 A stochastic model which exactly captures the true distribution will have an expected loss of $\sqrt{2} \cdot F(k, k, (n-1)/n)$, where $F$ refers to the cumulative distribution function of a Binomial random variable with $p=(n-1)/n$ (proofs can be found in the Appendix).
 Curves of both of these loss functions for different $n$ are shown in \cref{expected-loss}.
 These illustrate that as $n$ becomes large, an increasingly high number of samples is required for the correct stochastic prediction model to outperform the deterministic baseline according to this metric.
-
 
 The baseline model always produces the same prediction $\hat{y} = (\frac{1}{n}, ..., \frac{1}{n})$.
 Each sample from the true distribution is of the form $y_i = (0, ..., 0, 1, 0, ..., 0)$ with a single non-zero element.
@@ -833,7 +757,6 @@ Putting this together, the expected best-of-$k$ loss is given by:
   \mathbb{E}[\mathcal{L}_{\mbox{best-of-$k$}}] &= \mbox{P(at least one sample matches)}\cdot 0 + \mbox{P(none of the samples match)} \cdot \sqrt{2} \\
   &= \sqrt{2} \cdot F\Big (k, k, \frac{n-1}{n} \Big) \\
 \end{align}
-
 
 \begin{figure}
   \centering
@@ -861,9 +784,6 @@ Putting this together, the expected best-of-$k$ loss is given by:
     As the number of futures increases, it becomes increasingly difficult for the true model to outperform the baseline according to this metric.}
   \label{expected-loss}
 \end{figure}
-
-
-
 
 \subsection{Critic Evaluation Details}
 \label{critic-details}
@@ -905,11 +825,8 @@ This process is described explicitly in \cref{algo-critic}.
   \end{algorithmic}
 \end{algorithm}
 
-
-
 \subsection{Timing of Nearest Neighbor Search}
 \label{computational-cost}
-
 
 All the approaches above have a memory footprint which grows with the size of $\mathcal{Z}$.
 In terms of computational cost, the first approach requires $\mathcal{O}(1)$ at inference time as we are simply sampling from $\mathcal{Z}$.
@@ -917,7 +834,6 @@ The second approach allows us to construct the nearest-neighbor graph offline, s
 The third approach is input-dependent, and can be cast as a nearest-neighbor problem by first sampling a point from the Gaussian mixture model output by $f_\psi$, and then mapping it to the nearest vector in $\mathcal{Z}$.
 In practice, we found that the computational cost of an exact nearest neighbor search over $\mathcal{Z}$ on GPU was small compared to the cost of forward passes through other parts of the network (see \cref{nn-search-timing}).
 If additional speedups are required, we note that finding nearest neighbors is a well-studied problem for which fast exact or approximate algorithms exist, such as $k$-d trees or locally sensitive hashing.
-
 
 \begin{table}
   \caption{
@@ -938,7 +854,6 @@ The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM
   \end{tabular}
 \end{table}
 
-
 \begin{comment}
 \subsection{Additional Video Prediction Results}
 
@@ -951,7 +866,6 @@ The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM
 \end{figure}
 \end{comment}
 
-
 \begin{figure}
   \centering
   \includegraphics[width=0.5\textwidth]{images/distance_histograms.pdf}
@@ -962,7 +876,6 @@ The number of latent codes searched over is 240000 for BAIR and 100000 for NGSIM
 Consecutive vectors are closer on average, which supports the smoothness assumption underlying \cref{knn-algo}.
   }
 \end{figure}
-
 
 % \section*{References}
 %
