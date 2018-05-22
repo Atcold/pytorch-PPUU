@@ -98,8 +98,8 @@
 \begin{abstract}
   We propose a new model for stochastic prediction called the Target Encoding Network (TENet), in which the latent variable is a deterministic function of the input and target.
 The TENet model relies on three key ideas: i) the information content of the latent variable is limited by making it low dimensional, ii) the latent variable is set to zero some proportion of the time during training, forcing the model to also make use of the input, and iii) a non-parametric sampling scheme is used at generation time to naturally obtain samples which are on the manifold of latent variables.
-  We evaluate this method on two challenging real-world datasets, where it matches or outperforms existing approaches for stochastic prediction.
-  We also introduce a new challenging real-world dataset with applications to autonomous driving for use by the research community.
+  We evaluate this method on two challenging real-world data sets, where it matches or outperforms existing approaches for stochastic prediction.
+  We also introduce a new challenging real-world data set with applications to autonomous driving for use by the research community.
 \end{abstract}
 
 
@@ -144,8 +144,8 @@ This method does away with the need for a regularization term at training time w
 If the latent variable distribution is dependent on the input, it may additionally be necessary to condition the density model of the latent variables on previous values of the latent variable or directly on the input.
 We therefore propose and empirically investigate two ways of achieving this: (1) through non-parametric density model with a smoothness assumption on the trajectories in the space of latent variables, which translates into a nearest-neighbor based sampling scheme, and (2) by combining the non-parametric sampling scheme with a parametric likelihood model which restricts our sampling to a subregion of the manifold conditioned on the input.
 
-In addition to the proposed model, which we show performs comparably or better to existing approaches on a standard video prediction dataset, we also introduce a new real-world dataset with applications to autonomous driving.
-This dataset consists of a large number of driving trajectories taken from mounted traffic cameras, which we preprocess to form a representation consistent with radar or lidar readings received by autonomous vehicle sensors.
+In addition to the proposed model, which we show performs comparably or better to existing approaches on a standard video prediction data set, we also introduce a new real-world data set with applications to autonomous driving.
+This data set consists of a large number of driving trajectories taken from mounted traffic cameras, which we preprocess to form a representation consistent with radar or lidar readings received by autonomous vehicle sensors.
 Modeling and anticipating the behavior of surrounding drivers can be framed as a stochastic prediction problem, whose solution can allow an autonomous vehicle to anticipate or avoid unsafe situations as well as perform model-based planning.
 
 
@@ -441,14 +441,14 @@ We therefore believe this prediction tasks offers unique features which compleme
 
 \section{Experiments}
 
-We now describe our experimental results on two real-world datasets.
+We now describe our experimental results on two real-world data sets.
 We also encourage the reader to view videos at \url{https://sites.google.com/view/targetencodingnetworks/home}.
 
 
 \subsection{BAIR Results}
 
-The BAIR robot pushing dataset \citep{Ebert17} consists of videos of a Sawyer robotic arm randomly moving objects on a table.
-The dataset contains a high degree of stochasticity due to the random arm motion, and also contains real-world objects and backgrounds.
+The BAIR robot pushing data set \citep{Ebert17} consists of videos of a Sawyer robotic arm randomly moving objects on a table.
+The data set contains a high degree of stochasticity due to the random arm motion, and also contains real-world objects and backgrounds.
 Following previous work \citep{Babaeizadeh2018, Denton2018}, we condition our model on the first two frames in a video sequence and train it to predict the following 10 frames.
 We used the same model architecture as in \citep{Denton2018}, to isolate factors and better understand the influence of our loss and sampling procedure (details can be found in \cref{bair-details}.
 The main difference is that we did not use a prior network at training time, did not include a KL term in the loss function, and instead sampled latents at test time using the approaches described in \cref{sec:sampling}.
@@ -484,7 +484,7 @@ We also used a lower-dimensional latent variable, with 2 rather than 32 dimensio
     \centering
   \includegraphics[width=0.8\textwidth]{images/robot_trajectory-crop.pdf}
   \caption{
-    Trajectory generated on the BAIR dataset.
+    Trajectory generated on the BAIR data set.
 Top images are generated frames, bottom images show the latent 2-D codes extracted from the training set.
 The code sampled at each time step is marked in red.
   }
@@ -541,7 +541,7 @@ In particular, this number can grow exponentially with the number of time steps 
 
 \begin{table}[t!]
   \caption{
-    Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 dataset, averaged over 20 random seeds.
+    Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 data set, averaged over 20 random seeds.
 $p$-value indicates whether the difference between cVAE and \modelname-LP scores is statistically significant according to a Wilcoxon rank-sum test.
   }
   \label{critic-table}
@@ -594,10 +594,10 @@ This provides further evidence that it is able to generate high-quality predicti
 
 \section{Conclusion}
 
-In this work, we have made two contributions towards research in stochastic prediction: a new model architecture which is simple to train and does not suffer from mode collapse or posterior mismatch, and a challenging large-scale dataset with real-world applications in autonomous driving.
-We will make this dataset publicly available to the research community in an effort to encourage more research in this area.
+In this work, we have made two contributions towards research in stochastic prediction: a new model architecture which is simple to train and does not suffer from mode collapse or posterior mismatch, and a challenging large-scale data set with real-world applications in autonomous driving.
+We will make this data set publicly available to the research community in an effort to encourage more research in this area.
 In future work, we plan to apply our stochastic forward model for model-based planning under uncertainty, by backpropagating gradient of predicted costs with respect to input actions.
-%Our preparation of this dataset also makes it straightforward to use for planning, by having agents execute actions which are rendered in the simulator.
+%Our preparation of this data set also makes it straightforward to use for planning, by having agents execute actions which are rendered in the simulator.
 
 
 
@@ -712,7 +712,7 @@ For the \modelname we also set the dimension of $z$ to be lower (2 dimensions) a
 
 \subsection{Details for NGSIM-I80 Dataset Experiments}
 
-We first give some additional dataset details.
+We first give some additional data set details.
 After preprocessing, at every time step we have the following items for each car in the video frame:
 
 
@@ -786,7 +786,7 @@ We therefore used $0.0001$ in subsequent experiments.
 
 
 \begin{table}
-  \caption{NGSIM-I80 dataset statistics}
+  \caption{NGSIM-I80 data set statistics}
   \label{i80-stats}
   \centering
   \begin{tabular}{ll}
