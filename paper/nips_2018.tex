@@ -185,11 +185,11 @@ This is accomplished by setting the latent vector $z_t$ to zero with some probab
 This setting encourages the network to continue to extract as much information as possible from the input $s_{1:t}$, rather than simply trying to reconstruct the target, and only use the true target $s_{t+1}$ to reconstruct what cannot be predicted from the input.
 In our experiments, we train with $p = 0$ for an initial fixed number of iterations, which corresponds to purely deterministic training, after which we increase $p$ to incorporate the latent variables encoded from the targets.
 
-A second key point is that the dimension of the latent variable $z_t$ is much lower than the dimension of the states $s_t$.
+A second key point is that the dimension of the latent variable $z$ is much lower than the dimension of the state $s$.
 This has two benefits: first, it can further help limit the information content and prevent trivial reconstructions of the targets.
 Second, it allows us to use non-parametric estimates of the distribution over latent variables using a reasonable number of points, which we detail in the next section.
 A transformation $f_\text{exp}$ transforms this low-dimensional latent variable to be the same size as the hidden representation, after which it is combined via addition.
-Note that in the case of a linear transformation, this simply corresponds to combining the latent variable and hidden state via concatenatation.
+Note that in the case of a linear transformation, this simply corresponds to combining the latent variable and hidden state via concatenation.
 
 %In our experiments we found setting the dimension of $z$ to be of much lower dimension than $s$ to work well, however other methods, such as adding a sparsity or contractive penalty term, could also be used.
 
@@ -200,18 +200,18 @@ Note that in the case of a linear transformation, this simply corresponds to com
     \caption{Build Stochastic Model}
   \begin{algorithmic}[1]
     \State \textbf{input} training set $\mathcal{D}$
-    \State Initialize networks $f_\theta, f_\phi$
+    \State initialize networks $f_\theta, f_\phi$
     \While{not converged}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
-    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
+    \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
+    \State $z_t = f_{\phi}(s_{1:t}, s_{t+1}) \cdot u$
     \State $\hat{s}_{t+1} = f_{\theta}(s_{1:t}, z_t)$
-    \State $\ell(\theta, \phi) = \|s_{t+1} - \hat{s}_{t+1} \|_2^2$
-    \State $\theta \leftarrow \theta - \eta \nabla \theta$
-    \State $\phi \leftarrow \phi - \eta \nabla \phi$
+    \State $J(\theta, \phi) = \|\hat{s}_{t+1} - s_{t+1} \|_2^2$
+    \State $\theta \leftarrow \theta - \eta \nabla_\theta J$
+    \State $\phi \leftarrow \phi - \eta \nabla_\phi J$
     \EndWhile
     \State $\mathcal{Z} \leftarrow \varnothing$
-    \For{$i = 1:N_Z$}
-    \State Sample a sequence $\{s_1, ..., s_t, s_{t+1}\} \sim \mathcal{D}$
+    \For{$n = 1:N$}
+    \State sample a sequence $\{s_1, \;\cdots, s_{t+1}\} \sim \mathcal{D}$
     \State $z_t = f_{\phi}(s_{1:t}, s_{t+1})$
     \State $\mathcal{Z} \leftarrow \mathcal{Z} \cup \{ z_t \}$
     \EndFor
@@ -226,30 +226,30 @@ Note that in the case of a linear transformation, this simply corresponds to com
 \begin{algorithm}[H]
   \caption{Sampling Procedures}\label{algo-sample}
   \begin{algorithmic}[1]
-    \Procedure{KNN}{$\mathcal{Z}, z, K$}
-    \State $\mathcal{S} \gets $ set of $K$ nearest neighbors of $z$ in $\mathcal{Z}$.
-    \State \textbf{return} $\mathcal{S}$
-    \EndProcedure
-
     \Procedure{SampleUniform}{$\mathcal{Z}$}
-    \State Sample $z \sim \mathcal{Z}$ uniformly at random
+    \State sample $z \sim \mathcal{Z}$ uniformly at random
     \State \textbf{return} $z$
     \EndProcedure
 
-    \Procedure{SampleKNN}{$\mathcal{Z}, z, K$}
-    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, K)$
+    \Procedure{KNN}{$\mathcal{Z}, z, k$}
+    \State $\mathcal{S} \gets $ set of $k$ nearest neighbors of $z$ in $\mathcal{Z}$
+    \State \textbf{return} $\mathcal{S}$
+    \EndProcedure
+
+    \Procedure{SampleKNN}{$\mathcal{Z}, z, k$}
+    \State $\mathcal{S} \gets \textsc{KNN}(\mathcal{Z}, z, k)$
     \State $z \gets \textsc{SampleUniform}(\mathcal{S})$
     \State \textbf{return} $z$
     \EndProcedure
 
     \Procedure{SampleMDN}{$\mathcal{Z}, f_\psi, s_{1:t}$}
-    \State $(\pi, \mu, \sigma) = f_\psi(s_{1:t})$
-    \State $z^* \sim \mbox{GMM}(\pi, \mu, \sigma)$
-    \State $\{z\} \gets \textsc{KNN}(\mathcal{Z}, z^*, 1)$
+    \State $(\bm{\tau}, \bm{\mu}, \bm{\sigma}) = f_\psi(s_{1:t})$
+    \State $z^* \sim \mbox{GMM}(\bm{\tau}, \bm{\mu}, \bm{\sigma})$
+    \State $z \gets \textsc{SampleKNN}(\mathcal{Z}, z^*, 1)$
     \State \textbf{return} $z$
     \EndProcedure
   \end{algorithmic}
-\vspace{5pt}
+\vspace{5.7pt}
 \end{algorithm}
 \end{minipage}
 
