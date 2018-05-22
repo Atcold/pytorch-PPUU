@@ -113,7 +113,7 @@ Another approach is through the framework of Generative Adversarial Networks \ci
 A third approach is through the framework of Variational Autoencoders \citep{VAE} (VAEs), in which the latent variable is assumed to be the sum of a deterministic function of an input and a random variable with a simple distribution.
 It includes a loss term measuring the divergence between the assumed simple distribution and observed distribution.
 Choosing a simple distribution, such as a diagonal Gaussian, gives a simple closed-form expression for this term, but also can also cause either mode collapse or poor reconstructions due to the conflict between reconstruction and prior matching terms, and can require careful tuning or annealing schedules.
-%More recently, several works have been proposed which use the framework of conditional Variational AutoEncoders (VAEs) for generating images and video frames.
+%More recently, several works have been proposed which use the framework of conditional Variational Autoencoders (VAEs) for generating images and video frames.
 %VAEs assume a prior over latent variables and include a loss term measuring the Kullback–Leibler (KL) divergence between this prior and the distribution output by the posterior network.
 %This helps ensure that latent variables sampled from this prior at generation time are consistent with those input to the decoder network during training.
 %Simple priors, such as diagonal Gaussians, are common choices, as they enable a closed-form expression for the KL divergence between prior and posterior distributions, which in turn reduces the variance of the gradients with respect to this term.
@@ -297,16 +297,16 @@ We explore three sampling methods based on this estimate, which are described ex
 \textbf{Uniform} \quad
 For a given input $s_{1:t}$, we simply sample some $z \sim \mathcal{Z}$ uniformly at random, in this case the latent variable is independent of the input.
 
-\textbf{\emph{k}-Nearest Neighbors} \quad
+\textbf{\emph{k}-Nearest Neighbors (KNN)} \quad
 Here we make a smoothness assumption on the trajectories followed along the latent manifold.
 In particular, we assume that $z_{t+1}$ tends to be closer (on average) to $z_t$ than a random other vector in $\mathcal{Z}$.
 This assumption is motivated by a smoothness assumption on the inputs: if $s_{t+1}$ and $s_{t+2}$ are close and $f_\phi$ is a smooth function, then $z_t$ and $z_{t+1}$ will be close as well.
 This smoothness assumption can be reflected by restricting the choice of $z_{t+1}$ we sample from $\mathcal{Z}$ to the $k$-nearest neighbors of $z_t$.
 This approach can be implemented by constructing a $k$-nearest neighbor graph and performing a random walk along this graph.
 
-\textbf{Learned Prior} \quad
+\textbf{Mixture Density Network (MDN)} \quad
 We can also learn an input-dependent prior by training a neural network to assign likelihood values to different vectors in $\mathcal{Z}$ for a given input $s_{1:t}$.
-Specifically, we train a Mixture Density Network \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$ of a Gaussian mixture model (with diagonal covariances) and is trained to maximize the likelihood of $z_t$ under this model.
+Specifically, we train an MDN \citep{mixture-density-networks} $f_\psi(s_{1:t})$ which outputs the parameters $(\bm{\tau}, \bm{\mu}, \bm{\Sigma})$ of a Gaussian mixture model (with diagonal covariances) and is trained to maximize the likelihood of $z_t$ given $s_{1:t}$ under this model.
 Note that Gaussian mixture models can approximate arbitrary distributions given a sufficient number of components, hence this is not a conceptual limitation to the class of prior distributions that can be represented with our approach.
 
 %Although they offer increased flexibility, non-parametric approaches to modeling distributions can also bring potential challenges, which we discuss here.
@@ -351,16 +351,16 @@ In our experiments, we found that the cost of exact nearest neighbor searches re
 
 In recent years, several works have explored prediction of complex time series such as video \citep{mathieu-iclr-2016,canziani2017cortexnet, VPN}.
 These typically train models to predict future frames with the goal of learning good representations which disentangle factor of variation and can be used for unsupervised learning \citep{Srivastava15, Villegas17, DentonB17} or learn action-conditional forward models which can be used for planning \citep{Oh15, FinnGL16, Poke, VPN}.
-Several works have included latent variables as a means to model the uncertainty, using the framework of Variational AutoEncoders \citep{Babaeizadeh2018, Denton2018}.
+Several works have included latent variables as a means to model the uncertainty, using the framework of Variational Autoencoders \citep{Babaeizadeh2018, Denton2018} (VAEs).
 In contrast to VAEs, our model does not place any priors on the latent variable distribution, which removes the need for an additional loss term enforcing consistency between the prior and posterior.
 Additionally, our approach does not require any sampling at training time which reduces the variance in the gradients.
 
-Our model is related to Gated and Relational AutoEncoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
+Our model is related to Gated and Relational Autoencoders \citep{RelationalAE, GAE}, which were used to learn transformations between pairs of images in an unsupervised manner.
 The general architecture and loss is similar in both our works, however their focus was on representation learning for static images while ours is on video generation, and they do not consider sampling schemes for generation.
 
 Our model is also related to Generative Latent Optimization \citep{GLO}, which assigns one latent variable per training sample; latent variables are optimized through gradient descent.
 Our method computes latent variables using a learned parametric function, and we also investigate sampling schemes at generation time.
-Also related to our method is the Vector-Quantized VAE \citep{VQVAE}, where the latent variable is discrete.
+Also related to our method is the Vector-Quantized VAE \citep{VQVAE} (VQ-VAE), where the latent variable is discrete.
 Our model could be seen as a form of VQ-VAE where the are as many discrete latent variables as there are training samples.
 
 \section{Data sets}
@@ -376,9 +376,9 @@ An autonomous vehicle equipped with an accurate predictive model of its surround
 A predictive model can also be used for model-based planning, and can be learned from observational data without interacting with the environment.
 
 Second, this data set reflects complex interactions between a large number of agents (in this case vehicle drivers), leading to a challenging prediction problem which can be useful for evaluating new methods more generally.
-Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of Synthetic Moving MNIST digits \citep{Denton2018}, BAIR robot manipulation videos \citep{Ebert17}, or videos of human movements \citep{Denton2018, Babaeizadeh2018}.
+Current video prediction data sets used in the literature to evaluate stochastic prediction models consist of Synthetic Moving MNIST (SM-NIST) digits \citep{Denton2018}, BAIR robot manipulation videos \citep{Ebert17}, or videos of human movements \citep{Denton2018, Babaeizadeh2018}.
 These have the advantage of being able to evaluate specific model capabilities in a controlled setting, and have applications in robotics.
-However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions (\emph{i.e.}\ the position or velocity of the robot arm, which we demonstrate in our experiments).
+However, they also have relatively few degrees of freedom: \emph{e.g.}\ the SM-MNIST data set latent variables are two-dimensional (vertical and horizontal random velocities are picked), while the major factors of variation within the BAIR robot data set can also be captured with two dimensions \textcolor{red}{(\emph{i.e.}\ the position or velocity of the robot arm, which we demonstrate in our experiments)}.
 In contrast, the NGSIM I-80 data set has a relatively large number of cars per context image, as shown in \cref{car-statistics}, with each car having multiple degrees of freedom.
 We therefore believe this prediction tasks offers unique features which complement other data sets used in the literature.
 
@@ -389,7 +389,7 @@ We therefore believe this prediction tasks offers unique features which compleme
     \textbf{Preprocessing pipeline for the NGSIM-I80 data set.}
     \textcolor{Orange}{Orange arrows} show same vehicles across stages.
     \textcolor{ProcessBlue}{Blue arrows} show corresponding extracted context state.
-    \textbf{(a)} Snapshots from two of the six cameras.
+    \textbf{(a)} Snapshots from two of the seven cameras.
     \textbf{(b)} View point transformation, car localisation, characterisation, classification, and tracking.
     \textbf{(c)} Every vehicle in the simulator is initialised with starting position, initial velocity, dimensions, and ID number.
     At every time step, we use the tracked trajectories and a simplified kinematic model of a car to compute the agent actions $(a, b)$, corresponding to acceleration and tangential deviation.
@@ -459,7 +459,7 @@ Results using both PSNR and SSIM \citep{SSIM} as a metric are shown in \cref{bai
 
 We see that all \modelname variants outperform the deterministic baseline.
 The KNN variant performs better than the uniform, supporting the smoothness assumption that underlies it, and the MDN version with the learned prior network performs best of all.
-Compared to variational-based approaches, \modelname-LP performs best for the first few predicted timesteps according to both SSIM and PSNR, and for predictions further into the future the performance of \modelname-LP, \modelname-KNN and SVG-LP becomes statistically equivalent.
+Compared to variational-based approaches, \modelname-MDN performs best for the first few predicted timesteps according to both SSIM and PSNR, and for predictions further into the future the performance of \modelname-MDN, \modelname-KNN and SVG-MDN becomes statistically equivalent.
  Interestingly, the relative performance of \citep{Babaeizadeh2018} depends on the performance metric.
 The fact that our model is able to achieve performance which is similar or better than other state-of-the-art approaches using a latent variable with only two dimensions suggests that this data set is in fact quite simple.
 Please refer to the URL for videos.
@@ -483,28 +483,37 @@ This is evidence that the best-of-$k$ metric should be interpreted with caution 
 In particular, this number can grow exponentially with the number of time steps into the future which are predicted.
 
 \begin{figure}[t!]
-  \centering
-  \includegraphics[width=0.5\textwidth]{images/comparison_all_i80.pdf}
-%  \fbox{\rule[-.5cm]{0cm}{4cm}
-%    \rule[-.5cm]{4cm}{0cm}}
-  \caption{
-    \textbf{Best-of-$k$ performance on the NGSIM-I80 data set.}
-    The best PSNR out of 200 generated samples compared to the test sample is reported.
-    Shading indicates $95\%$ confidence interval.
-  }
-  \label{best-of-k-i80}
+  \begin{minipage}[t]{0.49 \textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{images/comparison_all_i80}
+    \caption{
+      \textbf{Best-of-$k$ performance on the NGSIM-I80 data set.}
+      The best PSNR out of 200 generated samples compared to the test sample is reported.
+      Shading indicates $95\%$ confidence interval.
+    }
+    \label{best-of-k-i80}
+  \end{minipage} \quad%
+  \begin{minipage}[t]{0.49 \textwidth}
+    \centering
+      \includegraphics[width=\textwidth]{images/car_statistics}
+    \caption{
+      \textbf{Cars per context state.}
+      Most of the time there are 13 vehicles in the context state, and at most 30.
+    }
+    \label{car-statistics}
+  \end{minipage}
 \end{figure}
 
 \begin{table}[t!]
-  \caption{
+    \caption{
     Scores assigned by a critic independently trained to classify real samples from samples generated by the different models on the NGSIM-I80 data set, averaged over 20 random seeds.
-$p$-value indicates whether the difference between cVAE and \modelname-LP scores is statistically significant according to a Wilcoxon rank-sum test.
+$p$-value indicates whether the difference between cVAE and \modelname-MDN scores is statistically significant according to a Wilcoxon rank-sum test.
   }
   \label{critic-table}
   \centering
   \begin{tabular}{l|l|lll}
     \toprule
-    Training iteration     & Deterministic & cVAE & \modelname-LP & $p$-value \\
+    Training iteration     & Deterministic & cVAE & \modelname-MDN & $p$-value \\
     \midrule
     500 & 0.00951 & 0.10296 & 0.11437 & 0.2134 \\
     1000 & 0.00183 & 0.00989 & \textbf{0.02681} & 0.0284 \\
@@ -540,7 +549,7 @@ We use the critic predictions as scores to evaluate the quality of generated seq
 Details of this training procedure and scoring can be found in \cref{critic-details}.
 
 Resulting scores are shown in \cref{critic-table}.
-The deterministic model has the lowest score, the VAE has a higher score, which agrees with its improved perceptual quality, and the \modelname-LP has the highest.
+The deterministic model has the lowest score, the VAE has a higher score, which agrees with its improved perceptual quality, and the \modelname-MDN has the highest.
 This provides further evidence that it is able to generate high-quality predictions far into the future.
 
 \section{Conclusion}
@@ -702,15 +711,6 @@ The VAE additionally includes a KL term and is trained to minimize the following
 
 We optimized the $\beta$ parameter over the range $\{1, 0.1, 0.01, 0.001, 0.0001, 0.00001 \}$ in an initial search, and found that values greater than $0.0001$ yielded image predictions which resembled those of the baseline model.
 We therefore used $0.0001$ in subsequent experiments.
-
-\begin{figure}
-  \centering
-  \begin{subfigure}[b]{0.5\textwidth}
-    \includegraphics[width=\textwidth]{images/car_statistics.pdf}
-  \end{subfigure}
-  \caption{Cars per context state}
-  \label{car-statistics}
-\end{figure}
 
 \begin{table}
   \caption{NGSIM-I80 data set statistics}
