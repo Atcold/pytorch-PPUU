@@ -46,7 +46,7 @@ plot_mean_and_CI(mean, lo, hi, color_mean='r', color_shading='r')
 # load VAE
 f = []
 for seed in [1, 2, 3, 4]:
-    f.append(torch.load(path + vae2 + ('/critic-nfeature=128-nhidden=128-lrt=0.0001-sampling=fp-seed={}.model.curves'.format(seed))).get('valid_loss'))
+    f.append(torch.load(path + vae1 + ('/critic-nfeature=128-nhidden=128-lrt=0.0001-sampling=fp-seed={}.model.curves'.format(seed))).get('valid_loss'))
 f=numpy.stack(f)[:, :nsteps]
 pdb.set_trace()
 mean, lo, hi = mean_confidence_interval(f)

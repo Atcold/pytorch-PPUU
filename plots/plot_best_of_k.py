@@ -50,20 +50,37 @@ nsample = 200
 
 if plot == 0:
 
-    x = torch.load(f'{opt.path}/model=fwd-cnn-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-nz=32-beta=0.0-warmstart=0.model-nbatches=100-npred=50-nsample=1.eval/loss.pth')
-    x = x[loss_type].view(100*4, -1)[:, :npred].numpy()
+    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=pdf-nmixture=20.eval/loss.pth')
+    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
-    best = x
+    best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='gray', color_shading='gray')
+    plot_mean_and_CI(mean, low, hi, color_mean='b-', color_shading='b')
 
+    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.005.eval/loss.pth')
+    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
+    x=-10*numpy.log(x) / numpy.log(10)
+    best = best_of_k(x)
+    mean, hi, low = mean_confidence_interval(best)
+    plot_mean_and_CI(mean, low, hi, color_mean='magenta', color_shading='magenta')
 
     x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=fp.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='magenta', color_shading='magenta')
+    plot_mean_and_CI(mean, low, hi, color_mean='g', color_shading='g')
+
+
+    '''
+    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=pdf-nmixture=1.eval/loss.pth')
+    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
+    x=-10*numpy.log(x) / numpy.log(10)
+    best = best_of_k(x)
+    mean, hi, low = mean_confidence_interval(best)
+    plot_mean_and_CI(mean, low, hi, color_mean='g--', color_shading='green')
+    '''
+
 
 
     '''
@@ -98,13 +115,6 @@ if plot == 0:
     plot_mean_and_CI(mean, low, hi, color_mean='g--', color_shading='g')
 
     '''
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.005.eval/loss.pth')
-    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='blue', color_shading='blue')
-
 
     x = torch.load(f'{opt.path}/model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model-nbatches=100-npred=10-nsample=200.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
@@ -112,18 +122,21 @@ if plot == 0:
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
     plot_mean_and_CI(mean, low, hi, color_mean='r', color_shading='r')
-    pdb.set_trace()
+
+    x = torch.load(f'{opt.path}/model=fwd-cnn-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-nz=32-beta=0.0-warmstart=0.model-nbatches=100-npred=50-nsample=1.eval/loss.pth')
+    x = x[loss_type].view(100*4, -1)[:, :npred].numpy()
+    x=-10*numpy.log(x) / numpy.log(10)
+    best = x
+    mean, hi, low = mean_confidence_interval(best)
+    plot_mean_and_CI(mean, low, hi, color_mean='black', color_shading='black')
 
 
 
 
-    title = 'ae_comparison.pdf'
-
-
-
-
-plt.ylabel('Average PSNR', fontsize=16)
-plt.xlabel('Time Step', fontsize=16)
-
-#plt.savefig(title)
+title = 'comparison_all_i80.pdf'
+plt.ylabel('Average PSNR', fontsize=18)
+plt.xlabel('Time Step', fontsize=18)
+plt.xticks([i+1 for i in range(npred)], fontsize=12)
+plt.legend(['TENet-MDN', 'TENet-KNN', 'TENet-Unif', 'cVAE', 'Deterministic'], fontsize=16)
+plt.savefig(title)
 
