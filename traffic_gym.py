@@ -6,6 +6,7 @@ import random
 import numpy as np
 import scipy.misc
 import sys, pickle
+from matplotlib.image import imsave
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core
 import os
@@ -226,7 +227,7 @@ class Car:
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
-            draw_rect(surface, self._colour, rectangle, d, 3)
+            draw_rect(surface, self._colour, rectangle, d)
 
             # Drawing vehicle number
             self._text[1].left = x
@@ -431,6 +432,17 @@ class Car:
         mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
         lane_cost = (lanes * mask).max() / 255
 
+        # # Draw boxes, for visualisation purpose
+        # # init as: env.reset(time_interval=1, frame=2510, control=False)
+        # if self.id in (1033, 987, 992, 958, 961):
+        #     w, h = width_height
+        #     points = np.array(((w, -h), (-w, -h), (-w, h), (w, h))) / 2
+        #     c, s = d
+        #     rot = np.array(((c, -s), (s, c)))
+        #     rot_points = (rot @ points.T).T + centre + m
+        #     pygame.draw.polygon(screen_surface, colours['c'], rot_points, 1)
+        #     imsave(f'car {self.id}.png', sub_rot_array_scaled_up)
+
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
         return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost
@@ -559,7 +571,7 @@ class StatefulEnv(core.Env):
 
     def reset(self, frame=None, control=True):
         # Initialise environment state
-        self.frame = 0 if frame is not None else frame
+        self.frame = 0 if frame is None else frame
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
@@ -790,6 +802,10 @@ class StatefulEnv(core.Env):
 
             pygame.display.flip()
 
+            # # save surface as image, for visualisation only
+            # pygame.image.save(self.screen, "screen_surface.png")
+
+
             if self.collision: self._pause()
 
         if mode == 'machine':
@@ -814,6 +830,10 @@ class StatefulEnv(core.Env):
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
+
+            # # save surface as image, for visualisation only
+            # pygame.image.save(vehicle_surface, "vehicle_surface.png")
+            # self._pause()
 
     def _draw_lanes(self, surface, mode='human', offset=0):
         draw_line = pygame.draw.line
