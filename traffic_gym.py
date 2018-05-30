@@ -868,3 +868,6 @@ class StatefulEnv(core.Env):
                     sys.exit()
                 elif e.type == pygame.MOUSEBUTTONUP:
                     pause = False
+
+    def _get_vehicle(self, id_):
+        return self.vehicles[[v.id for v in self.vehicles].index(id_)]
