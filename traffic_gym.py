@@ -771,13 +771,6 @@ class StatefulEnv(core.Env):
     def render(self, mode='human', width_height=None, scale=1.):
         if mode == 'human' and self.display:
 
-            # capture the closing window and mouse-button-up event
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    self._pause()
-
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
             self.mean_fps = 0.9 * self.mean_fps + 0.1 * fps if self.mean_fps is not None else fps
@@ -805,8 +798,16 @@ class StatefulEnv(core.Env):
             # # save surface as image, for visualisation only
             # pygame.image.save(self.screen, "screen_surface.png")
 
+            # capture the closing window and mouse-button-up event
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sys.exit()
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    self._pause()
 
-            if self.collision: self._pause()
+            if self.collision:
+                self._pause()
+                self.collision = False
 
         if mode == 'machine':
             max_extension = int(np.linalg.norm(width_height))
