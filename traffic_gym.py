@@ -470,7 +470,6 @@ class Car:
 
     def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
         os.system('mkdir -p ' + save_dir)
-        print('dumping')
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
             print('failure, {}'.format(save_dir))
@@ -506,7 +505,8 @@ class Car:
 
     def __repr__(self) -> str:
         cls = self.__class__
-        return f'{cls.__module__}.{cls.__name__}.{self.id}'
+        return '{}.{}.{}'.format(cls.__module__, cls.__name__, self.id)
+#        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 
 
 class StatefulEnv(core.Env):

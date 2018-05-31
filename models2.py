@@ -117,22 +117,6 @@ class decoder(nn.Module):
                 nn.Linear(opt.nfeature, self.n_out*4)
             )
 
-            if self.opt.decoder > 0:
-                self.u_encoder = nn.Sequential(
-                    nn.Conv2d(opt.nfeature, 2*opt.nfeature, 4, 2, 1),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(2*opt.nfeature, 4*opt.nfeature, (4, 1), 2, (1, 0)),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(4*opt.nfeature, 8*opt.nfeature, (3, 1), 2, (0, 0)),
-                )
-                self.u_decoder = nn.Sequential(
-                    nn.ConvTranspose2d(8*opt.nfeature, 4*opt.nfeature, (3, 2), 2, 0),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.ConvTranspose2d(4*opt.nfeature, 2*opt.nfeature, (4, 1), 2, (1, 0)),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.ConvTranspose2d(2*opt.nfeature, opt.nfeature, (4, 1), 2, (0, 1)),
-                )
-
 
     def forward(self, h):
         bsize = h.size(0)

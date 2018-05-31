@@ -215,7 +215,7 @@ class RealTraffic(StatefulEnv):
             if v.off_screen:
                 # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('scratch/data_i80_v3/', os.path.basename(self._section))
+                    file_name = os.path.join('scratch/nvidia-collab/data/data_i80_v2/', os.path.basename(self._section))
                     print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
