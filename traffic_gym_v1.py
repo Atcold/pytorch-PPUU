@@ -130,9 +130,9 @@ class RealTraffic(StatefulEnv):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self.file_names = (
-            './data_i80/trajectories-0515-0530.txt',
-            './data_i80/trajectories-0500-0515.txt',
             './data_i80/trajectories-0400-0415.txt',
+            './data_i80/trajectories-0500-0515.txt',
+            './data_i80/trajectories-0515-0530.txt',
         )
         self.df = None
         self.vehicles_history = set()
@@ -172,7 +172,7 @@ class RealTraffic(StatefulEnv):
 
     def reset(self, frame=None, control=True, time_interval=None):
         super().reset(frame, control)
-        file_name = self.file_names[time_interval] if time_interval else choice(self.file_names)
+        file_name = self.file_names[time_interval] if time_interval is not None else choice(self.file_names)
         self.df = self._get_data_frame(file_name, self.screen_size[0])
         if frame is None:
             frame_df = self.df['Frame ID']
