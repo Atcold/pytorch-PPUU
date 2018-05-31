@@ -12,8 +12,7 @@
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=mbh305@nyu.edu
 
-module load python-3.6
-source activate py36
+source activate py35
 cd ../
-srun python generate_trajectories.py -n_episodes 20 -seed $1 -lanes 8 
+srun python generate_trajectories.py -time_interval $1
 

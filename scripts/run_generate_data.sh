@@ -1,7 +1,5 @@
 #!/bin/bash
 
-rm datagen*
-
-for seed in {1..20}; do 
-    sbatch submit_generate_data.slurm $seed
+for i in 0 1 2; do 
+    sbatch submit_generate_data.slurm $i
 done
