@@ -99,10 +99,6 @@ if opt.model == 'fwd-cnn-vae-fp':
     model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-vae-lp':
     model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
-elif opt.model == 'fwd-cnn-een-lp':
-    model = models.FwdCNN_EEN_LP(opt, mfile=prev_model)
-elif opt.model == 'fwd-cnn-een-fp':
-    model = models.FwdCNN_EEN_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-ae-fp':
     model = models.FwdCNN_AE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-ae-lp':
@@ -111,8 +107,6 @@ elif opt.model == 'fwd-cnn':
     model = models.FwdCNN(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-mdn':
     model = models.FwdCNN_MDN(opt, mfile='')
-elif opt.model == 'fwd-cnn2':
-    model = models.FwdCNN2(opt)
 
 model.intype('gpu')
 
@@ -153,11 +147,6 @@ def compute_loss(targets, predictions, r=True):
 # loss_c: costs
 # loss_p: prior
 
-def make_variables(x):
-    y = []
-    for i in range(len(x)):
-        y.append(Variable(x[i]))
-    return y
 
 def train(nbatches, npred):
     model.train()
@@ -166,8 +155,8 @@ def train(nbatches, npred):
         optimizer.zero_grad()
         t0 = time.time()
         inputs, actions, targets = dataloader.get_batch_fm('train', npred)
-        inputs = make_variables(inputs)
-        targets = make_variables(targets)
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
@@ -197,8 +186,8 @@ def test(nbatches):
     total_loss_i, total_loss_s, total_loss_c, total_loss_p = 0, 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets = dataloader.get_batch_fm('valid')
-        inputs = make_variables(inputs)
-        targets = make_variables(targets)
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
@@ -215,16 +204,6 @@ def test(nbatches):
     total_loss_c /= nbatches
     total_loss_p /= nbatches
     return total_loss_i, total_loss_s, total_loss_c, total_loss_p
-
-
-def compute_pz(nbatches):
-    model.p_z = []
-    for j in range(nbatches):
-        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred)
-        inputs = Variable(inputs)
-        actions = Variable(actions)
-        targets = Variable(targets)
-        pred, loss_kl = model(inputs, actions, targets, save_z = True)
         
 
 optimizer = optim.Adam(model.parameters(), opt.lrt)

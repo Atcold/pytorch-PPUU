@@ -233,7 +233,9 @@ class DataLoader():
         except:
             pdb.set_trace()
 
+#        states = states.contiguous()
         states = states[:, :, 0].contiguous()
+
         actions = torch.stack(actions)
 
         if self.opt.debug == 0:
@@ -261,11 +263,5 @@ class DataLoader():
             actions = actions.cpu()
             target_images = target_images.cpu()
             
-#        input_images = Variable(input_images)
-#        input_states = Variable(input_states)
-#        target_images = Variable(target_images)
-#        target_states = Variable(target_states)
-#        actions = Variable(actions)
-#        target_costs = Variable(target_costs)
         return [input_images, input_states], actions, [target_images, target_states, target_costs]
 
