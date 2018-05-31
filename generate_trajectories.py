@@ -22,6 +22,7 @@ parser.add_argument('-data_dir', type=str, default='scratch/nvidia-collab/data/'
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
 parser.add_argument('-fps', type=int, default=30)
+parser.add_argument('-time_interval', type=int, default=0)
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -59,7 +60,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 
 def run_episode():
-    env.reset()
+    env.reset(frame=0, time_interval=opt.time_interval, control=False)
     while True:
         env.step(None)
         env.render()

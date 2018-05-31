@@ -61,6 +61,8 @@ class RealCar(Car):
         self._safe_factor = 1.5  # second, manually matching the data
         if font is not None:
             self._text = self.get_text(self.id, font)
+        self.is_controlled = False
+        self.is_autonomous = False
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
@@ -130,10 +132,11 @@ class RealTraffic(StatefulEnv):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self.file_names = (
-            './data_i80/trajectories-0400-0415.txt',
-            './data_i80/trajectories-0500-0515.txt',
-            './data_i80/trajectories-0515-0530.txt',
+            './data_i80/trajectories-0400-0415',
+            './data_i80/trajectories-0500-0515',
+            './data_i80/trajectories-0515-0530',
         )
+        self._section = None
         self.df = None
         self.vehicles_history = set()
         self.lane_occupancy = None
@@ -172,8 +175,8 @@ class RealTraffic(StatefulEnv):
 
     def reset(self, frame=None, control=True, time_interval=None):
         super().reset(frame, control)
-        file_name = self.file_names[time_interval] if time_interval is not None else choice(self.file_names)
-        self.df = self._get_data_frame(file_name, self.screen_size[0])
+        self._section = self.file_names[time_interval] if time_interval is not None else choice(self.file_names)
+        self.df = self._get_data_frame(self._section + '.txt', self.screen_size[0])
         if frame is None:
             frame_df = self.df['Frame ID']
             self.frame = self.controlled_car['frame'] = randrange(min(frame_df), max(frame_df))
@@ -212,7 +215,7 @@ class RealTraffic(StatefulEnv):
             if v.off_screen:
                 # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('scratch/data_i80_v3/', os.path.basename(self.file_name))
+                    file_name = os.path.join('scratch/data_i80_v3/', os.path.basename(self._section))
                     print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
