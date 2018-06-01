@@ -120,12 +120,6 @@ class decoder(nn.Module):
 
     def forward(self, h):
         bsize = h.size(0)
-        if self.opt.decoder == 0:
-            h = h
-        elif self.opt.decoder == 1:
-            h = self.u_decoder(self.u_encoder(h))
-        elif self.opt.decoder == 2:
-            h = h + self.u_decoder(self.u_encoder(h))
         h = h.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         h_reduced = self.h_reducer(h).view(bsize, -1)
         pred_cost = self.c_predictor(h_reduced)

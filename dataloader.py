@@ -11,18 +11,16 @@ class DataLoader():
         self.dataset = dataset
         self.random = random.Random()
         self.random.seed(12345) # use this so that the same batches will always be picked
-#        if self.opt.debug == 1:
-#            return 
 
         if dataset == 'i80':
-            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80/'
+            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v2/'
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
             else:
-                data_files = ['trajectories-0400-0415.txt/', 
-                              'trajectories-0500-0515.txt/', 
-                              'trajectories-0515-0530.txt/']
+                data_files = ['trajectories-0400-0415/', 
+                              'trajectories-0500-0515/', 
+                              'trajectories-0515-0530/']
 
             self.images = []
             self.actions = []
@@ -114,8 +112,15 @@ class DataLoader():
             self.test_indx = range(self.n_train+self.n_valid+1, self.n_episodes)        
             self.test_indx_iterator = 0
 
-
-        if dataset != 'random' and opt.debug == 0:
+        stats_path = data_dir + '/data_stats.pth'
+        if os.path.isfile(stats_path):
+            print(f'[loading data stats: {stats_path}]')
+            stats = torch.load(stats_path)
+            self.a_mean = stats.get('a_mean')
+            self.a_std = stats.get('a_std')
+            self.s_mean = stats.get('s_mean')
+            self.s_std = stats.get('s_std')
+        else:
             print('[computing action stats]')
             all_actions = []
             for i in self.train_indx:
@@ -123,7 +128,6 @@ class DataLoader():
             all_actions = torch.cat(all_actions, 0)
             self.a_mean = torch.mean(all_actions, 0)
             self.a_std = torch.std(all_actions, 0)
-
             print('[computing state stats]')
             all_states = []
             for i in self.train_indx:
@@ -131,55 +135,11 @@ class DataLoader():
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
+            torch.save({'a_mean': self.a_mean, 
+                        'a_std': self.a_std, 
+                        's_mean': self.s_mean, 
+                        's_std': self.s_std}, stats_path)
 
-            '''
-            print('[computing cost stats]')
-            all_costs = []
-            for i in self.train_indx:
-                all_costs.append(self.costs[i])
-            all_costs = torch.cat(all_costs, 0)
-            self.c_mean = torch.mean(all_costs, 0)
-            self.c_std = torch.std(all_costs, 0)
-            '''
-
-
-    # get batch to use for imitation learning:
-    # a sequence of ncond consecutive states, and a sequence of npred actions
-    def get_batch_il(self, split):
-        if split == 'train':
-            indx = self.train_indx
-        elif split == 'valid':
-            indx = self.valid_indx
-        elif split == 'test':
-            indx = self.test_indx
-
-        images, states, masks, actions = [], [], [], []
-        nb = 0
-        while nb < self.opt.batch_size:
-            s = self.random.choice(indx)
-            T = len(self.actions[s]) - 1
-            if T > (self.opt.ncond + self.opt.npred):
-                t = self.random.randint(0, T - (self.opt.ncond+self.opt.npred))
-                images.append(self.images[s][t:t+(self.opt.ncond+self.opt.npred)])
-#                states.append(self.states[s][t:t+(self.opt.ncond+self.opt.npred)])
-#                masks.append(self.masks[s][t:t+(self.opt.ncond+self.opt.npred)])
-                actions.append(self.actions[s][t:t+(self.opt.ncond+self.opt.npred)])
-                nb += 1
-        images = torch.stack(images)
-#        states = torch.stack(states)
-        actions = torch.stack(actions)
-#        masks = torch.stack(masks)
-        images = images[:, :self.opt.ncond].clone()
-#        states = states[:, :self.opt.ncond, 0].clone()
-#        masks = masks[:, :self.opt.ncond].clone()
-        actions = actions[:, self.opt.ncond:(self.opt.ncond+self.opt.npred)].clone()
-        images = images.float() / 255.0
-
-        actions -= self.a_mean.view(1, 1, 2).expand(actions.size())
-        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size()))
-        states = torch.zeros(self.opt.batch_size, self.opt.ncond, self.opt.n_inputs).cuda()
-        assert(images.max() <= 1 and images.min() >= 0)
-        return images.float().cuda(), states.float().cuda(), actions.float().cuda()
 
 
 
@@ -226,7 +186,6 @@ class DataLoader():
                             
         images = torch.stack(images).float()
         images.div_(255.0)
-#        print(images.mean())
 
         try:
             states = torch.stack(states)
