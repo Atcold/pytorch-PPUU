@@ -23,9 +23,10 @@ parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGrou
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=16)
-parser.add_argument('-nfeature', type=int, default=96)
+parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
+parser.add_argument('-p_dropout', type=float, default=0.0, help='set z=0 with this probability')
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-lrt', type=float, default=0.0001)
@@ -41,12 +42,14 @@ os.system('mkdir -p ' + opt.model_dir)
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
+
+# define model file name
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-combine={opt.combine}'
 
-
-if ('vae' in opt.model) or ('fwd-cnn-ae' in opt.model):
+if ('vae' in opt.model) or ('fwd-cnn-ten' in opt.model):
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
+    opt.model_file += f'-dropout={opt.p_dropout}'
 
 if ('fwd-cnn-ten' in opt.model) and opt.beta > 0:
     opt.model_file += f'-nmix={opt.n_mixture}'
@@ -59,6 +62,7 @@ if opt.zeroact == 1:
 
 opt.model_file += f'-warmstart={opt.warmstart}'
 print(f'[will save model as: {opt.model_file}]')
+
 
 opt.n_inputs = 4
 opt.n_actions = 2
@@ -77,20 +81,20 @@ elif opt.dataset == 'i80':
     opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 if opt.warmstart == 1:
-    prev_model += f'{opt.model_dir}/model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0002-nhidden=100-nfeature={opt.nfeature}-decoder={opt.decoder}-combine={opt.combine}-warmstart=0.model'
+    # previous model we use to initialize parameters
+    prev_model = f'{opt.model_dir}/model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-combine={opt.combine}-gclip=1.0-warmstart=0.model'
 else:
     prev_model = ''
 
-if opt.model == 'fwd-cnn-vae-fp':
+# create the model
+if opt.model == 'fwd-cnn':
+    model = models.FwdCNN(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-ten':
+    model = models.FwdCNN_TEN(opt, mfile=prev_model)
+elif opt.model == 'fwd-cnn-vae-fp':
     model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-vae-lp':
     model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
-elif opt.model == 'fwd-cnn-ten-fp':
-    model = models.FwdCNN_AE_FP(opt, mfile=prev_model)
-elif opt.model == 'fwd-cnn-ten-lp':
-    model = models.FwdCNN_AE_LP(opt, mfile=prev_model)
-elif opt.model == 'fwd-cnn':
-    model = models.FwdCNN(opt, mfile=prev_model)
 
 model.intype('gpu')
 
@@ -125,12 +129,11 @@ def compute_loss(targets, predictions, r=True):
         loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
     return loss_i, loss_s, loss_c
     
-
+# training and testing functions. We will compute several losses:
 # loss_i: images
 # loss_s: states
 # loss_c: costs
-# loss_p: prior
-
+# loss_p: prior (optional)
 
 def train(nbatches, npred):
     model.train()
@@ -143,7 +146,7 @@ def train(nbatches, npred):
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
-        pred, loss_p = model(inputs, actions, targets)
+        pred, loss_p = model(inputs, actions, targets, p_dropout=opt.p_dropout)
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
         loss = loss_i + loss_s + loss_c + opt.beta * loss_p
         loss.backward()
@@ -172,7 +175,7 @@ def test(nbatches):
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
-        pred, loss_p = model(inputs, actions, targets)
+        pred, loss_p = model(inputs, actions, targets, p_dropout=0)
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
         total_loss_i += loss_i.data[0]
         total_loss_s += loss_s.data[0]
@@ -187,7 +190,6 @@ def test(nbatches):
     return total_loss_i, total_loss_s, total_loss_c, total_loss_p
         
 
-optimizer = optim.Adam(model.parameters(), opt.lrt)
 print('[training]')
 for i in range(100):
     t0 = time.time()

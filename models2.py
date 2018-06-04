@@ -487,10 +487,10 @@ class FwdCNN_MDN(nn.Module):
 
 
 
-# forward TENet model
-class FwdCNN_AE_FP(nn.Module):
+# forward TEN model
+class FwdCNN_TEN(nn.Module):
     def __init__(self, opt, mfile=''):
-        super(FwdCNN_AE_FP, self).__init__()
+        super(FwdCNN_TEN, self).__init__()
         self.opt = opt
 
         if mfile == '':
@@ -599,7 +599,7 @@ class FwdCNN_AE_FP(nn.Module):
         if self.use_cuda: z = z.cuda()
         return [Variable(z), z_indx]
 
-    def forward(self, inputs, actions, targets, save_z = False, sampling=None):
+    def forward(self, inputs, actions, targets, save_z = False, sampling=None, p_dropout=0.0):
         input_images, input_states = inputs
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
@@ -611,37 +611,32 @@ class FwdCNN_AE_FP(nn.Module):
         pred_images, pred_states, pred_costs = [], [], []
         self.Z = []
         self.z_top_list = []
-
+            
         z = None
         for t in range(npred):
-            tt = time.time()
             # encode the inputs
             h_x = self.encoder(input_images, input_states, actions[:, t])
-            tt = time.time() - tt
-#            print(f'encoding took {tt}s')
-            if (sampling is None) or t == 0: 
+            if sampling is None:
                 # we are training or estimating z distribution
-                # t == 0 condition applies when we are inferring the first z vector, which is necessary for KNN. 
-                # we do this for all methods for consistency and discard the first sampled step in the loss computation at evaluation time 
                 target_images, target_states, target_costs = targets
                 # encode the targets into z
                 h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
-                z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
-                if sampling is not None:
-                    z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=True)
-                if save_z:
-                    self.save_z(z)
-                if self.opt.beta > 0 and sampling is None:
-                    pi, mu, sigma = self.u_network(h_x)
-                    ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
-                    if math.isnan(ploss.data[0]):
-                        pdb.set_trace()
+                if random.random() < p_dropout:
+                    z = Variable(torch.zeros(bsize, self.opt.nz).cuda())
+                else:
+                    z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
+                    if save_z:
+                        self.save_z(z)
+                    if self.opt.beta > 0:
+                        pi, mu, sigma = self.u_network(h_x)
+                        ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
+                        if math.isnan(ploss.data[0]):
+                            pdb.set_trace()
             else:
                 # we are doing inference
                 z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=False)
 
             z_ = z if sampling is None else z[0]
-            tt = time.time()
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
@@ -656,8 +651,6 @@ class FwdCNN_AE_FP(nn.Module):
             pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            tt = time.time() - tt
-#            print(f'decoding took {tt}s')
             pred_images.append(pred_image)
             pred_states.append(pred_state)
             pred_costs.append(pred_cost)
@@ -696,7 +689,8 @@ class FwdCNN_AE_FP(nn.Module):
         elif t == 'cpu':
             self.cpu()
             self.use_cuda = False
-            self.p_z = self.p_z.cpu()
+            if len(self.p_z) > 0:
+                self.p_z = self.p_z.cpu()
 
 
 

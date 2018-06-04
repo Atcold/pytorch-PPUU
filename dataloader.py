@@ -29,7 +29,7 @@ class DataLoader():
             for df in data_files:
                 combined_data_path = data_dir + f'{df}/all_data.pth'
                 if os.path.isfile(combined_data_path):
-                    print(f'[loading data {combined_data_path}]')
+                    print(f'[loading data shard: {combined_data_path}]')
                     data = torch.load(combined_data_path)
                     self.images += data.get('images')
                     self.actions += data.get('actions')
@@ -72,7 +72,7 @@ class DataLoader():
             self.n_test = int(math.floor(self.n_episodes * 0.05))
             splits_path = data_dir + '/splits.pth'
             if os.path.exists(splits_path):
-                print('[loading data splits]')
+                print(f'[loading data splits: {splits_path}]')
                 self.splits = torch.load(splits_path)                
                 self.train_indx = self.splits.get('train_indx')
                 self.valid_indx = self.splits.get('valid_indx')

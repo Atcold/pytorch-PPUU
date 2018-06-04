@@ -27,8 +27,8 @@ parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0001-nmix=1-warmstart=1.model')
 
 
@@ -46,14 +46,15 @@ opt.eval_dir = opt.model_dir + f'/eval/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
-
+if opt.cuda == 1:
+    model.intype('gpu')
 model.eval()
 
 
 
 
 dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
-if '-ae' in opt.mfile:
+if '-ten' in opt.mfile:
     dirname += f'-sampling={opt.sampling}'
     if opt.sampling == 'knn':
         dirname += f'-density={opt.graph_density}'
@@ -62,7 +63,7 @@ if '-ae' in opt.mfile:
         mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature=128-lrt=0.0001-nmixture={opt.n_mixture}.prior'
         print(f'[loading prior model: {mfile_prior}]')
         model.prior = torch.load(mfile_prior).cuda()
-dirname += '.eval/'
+dirname += '.eval'
 os.system('mkdir -p ' + dirname)
 
 
@@ -79,14 +80,14 @@ def compute_pz(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = utils.Variable(actions)
-        pred, loss_kl = model(inputs, actions, targets, save_z = True)
+        pred, loss_kl = model(inputs, actions, targets, save_z = True, sampling=None)
         del inputs, actions, targets
 
 
 model.opt.npred = opt.npred
 
 
-if '-ae' in opt.mfile:
+if '-ten' in opt.mfile:
     pzfile = opt.model_dir + opt.mfile + '_100000.pz'
     if os.path.isfile(pzfile):
         p_z = torch.load(pzfile)
@@ -102,8 +103,6 @@ if '-ae' in opt.mfile:
         torch.save({'knn_dist': model.knn_dist, 'knn_indx': model.knn_indx}, pzfile + '.graph')
     print('[done]')
 
-if opt.cuda == 1:
-    model.intype('gpu')
 
 loss_i = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
 loss_s = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
@@ -132,7 +131,7 @@ for i in range(opt.n_batches):
         for b in range(opt.batch_size):
             dirname_movie = '{}/videos/x{:d}/y/'.format(dirname, i*opt.batch_size + b)
             print('[saving ground truth video: {}]'.format(dirname_movie))
-            utils.save_movie(dirname_movie, targets_[0][b])
+            utils.save_movie(dirname_movie, targets_[0][b], targets_[1][b], targets_[2][b])
 
     for s in range(opt.n_samples):
         print('[batch {}, sample {}'.format(i, s), end="\r")
@@ -153,10 +152,10 @@ for i in range(opt.n_batches):
 
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
-                pred_b = pred_[0][b].clone()
                 dirname_movie = '{}/videos/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
-                utils.save_movie(dirname_movie, pred_b.data, smooth=False)
+                utils.save_movie(dirname_movie, pred_[0][b].data, pred_[1][b].data, pred_[2][b].data)
+
         del inputs, actions, targets, pred_
 
 torch.save({'loss_i': loss_i, 

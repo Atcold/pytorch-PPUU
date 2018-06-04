@@ -5,6 +5,8 @@ import scipy
 from sklearn import decomposition
 import sklearn.manifold as manifold
 from torch.autograd import Variable
+from PIL import Image, ImageDraw
+import matplotlib.pyplot as plt
 
 # Logging function
 def log(fname, s):
@@ -38,16 +40,24 @@ def format_losses(loss_i, loss_s, loss_c, loss_p, split):
 
 
 
-def save_movie(dirname, x, smooth=False, pytorch=True):
+def save_movie(dirname, images, states, costs, pytorch=True):
     os.system('mkdir -p ' + dirname)
     if pytorch:
-        x = x.squeeze().permute(0, 2, 3, 1).cpu().numpy()
-    for t in range(x.shape[0]):
-        if smooth and t > 0:
-            p = (x[t] + x[t-1])/2
-        else:
-            p = x[t]
-        scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), p)
+        images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy()
+    for t in range(images.shape[0]):
+        img = images[t]*255
+        img = numpy.concatenate((img, numpy.zeros((24, 24, 3)).astype('float')), axis=0)
+        img = scipy.misc.imresize(img, 5.0)
+        img = numpy.uint8(img)
+        pil = Image.fromarray(img)
+        draw = ImageDraw.Draw(pil)
+        if states is not None:
+            text = f'x: [{states[t][0]:.2f}, {states[t][1]:.2f} \n'
+            text += f'dx: {states[t][2]:.2f}, {states[t][3]:.2f}]\n'
+            text += f'c: [{costs[t][0]:.2f}, {costs[t][1]:.2f}]\n'
+        draw.text((10, 130*5-10), text, (255,255,255))
+        img = numpy.asarray(pil)
+        scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)
 
 
 def grad_norm(net):
