@@ -68,7 +68,7 @@ class RealCar(Car):
         return False
 
     def _get(self, what, k):
-        direction_vector = self._trajectory[k + 1] - self._trajectory[k]
+        direction_vector = self._trajectory[k + 1] - self._trajectory[k]  # TODO: use my own coordinates!!!
         norm = np.linalg.norm(direction_vector)
         if what == 'direction':
             if norm < 1e-6: return self._direction  # if static returns previous direction
@@ -77,17 +77,16 @@ class RealCar(Car):
             return norm / self._dt
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
-    # def step(self, action):
-    #     self._frame += 1
-    #     position = self._position
-    #     df = self._trajectory
-    #     self._position = df.loc[df.index[self._frame], ['x', 'y']].values
-    #     new_direction = self._position - position
-    #     self._direction = new_direction if np.linalg.norm(new_direction) > 1 else self._direction
-    #     self._direction /= np.linalg.norm(self._direction)
-    #     self.off_screen = self._frame >= len(df) - self._k
+    def step(self, action):
+        position = self._position
+        self._position = self._trajectory[self._frame]
+        new_direction = self._position - position
+        self._direction = new_direction if np.linalg.norm(new_direction) > 0.1 else self._direction
+        self._direction /= np.linalg.norm(self._direction)
+        assert 0.99 < np.linalg.norm(self._direction) < 1.01
+        assert self._direction[0] > 0
 
-    def policy(self, observation):
+    def policy(self, observation, **kwargs):
         self._frame += 1
         self.off_screen = self._frame >= len(self._df) - self._k - 2
 
@@ -99,7 +98,8 @@ class RealCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
             b = self._speed * np.sign(b)
-        return np.array((a, b))
+        # return np.array((a, b))
+        return np.zeros((2,))  # disable policy output
 
     @property
     def current_lane(self):
@@ -253,7 +253,7 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state) if not v.is_autonomous else policy_action
+            action = v.policy(state, ) if not v.is_autonomous else policy_action
 
             # Perform such action
             v.step(action)
@@ -263,8 +263,9 @@ class RealTraffic(StatefulEnv):
                 v.store('state', state)
                 v.store('action', action)
 
-            if v.is_controlled and v.valid:
+            if v.valid:
                 v.count_collisions(state)
+                if v.collisions_per_frame > 0: self.collision = True
 
         self.frame += 1
 
