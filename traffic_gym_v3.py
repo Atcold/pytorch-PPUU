@@ -1,3 +1,5 @@
+# v3: controlled ego car on I-80 traffic
+
 from traffic_gym_v1 import RealTraffic, RealCar
 from traffic_gym_v2 import PatchedCar
 

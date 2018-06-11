@@ -1,3 +1,5 @@
+# v0: rule-based ego car and rule-based traffic
+
 import bisect
 
 import pygame, pdb, torch

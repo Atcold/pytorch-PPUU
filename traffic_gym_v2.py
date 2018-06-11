@@ -1,3 +1,5 @@
+# v2: Rules-based ego car on I-80 traffic.
+
 from traffic_gym import StatefulEnv, Car
 from traffic_gym_v1 import RealTraffic
 import pygame
@@ -8,7 +10,7 @@ LANE_W = 24  # pixels / 3.7 m, lane width
 SCALE = LANE_W / 3.7  # pixels per metre
 
 
-class PatchedCar(Car):
+class PatchedCar(Car): # `PatchedCar` knows there are only `7` lanes, and the `7`-th is the ramp.
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
