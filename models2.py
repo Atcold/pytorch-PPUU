@@ -599,7 +599,7 @@ class FwdCNN_TEN(nn.Module):
         if self.use_cuda: z = z.cuda()
         return [Variable(z), z_indx]
 
-    def forward(self, inputs, actions, targets, save_z = False, sampling=None, p_dropout=0.0):
+    def forward(self, inputs, actions, targets, save_z = False, sampling=None, p_dropout=0.0, z_seq=None):
         input_images, input_states = inputs
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
@@ -634,7 +634,10 @@ class FwdCNN_TEN(nn.Module):
                             pdb.set_trace()
             else:
                 # we are doing inference
-                z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=False)
+                if z_seq is not None:
+                    z = [z_seq[t], None]
+                else:
+                    z = self.sample_z(bsize, sampling, input_images, input_states, actions[:, t], z, t0=False)
 
             z_ = z if sampling is None else z[0]
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -661,24 +664,56 @@ class FwdCNN_TEN(nn.Module):
         return [pred_images, pred_states, pred_costs], ploss
 
 
-    def plan_actions_backprop(self, observation, args):
+    def plan_actions_backprop(self, observation, args, verbose=True, normalize=True, optimize_z=False, optimize_a=True):
         input_images, input_states = observation
-        input_images = Variable(input_images.cuda().float()).unsqueeze(0)
-        input_states = Variable(input_states.cuda()).unsqueeze(0)
+        input_images = input_images.float().clone()
+        input_states = input_states.clone()
+        if normalize:
+            input_images.div_(255.0)
+            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
+            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
+            input_images = Variable(input_images.cuda()).unsqueeze(0)
+            input_states = Variable(input_states.cuda()).unsqueeze(0)
         bsize = input_images.size(0)
         # repeat for multiple rollouts
-        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda(), requires_grad=True)
+        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.0), requires_grad=True)
         optimizer_a = optim.Adam([actions], args.lrt)
+        Z = self.sample_z(bsize * args.npred, method='fp')[0]
+        Z = Z.view(args.npred, bsize, -1)
+        Z0 = Z.clone()
+        if optimize_z:
+            Z.requires_grad = True
+            optimizer_z = optim.Adam([Z], args.lrt)
+        pred = None
         for i in range(0, args.n_iter):
             optimizer_a.zero_grad()
-            pred, _ = self.forward([input_images, input_states], actions, None, sampling='fp')
-            pdb.set_trace()
+            self.zero_grad()
+            pred, _ = self.forward([input_images, input_states], actions, None, sampling='fp', z_seq=Z)
             costs = pred[2]
-            loss = costs.mean()
+            loss = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
             loss.backward()
             if verbose:
-                print('[iter {} | mean cost = {}], grad = {}'.format(i, loss.data[0], 0))
-            optimizer_a.step()
+                print('[iter {} | mean pred cost = {}], grad = {}'.format(i, loss.data[0], actions.grad.data.norm()))
+            if optimize_a:
+                torch.nn.utils.clip_grad_norm([actions], 1)
+                optimizer_a.step()
+                actions.data.clamp_(min=-2, max=2)
+                actions.data[:, :, 1].clamp_(min=-1, max=1)
+
+            if optimize_z:
+                torch.nn.utils.clip_grad_norm([Z], 1)
+                Z.grad *= -1
+                optimizer_z.step()
+                
+
+        # also get predictions using zero actions
+        pred_const, _ = self.forward([input_images, input_states], actions.clone().zero_(), None, sampling='fp', z_seq=Z0)
+        actions = actions.data.cpu()
+        actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
+        actions += self.stats['a_mean'].view(1, 1, 2).expand(actions.size())
+        return actions.squeeze().numpy(), pred, pred_const
+
+
 
     def intype(self, t):
         if t == 'gpu':
@@ -780,7 +815,7 @@ class FwdCNN_VAE_FP(nn.Module):
         input_states = Variable(input_states.cuda()).unsqueeze(0)
         bsize = input_images.size(0)
         # repeat for multiple rollouts
-        actions = Variable(torch.zeros(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.01), requires_grad=True)
+        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.01), requires_grad=True)
         optimizer_a = optim.SGD([actions], args.lrt)
         Z = torch.randn(args.npred, 1, self.opt.nz).cuda()
         for i in range(0, args.n_iter):
