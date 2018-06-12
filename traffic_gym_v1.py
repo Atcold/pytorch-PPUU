@@ -62,7 +62,10 @@ class RealCar(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
-        self.is_autonomous = False
+
+    @property
+    def is_autonomous(self):
+        return False
 
     def _get(self, what, k):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
