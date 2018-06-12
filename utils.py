@@ -52,9 +52,9 @@ def save_movie(dirname, images, states, costs, pytorch=True):
         pil = Image.fromarray(img)
         draw = ImageDraw.Draw(pil)
         if states is not None:
-            text = f'x: [{states[t][0]:.2f}, {states[t][1]:.2f} \n'
-            text += f'dx: {states[t][2]:.2f}, {states[t][3]:.2f}]\n'
-            text += f'c: [{costs[t][0]:.2f}, {costs[t][1]:.2f}]\n'
+            text = 'x: [{:.2f}, {:.2f} \n'.format(states[t][0], states[t][1])
+            text += 'dx: {:.2f}, {:.2f}]\n'.format(states[t][2], states[t][3])
+            text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
         draw.text((10, 130*5-10), text, (255,255,255))
         img = numpy.asarray(pil)
         scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)

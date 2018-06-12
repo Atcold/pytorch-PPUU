@@ -20,13 +20,12 @@ parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-n_iter', type=int, default=100)
+parser.add_argument('-opt_z', type=int, default=0)
+parser.add_argument('-opt_a', type=int, default=1)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-nb_conditions', type=int, default=10)
-parser.add_argument('-nb_predictions', type=int, default=10)
-parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-v', type=str, default='3', choices={'3'})
-parser.add_argument('-display', type=int, default=1)
+parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
@@ -37,6 +36,14 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
+if opt.dataset == 'i80':
+    opt.height = 117
+    opt.width = 24
+    opt.h_height = 14
+    opt.h_width = 3
+
+opt.opt_z = (opt.opt_z == 1)
+opt.opt_a = (opt.opt_a == 1)
 
 # load the model
 def load_model():
@@ -55,21 +62,49 @@ def load_model():
 
 model = load_model()
 
+gym.envs.registration.register(
+    id='Traffic-v3',
+    entry_point='traffic_gym_v3:ControlledI80',
+    kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0},
+)
+
+print('Building the environment (loading data, if any)')
+env = gym.make('Traffic-v' + opt.v)
+
+
 # load the dataset
 dataloader = DataLoader(None, opt, opt.dataset)
 
-for j in range(10):
-    print('j')
+
+
+total_cost_test = 0
+n_batches = 20
+log_file = 'logs/rollouts={}-optz={}-opta={}-iter={}-lrt={}.log'.format(opt.n_rollouts, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
+
+use_env = True
+for j in range(n_batches):
+    print(j)
+    if use_env:
+        env.reset()
+        observation = None
+        while observation is None:
+            observation, reward, done, info = env.step(numpy.zeros((2,)))
+        pdb.set_trace()
+
+            
     inputs, actions, targets = dataloader.get_batch_fm('test', opt.npred)
     inputs = utils.make_variables(inputs)
     targets = utils.make_variables(targets)
     actions = utils.Variable(actions)
 
-    a, pred, pred_const = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=False, optimize_z=True, optimize_a=False)        
+    a, pred, pred_const, cost_test = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=False, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+    total_cost_test += cost_test
+    utils.log(log_file, '{}'.format(cost_test))
     for i in range(4):
         movie_id = j*opt.batch_size + i
-        utils.save_movie(f'tmp_zopt/pred_a_opt/movie{movie_id}/', pred[0][i].data, pred[1][i].data, pred[2][i].data)
-        utils.save_movie(f'tmp_zopt/pred_a_const/movie{movie_id}/', pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
+        utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)
+        utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
 
-
-
+total_cost_test /= n_batches
+print(total_cost_test)
+utils.log(log_file, '{}'.format(total_cost_test))

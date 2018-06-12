@@ -27,9 +27,9 @@ class DataLoader():
             self.costs = []
             self.states = []
             for df in data_files:
-                combined_data_path = data_dir + f'{df}/all_data.pth'
+                combined_data_path = data_dir + '{}/all_data.pth'.format(df)
                 if os.path.isfile(combined_data_path):
-                    print(f'[loading data shard: {combined_data_path}]')
+                    print('[loading data shard: {}]'.format(combined_data_path))
                     data = torch.load(combined_data_path)
                     self.images += data.get('images')
                     self.actions += data.get('actions')
@@ -37,8 +37,8 @@ class DataLoader():
                     self.states += data.get('states')
                 else:
                     print(data_dir)
-                    for f in glob.glob(data_dir + f'{df}/car*.pkl'):
-                        print(f'[loading {f}]')
+                    for f in glob.glob(data_dir + '{}/car*.pkl'.format(df)):
+                        print('[loading {}]'.format(f))
                         fd = pickle.load(open(f, 'rb'))
                         try:
                             T = fd.get('actions').size(0)
@@ -72,7 +72,7 @@ class DataLoader():
             self.n_test = int(math.floor(self.n_episodes * 0.05))
             splits_path = data_dir + '/splits.pth'
             if os.path.exists(splits_path):
-                print(f'[loading data splits: {splits_path}]')
+                print('[loading data splits: {}]'.format(splits_path))
                 self.splits = torch.load(splits_path)                
                 self.train_indx = self.splits.get('train_indx')
                 self.valid_indx = self.splits.get('valid_indx')
@@ -87,8 +87,8 @@ class DataLoader():
 
         elif dataset == 'simulator':        
             for i in range(opt.nshards):
-                f = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes={opt.n_episodes}-seed={i+1}.pkl'
-                print(f'[loading {f}]')
+                f = '{}/traffic_data_lanes={}-episodes={}-seed={}.pkl'.format(opt.data_dir, opt.lanes, opt.n_episodes, i+1)
+                print('[loading {}]'.format(f))
                 self.data += pickle.load(open(f, 'rb'))
 
             self.images = []
@@ -103,7 +103,7 @@ class DataLoader():
 
         
             self.n_episodes = len(self.images)
-            print(f'Number of episodes: {self.n_episodes}')
+            print('Number of episodes: {}'.format(self.n_episodes))
             self.n_train = int(math.floor(self.n_episodes * 0.9))
             self.n_valid = int(math.floor(self.n_episodes * 0.05))
             self.n_test = int(math.floor(self.n_episodes * 0.05))
@@ -114,7 +114,7 @@ class DataLoader():
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
-            print(f'[loading data stats: {stats_path}]')
+            print('[loading data stats: {}]'.format(stats_path))
             stats = torch.load(stats_path)
             self.a_mean = stats.get('a_mean')
             self.a_std = stats.get('a_std')

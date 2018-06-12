@@ -676,10 +676,17 @@ class FwdCNN_TEN(nn.Module):
             input_states = Variable(input_states.cuda()).unsqueeze(0)
         bsize = input_images.size(0)
         # repeat for multiple rollouts
-        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.0), requires_grad=True)
-        optimizer_a = optim.Adam([actions], args.lrt)
-        Z = self.sample_z(bsize * args.npred, method='fp')[0]
-        Z = Z.view(args.npred, bsize, -1)
+        input_images = input_images.unsqueeze(1).expand(bsize, args.n_rollouts, args.ncond, 3, args.height, args.width)
+        input_states = input_states.unsqueeze(1).expand(bsize, args.n_rollouts, args.ncond, 4)
+        input_images = input_images.contiguous().view(bsize * args.n_rollouts, args.ncond, 3, args.height, args.width)
+        input_states = input_states.contiguous().view(bsize * args.n_rollouts, args.ncond, 4)
+        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.0))
+        if optimize_a:
+            actions.requires_grad = True
+            optimizer_a = optim.Adam([actions], args.lrt)
+
+        Z = self.sample_z(bsize * args.n_rollouts * args.npred, method='fp')[0]
+        Z = Z.view(args.npred, bsize * args.n_rollouts, -1)
         Z0 = Z.clone()
         if optimize_z:
             Z.requires_grad = True
@@ -688,7 +695,8 @@ class FwdCNN_TEN(nn.Module):
         for i in range(0, args.n_iter):
             optimizer_a.zero_grad()
             self.zero_grad()
-            pred, _ = self.forward([input_images, input_states], actions, None, sampling='fp', z_seq=Z)
+            actions_rep = actions.unsqueeze(1).expand(bsize, args.n_rollouts, args.npred, 2).contiguous().view(bsize * args.n_rollouts, args.npred, 2)
+            pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
             costs = pred[2]
             loss = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
             loss.backward()
@@ -704,14 +712,26 @@ class FwdCNN_TEN(nn.Module):
                 torch.nn.utils.clip_grad_norm([Z], 1)
                 Z.grad *= -1
                 optimizer_z.step()
+
+
+        # evaluate on new futures
+        Z_test = self.sample_z(bsize * args.n_rollouts * args.npred, method='fp')[0]
+        Z_test = Z_test.view(args.npred, bsize * args.n_rollouts, -1)
+        actions_rep = actions.unsqueeze(1).expand(bsize, args.n_rollouts, args.npred, 2).contiguous().view(bsize * args.n_rollouts, args.npred, 2)
+        pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z_test)
+        costs = pred[2]
+        loss_test = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
+        print('\n[pred test cost = {}]\n'.format(loss_test.data[0]))
                 
 
         # also get predictions using zero actions
         pred_const, _ = self.forward([input_images, input_states], actions.clone().zero_(), None, sampling='fp', z_seq=Z0)
         actions = actions.data.cpu()
-        actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
-        actions += self.stats['a_mean'].view(1, 1, 2).expand(actions.size())
-        return actions.squeeze().numpy(), pred, pred_const
+        if normalize:
+            actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
+            actions += self.stats['a_mean'].view(1, 1, 2).expand(actions.size())
+        return actions.squeeze().numpy(), pred, pred_const, loss_test.data[0]
+
 
 
 
