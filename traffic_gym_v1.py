@@ -275,7 +275,7 @@ class RealTraffic(StatefulEnv):
             return_ = self.controlled_car['locked'].get_last(self.nb_states)
             if return_: return return_
 
-        return None, None, False, None
+        return None, None, self.collision, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 

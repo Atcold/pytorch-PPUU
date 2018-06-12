@@ -808,7 +808,7 @@ class StatefulEnv(core.Env):
                     self._pause()
 
             if self.collision:
-                self._pause()
+                # self._pause()
                 self.collision = False
 
         if mode == 'machine':

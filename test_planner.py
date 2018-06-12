@@ -34,8 +34,10 @@ gym.envs.registration.register(
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
-for episode in range(10):
-    env.reset()
+for episode in range(1000):
+
+    env.reset(frame=int(input('Frame: ')), time_interval=2, control=False)
+
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))
