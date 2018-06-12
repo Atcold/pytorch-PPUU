@@ -141,7 +141,7 @@ class RealTraffic(StatefulEnv):
         )
         self._section = None
         self.df = None
-        self.vehicles_history = set()
+        self.vehicles_history = None
         self.lane_occupancy = None
         self._lane_surfaces = dict()
         self.nb_lanes = 7
@@ -183,6 +183,7 @@ class RealTraffic(StatefulEnv):
         if frame is None:
             frame_df = self.df['Frame ID']
             self.frame = self.controlled_car['frame'] = randrange(min(frame_df), max(frame_df))
+        self.vehicles_history = set()
 
     def step(self, policy_action=None):
 
