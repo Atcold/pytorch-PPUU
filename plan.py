@@ -73,7 +73,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 
 # load the dataset
-dataloader = DataLoader(None, opt, opt.dataset)
+#dataloader = DataLoader(None, opt, opt.dataset)
 
 
 
@@ -81,29 +81,45 @@ total_cost_test = 0
 n_batches = 20
 log_file = 'logs/rollouts={}-optz={}-opta={}-iter={}-lrt={}.log'.format(opt.n_rollouts, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
 
+
+
 use_env = True
 for j in range(n_batches):
     print(j)
     if use_env:
         env.reset()
-        observation = None
-        while observation is None:
-            observation, reward, done, info = env.step(numpy.zeros((2,)))
-        pdb.set_trace()
+        inputs = None
+        while inputs is None:
+            inputs, cost, done, info = env.step(numpy.zeros((2,)))
+        a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+        cost_test = 0
+        images, states, costs = [], [], []
+        for t in range(opt.npred):
+            inputs, cost, done, info = env.step(a[t])
+            images.append(inputs[0][-1])
+            states.append(inputs[1][-1])
+            costs.append([cost[0][-1], cost[1][-1]])
+        images = numpy.stack(images).transpose(0, 2, 3, 1)
+        states = numpy.stack(states)
+        costs = numpy.stack(costs)
+        print(costs[:, 0].mean() + 0.5*costs[:, 1].mean())
+        movie_dir = 'videos_simulator/ep{}/'.format(j)
+        utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, pytorch=False)
+        for i in range(opt.n_rollouts):
+            utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
+    else:
+        inputs, actions, targets = dataloader.get_batch_fm('test', opt.npred)
+        inputs = utils.make_variables(inputs)
+        targets = utils.make_variables(targets)
+        actions = utils.Variable(actions)
+        a, pred, pred_const, cost_test = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=use_env, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+        for i in range(4):
+            movie_id = j*opt.batch_size + i
+            utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)
+            utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
 
-            
-    inputs, actions, targets = dataloader.get_batch_fm('test', opt.npred)
-    inputs = utils.make_variables(inputs)
-    targets = utils.make_variables(targets)
-    actions = utils.Variable(actions)
-
-    a, pred, pred_const, cost_test = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=False, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
-    total_cost_test += cost_test
-    utils.log(log_file, '{}'.format(cost_test))
-    for i in range(4):
-        movie_id = j*opt.batch_size + i
-        utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)
-        utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
+#    total_cost_test += cost_test
+#    utils.log(log_file, '{}'.format(cost_test))
 
 total_cost_test /= n_batches
 print(total_cost_test)

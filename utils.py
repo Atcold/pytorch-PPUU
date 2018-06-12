@@ -43,9 +43,9 @@ def format_losses(loss_i, loss_s, loss_c, loss_p, split):
 def save_movie(dirname, images, states, costs, pytorch=True):
     os.system('mkdir -p ' + dirname)
     if pytorch:
-        images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy()
+        images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy() * 255
     for t in range(images.shape[0]):
-        img = images[t]*255
+        img = images[t]
         img = numpy.concatenate((img, numpy.zeros((24, 24, 3)).astype('float')), axis=0)
         img = scipy.misc.imresize(img, 5.0)
         img = numpy.uint8(img)
