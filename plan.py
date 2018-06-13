@@ -18,6 +18,7 @@ parser.add_argument('-batch_size', type=int, default=4)
 parser.add_argument('-lrt', type=float, default=0.01)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=200)
+parser.add_argument('-nexec', type=int, default=10)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-n_iter', type=int, default=100)
 parser.add_argument('-opt_z', type=int, default=0)
@@ -28,6 +29,7 @@ parser.add_argument('-v', type=str, default='3', choices={'3'})
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
+parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
 
 opt = parser.parse_args()
@@ -79,7 +81,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 total_cost_test = 0
 n_batches = 20
-log_file = 'logs/rollouts={}-optz={}-opta={}-iter={}-lrt={}.log'.format(opt.n_rollouts, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
+plan_file = 'rollouts={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
 
 
 
@@ -87,23 +89,35 @@ use_env = True
 for j in range(n_batches):
     print(j)
     if use_env:
+        print('\n[NEW EPISODE]\n')
         env.reset()
         inputs = None
-        while inputs is None:
-            inputs, cost, done, info = env.step(numpy.zeros((2,)))
-        a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
-        cost_test = 0
-        images, states, costs = [], [], []
-        for t in range(opt.npred):
-            inputs, cost, done, info = env.step(a[t])
-            images.append(inputs[0][-1])
-            states.append(inputs[1][-1])
-            costs.append([cost[0][-1], cost[1][-1]])
+        done = False
+        images, states, costs = [], [], []        
+        while not done:
+            if inputs is None:
+                print('[finding valid input]')
+                while inputs is None:
+                    inputs, cost, done, info = env.step(numpy.zeros((2,)))
+                print('[done]')
+            print('[planning action sequence]')
+            a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+            cost_test = 0
+            print('[executing action sequence]')
+            t = 0
+            while (t < opt.nexec) and not done:
+                inputs, cost, done, info = env.step(a[t])
+                images.append(inputs[0][-1])
+                states.append(inputs[1][-1])
+                costs.append([cost[0][-1], cost[1][-1]])
+                t += 1
+
         images = numpy.stack(images).transpose(0, 2, 3, 1)
         states = numpy.stack(states)
         costs = numpy.stack(costs)
-        print(costs[:, 0].mean() + 0.5*costs[:, 1].mean())
-        movie_dir = 'videos_simulator/ep{}/'.format(j)
+        cost_test = costs[:, 0].mean() + 0.5*costs[:, 1].mean()
+        print(cost_test)
+        movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
         utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, pytorch=False)
         for i in range(opt.n_rollouts):
             utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
@@ -118,9 +132,9 @@ for j in range(n_batches):
             utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)
             utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
 
-#    total_cost_test += cost_test
-#    utils.log(log_file, '{}'.format(cost_test))
+    total_cost_test += cost_test
+    utils.log(plan_file + '.log', '{}'.format(cost_test))
 
 total_cost_test /= n_batches
 print(total_cost_test)
-utils.log(log_file, '{}'.format(total_cost_test))
+utils.log(plan_file + '.log', '{}'.format(total_cost_test))
