@@ -189,7 +189,7 @@ class RealTraffic(StatefulEnv):
         return df[valid_x]
 
     def reset(self, frame=None, control=True, time_slot=None):
-        super().reset(frame, control)
+        super().reset(control=(frame is None))
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0])
         if frame is None:  # controlled
@@ -199,8 +199,8 @@ class RealTraffic(StatefulEnv):
             while not new_vehicles:
                 frame = self.random.randrange(min(frame_df), max(frame_df))
                 vehicles_history = set(self.df[self.df['Frame ID'] <= frame]['Vehicle ID'])
-                new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history -
-                        self._black_list[self._t_slot]
+                new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history
+                new_vehicles -= self._black_list[self._t_slot]  # clean up fuckers
         self.frame = frame
         self.vehicles_history = set()
 
