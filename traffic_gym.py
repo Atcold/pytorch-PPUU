@@ -225,10 +225,12 @@ class Car:
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
-            if self.collisions_per_frame > 0:
-                print(f'Accident! Check vehicle {self}')
-                pygame.draw.rect(surface, (128, 255, 0),
-                                 (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
+
+            # Highlight colliding vehicle / debugging purpose
+            # if self.collisions_per_frame > 0:
+            #     print(f'Accident! Check vehicle {self}')
+            #     pygame.draw.rect(surface, (128, 255, 0),
+            #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
 
             draw_rect(surface, self._colour, rectangle, d)
 
@@ -710,7 +712,7 @@ class StatefulEnv(core.Env):
                     # else:
                     #     # if len(v._states_image) > 15:
                     #     #     pdb.set_trace()
-                    action = v.policy(state, )
+                    action = v.policy(state, 'hardcoded')
 
                 # Check for accident
                 if v.crashed: self.collision = v
@@ -808,7 +810,7 @@ class StatefulEnv(core.Env):
                     self._pause()
 
             if self.collision:
-                # self._pause()
+                self._pause()
                 self.collision = False
 
         if mode == 'machine':

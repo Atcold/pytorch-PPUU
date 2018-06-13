@@ -60,7 +60,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 
 def run_episode():
-    env.reset(frame=0, time_slot=opt.time_interval, control=False)
+    env.reset(frame=0, time_slot=opt.time_interval)
     while True:
         env.step(None)
         env.render()

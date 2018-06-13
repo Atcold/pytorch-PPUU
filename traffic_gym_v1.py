@@ -77,14 +77,14 @@ class RealCar(Car):
             return norm / self._dt
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
-    def step(self, action):
-        position = self._position
-        self._position = self._trajectory[self._frame]
-        new_direction = self._position - position
-        self._direction = new_direction if np.linalg.norm(new_direction) > 0.1 else self._direction
-        self._direction /= np.linalg.norm(self._direction)
-        assert 0.99 < np.linalg.norm(self._direction) < 1.01
-        assert self._direction[0] > 0
+    # def step(self, action):
+    #     position = self._position
+    #     self._position = self._trajectory[self._frame]
+    #     new_direction = self._position - position
+    #     self._direction = new_direction if np.linalg.norm(new_direction) > 0.1 else self._direction
+    #     self._direction /= np.linalg.norm(self._direction)
+    #     assert 0.99 < np.linalg.norm(self._direction) < 1.01
+    #     assert self._direction[0] > 0
 
     def policy(self, observation, **kwargs):
         self._frame += 1
@@ -98,8 +98,7 @@ class RealCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
             b = self._speed * np.sign(b)
-        # return np.array((a, b))
-        return np.zeros((2,))  # disable policy output
+        return np.array((a, b))
 
     @property
     def current_lane(self):
@@ -188,7 +187,7 @@ class RealTraffic(StatefulEnv):
         # Restrict data frame to valid x coordinates
         return df[valid_x]
 
-    def reset(self, frame=None, control=True, time_slot=None):
+    def reset(self, frame=None, time_slot=None):
         super().reset(control=(frame is None))
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0])
@@ -264,7 +263,7 @@ class RealTraffic(StatefulEnv):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state, ) if not v.is_autonomous else policy_action
+            action = v.policy(state) if not v.is_autonomous else policy_action
 
             # Perform such action
             v.step(action)
@@ -274,7 +273,7 @@ class RealTraffic(StatefulEnv):
                 v.store('state', state)
                 v.store('action', action)
 
-            if v.valid:
+            if v.is_controlled and v.valid:
                 v.count_collisions(state)
                 if v.collisions_per_frame > 0: self.collision = True
 
@@ -286,7 +285,7 @@ class RealTraffic(StatefulEnv):
             return_ = self.controlled_car['locked'].get_last(self.nb_states)
             if return_: return return_
 
-        return None, None, self.collision, None
+        return None, None, False, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
