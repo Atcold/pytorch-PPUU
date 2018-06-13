@@ -9,7 +9,6 @@ import scipy.misc
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-lanes', type=int, default=3)
@@ -22,7 +21,7 @@ parser.add_argument('-data_dir', type=str, default='scratch/nvidia-collab/data/'
 parser.add_argument('-steps', type=int, default=500)
 parser.add_argument('-v', type=str, default='0')
 parser.add_argument('-fps', type=int, default=30)
-parser.add_argument('-time_interval', type=int, default=0)
+parser.add_argument('-time_slot', type=int, default=0)
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -60,7 +59,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 
 def run_episode():
-    env.reset(frame=0, time_slot=opt.time_interval)
+    env.reset(frame=0, time_slot=opt.time_slot)
     while True:
         env.step(None)
         env.render()
