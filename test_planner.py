@@ -36,7 +36,7 @@ env = gym.make('Traffic-v' + opt.v)
 
 for episode in range(1000):
 
-    env.reset(frame=int(input('Frame: ')), time_interval=2, control=False)
+    env.reset(frame=int(input('Frame: ')), time_slot=1, control=False)
 
     done = False
     while not done:
