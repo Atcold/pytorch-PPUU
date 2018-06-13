@@ -10,7 +10,7 @@ parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-nb_predictions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-models_dir', type=str, default='./models_il/')
-parser.add_argument('-display', type=int, default=0)
+parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-v', type=str, default='3', choices={'3'})
 
 opt = parser.parse_args()
@@ -34,8 +34,10 @@ gym.envs.registration.register(
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
 
-for episode in range(10):
+for episode in range(1000):
     env.reset()
+    # env.reset(frame=int(input('Frame: ')), time_slot=1)
+
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))

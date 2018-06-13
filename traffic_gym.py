@@ -213,10 +213,8 @@ class Car:
         """
         Draw current car on screen with a specific colour
         :param surface: PyGame ``Surface`` where to draw
-        :param c: default colour
         :param mode: human or machine
         :param offset: for representation cropping
-        :param scale: draw with rescaled coordinates
         """
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
@@ -227,6 +225,13 @@ class Car:
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
+
+            # Highlight colliding vehicle / debugging purpose
+            # if self.collisions_per_frame > 0:
+            #     print(f'Accident! Check vehicle {self}')
+            #     pygame.draw.rect(surface, (128, 255, 0),
+            #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
+
             draw_rect(surface, self._colour, rectangle, d)
 
             # Drawing vehicle number
