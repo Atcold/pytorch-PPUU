@@ -5,7 +5,7 @@ from traffic_gym import StatefulEnv, Car, colours
 import pygame
 import pandas as pd
 import numpy as np
-import pdb
+import pdb, random
 import bisect
 import pdb, pickle, os
 
@@ -146,6 +146,8 @@ class RealTraffic(StatefulEnv):
         self._lane_surfaces = dict()
         self.nb_lanes = 7
         self.smoothing_window = 15
+        self.random = random.Random()
+        self.random.seed(54321)
 
     @staticmethod
     def _get_data_frame(file_name, x_max):
@@ -178,14 +180,14 @@ class RealTraffic(StatefulEnv):
 
     def reset(self, frame=None, time_interval=None):
         super().reset(control=(frame is None))
-        self._section = self.file_names[time_interval] if time_interval is not None else choice(self.file_names)
+        self._section = self.file_names[time_interval] if time_interval is not None else self.random.choice(self.file_names)
         self.df = self._get_data_frame(self._section + '.txt', self.screen_size[0])
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
             new_vehicles = set()
             while not new_vehicles:
-                frame = randrange(min(frame_df), max(frame_df))
+                frame = self.random.randrange(min(frame_df), max(frame_df))
                 vehicles_history = set(self.df[self.df['Frame ID'] <= frame]['Vehicle ID'])
                 new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history
         self.frame = frame
