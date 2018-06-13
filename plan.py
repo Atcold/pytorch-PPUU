@@ -12,13 +12,13 @@ from dataloader import DataLoader
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-seed', type=int, default=0)
+parser.add_argument('-seed', type=int, default=333333)
 # planning params
-parser.add_argument('-batch_size', type=int, default=4)
+parser.add_argument('-batch_size', type=int, default=1)
 parser.add_argument('-lrt', type=float, default=0.01)
 parser.add_argument('-ncond', type=int, default=10)
-parser.add_argument('-npred', type=int, default=200)
-parser.add_argument('-nexec', type=int, default=10)
+parser.add_argument('-npred', type=int, default=50)
+parser.add_argument('-nexec', type=int, default=20)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-n_iter', type=int, default=100)
 parser.add_argument('-opt_z', type=int, default=0)
@@ -81,15 +81,15 @@ env = gym.make('Traffic-v' + opt.v)
 
 total_cost_test = 0
 n_batches = 20
-plan_file = 'rollouts={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
-
-
+plan_file = 'rollouts={}-npred={}-nexec={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.npred, opt.nexec, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
+print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
 
 use_env = True
 for j in range(n_batches):
-    print(j)
     if use_env:
-        print('\n[NEW EPISODE]\n')
+        print('\n[NEW EPISODE ({})]\n'.format(j))
+        movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
+        print('[will save to: {}]'.format(movie_dir))
         env.reset()
         inputs = None
         done = False
@@ -111,13 +111,16 @@ for j in range(n_batches):
                 states.append(inputs[1][-1])
                 costs.append([cost[0][-1], cost[1][-1]])
                 t += 1
+            costs_ = numpy.stack(costs)
+            print(costs_[:, 0].mean() + 0.5*costs_[:, 1].mean())
+            if len(images) > 600:
+                done = True
 
         images = numpy.stack(images).transpose(0, 2, 3, 1)
         states = numpy.stack(states)
         costs = numpy.stack(costs)
         cost_test = costs[:, 0].mean() + 0.5*costs[:, 1].mean()
         print(cost_test)
-        movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
         utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, pytorch=False)
         for i in range(opt.n_rollouts):
             utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
@@ -130,11 +133,11 @@ for j in range(n_batches):
         for i in range(4):
             movie_id = j*opt.batch_size + i
             utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)
-            utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
+#            utils.save_movie('tmp_zopt/pred_a_const/movie{}/'.format(movie_id), pred_const[0][i].data, pred_const[1][i].data, pred_const[2][i].data)
 
     total_cost_test += cost_test
-    utils.log(plan_file + '.log', '{}'.format(cost_test))
+    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep {}, cost: {}'.format(j, cost_test))
 
 total_cost_test /= n_batches
 print(total_cost_test)
-utils.log(plan_file + '.log', '{}'.format(total_cost_test))
+utils.log(opt.save_dir + '/' + plan_file + '.log', '{}'.format(total_cost_test))

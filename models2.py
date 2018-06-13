@@ -724,8 +724,11 @@ class FwdCNN_TEN(nn.Module):
         print('\n[pred test cost = {}]\n'.format(loss_test.data[0]))
                 
 
+        '''
         # also get predictions using zero actions
         pred_const, _ = self.forward([input_images, input_states], actions.clone().zero_(), None, sampling='fp', z_seq=Z0)
+        '''
+        pred_const = None
         actions = actions.data.cpu()
         if normalize:
             actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
