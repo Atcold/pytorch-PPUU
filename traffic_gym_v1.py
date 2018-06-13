@@ -176,13 +176,19 @@ class RealTraffic(StatefulEnv):
         # Restrict data frame to valid x coordinates
         return df[valid_x]
 
-    def reset(self, frame=None, control=True, time_interval=None):
-        super().reset(frame, control)
+    def reset(self, frame=None, time_interval=None):
+        super().reset(control=(frame is None))
         self._section = self.file_names[time_interval] if time_interval is not None else choice(self.file_names)
         self.df = self._get_data_frame(self._section + '.txt', self.screen_size[0])
-        if frame is None:
-            frame_df = self.df['Frame ID']
-            self.frame = self.controlled_car['frame'] = randrange(min(frame_df), max(frame_df))
+        if frame is None:  # controlled
+            # Start at a random valid (new_vehicles is not empty) initial frame
+            frame_df = self.df['Frame ID'].values
+            new_vehicles = set()
+            while not new_vehicles:
+                frame = randrange(min(frame_df), max(frame_df))
+                vehicles_history = set(self.df[self.df['Frame ID'] <= frame]['Vehicle ID'])
+                new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history
+        self.frame = frame
         self.vehicles_history = set()
 
     def step(self, policy_action=None):
@@ -202,8 +208,7 @@ class RealTraffic(StatefulEnv):
                 self.vehicles.append(car)
                 if self.controlled_car and \
                         not self.controlled_car['locked'] and \
-                        self.frame > self.controlled_car['frame'] and \
-                        car.current_lane == self.controlled_car['lane']:
+                        self.vehicles_history:
                     self.controlled_car['locked'] = car
                     car.is_controlled = True
                     car.buffer_size = self.nb_states
