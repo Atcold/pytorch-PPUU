@@ -569,9 +569,9 @@ class StatefulEnv(core.Env):
     def set_policy(self, policy_network):
         self.policy_network = policy_network
 
-    def reset(self, frame=None, control=True):
+    def reset(self, control=True):
         # Initialise environment state
-        self.frame = 0 if frame is None else frame
+        self.frame = 0
         self.vehicles = list()
         self.lane_occupancy = [[] for _ in range(self.nb_lanes)]
         self.episode += 1
@@ -582,7 +582,6 @@ class StatefulEnv(core.Env):
         pygame.display.set_caption('Traffic simulator, episode {}, start from frame {}'.format(self.episode, self.frame))
         if control:
             self.controlled_car = {
-                'lane': random.randrange(self.nb_lanes),
                 'locked': False,
             }
 
