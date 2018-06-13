@@ -134,12 +134,22 @@ class RealTraffic(StatefulEnv):
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
-        self.file_names = (
+        self._time_slots = (
             './data_i80/trajectories-0400-0415',
             './data_i80/trajectories-0500-0515',
             './data_i80/trajectories-0515-0530',
         )
-        self._section = None
+        self._t_slot = None
+        self._black_list = {
+            self._time_slots[0]:
+                {1628, 2089, 2834, 2818, 2874},
+            self._time_slots[1]:
+                {537, 1119, 1261, 1215, 1288, 1381, 1382, 1348, 2512, 2462, 2442, 2427,
+                 2407, 2486, 2296, 2427, 2552, 2500, 2616, 2555, 2586, 2669},
+            self._time_slots[2]:
+                {269, 567, 722, 790, 860, 1603, 1651, 1734, 1762, 1734,
+                 1800, 1722, 1878, 2056, 2075, 2258, 2252, 2285, 2362},
+        }
         self.df = None
         self.vehicles_history = None
         self.lane_occupancy = None
@@ -178,10 +188,10 @@ class RealTraffic(StatefulEnv):
         # Restrict data frame to valid x coordinates
         return df[valid_x]
 
-    def reset(self, frame=None, time_interval=None):
-        super().reset(control=(frame is None))
-        self._section = self.file_names[time_interval] if time_interval is not None else self.random.choice(self.file_names)
-        self.df = self._get_data_frame(self._section + '.txt', self.screen_size[0])
+    def reset(self, frame=None, control=True, time_slot=None):
+        super().reset(frame, control)
+        self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
+        self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0])
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
@@ -189,7 +199,8 @@ class RealTraffic(StatefulEnv):
             while not new_vehicles:
                 frame = self.random.randrange(min(frame_df), max(frame_df))
                 vehicles_history = set(self.df[self.df['Frame ID'] <= frame]['Vehicle ID'])
-                new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history
+                new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history -
+                        self._black_list[self._t_slot]
         self.frame = frame
         self.vehicles_history = set()
 
@@ -197,7 +208,7 @@ class RealTraffic(StatefulEnv):
 
         df = self.df
         now = df['Frame ID'] == self.frame
-        vehicles = set(df[now]['Vehicle ID']) - self.vehicles_history
+        vehicles = set(df[now]['Vehicle ID']) - self.vehicles_history - self._black_list[self._t_slot]
 
         if vehicles:
             now_and_on = df['Frame ID'] >= self.frame
@@ -226,7 +237,7 @@ class RealTraffic(StatefulEnv):
             if v.off_screen:
                 # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('scratch/nvidia-collab/data/data_i80_v2/', os.path.basename(self._section))
+                    file_name = os.path.join('scratch/nvidia-collab/data/data_i80_v2/', os.path.basename(self._t_slot))
                     print('[dumping {}]'.format(file_name))
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
