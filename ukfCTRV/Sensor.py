@@ -69,7 +69,7 @@ class Sensor(object):
 
 class I80measurement(Sensor):
 
-    def __init__(self, name, stdx=0.1, stdy=0.2):
+    def __init__(self, name, stdx=0.5, stdy=0.75):
         super(I80measurement, self).__init__(
             name=name, active=True, noise=np.asarray([stdx, stdy]),
             sensor_type=sensor_types['I80'], data_dimension=2)

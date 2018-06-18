@@ -151,8 +151,6 @@ class ukf(object):
             while x_diff[3] < -np.pi:
                 x_diff[3] = x_diff[3] + 2.*np.pi
 
-            print(self.weights.shape)
-            print(self.weights[i])
             P_out = P_out + self.weights[i]*np.outer(x_diff, np.transpose(x_diff))
 
         # update state

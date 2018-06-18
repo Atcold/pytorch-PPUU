@@ -4,16 +4,18 @@ from ukfCTRV import Sensor
 import matplotlib.pyplot as plt
 
 
-sample = 50
+Fs = 8000
+f = 5
+sample = 8000
 x = np.arange(sample)
-y = 1.*x + 0.5
+y = np.sin(2 * np.pi * f * x / Fs)
 
 plt.plot(x, y)
 plt.show()
 
 xnoise = np.random.normal(0, 0.1, x.shape)
 x = x + xnoise
-ynoise = np.random.normal(0, 1.0, x.shape)
+ynoise = np.random.normal(0, 0.2, x.shape)
 y = y + ynoise
 
 plt.plot(x, y)
