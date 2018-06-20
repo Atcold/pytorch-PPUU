@@ -41,6 +41,20 @@ def hx(x):
     """
     return np.array([x[0], x[1]])
 
+@jit
+def state_mean(sigmas, Wm):
+    x = np.zeros(5)
+
+    x[0] = np.sum(np.dot(sigmas[:,0], Wm))
+    x[1] = np.sum(np.dot(sigmas[:,1], Wm))
+    x[2] = np.sum(np.dot(sigmas[:,2], Wm))
+    sum_sin = np.sum(np.dot(np.sin(sigmas[:, 3]), Wm))
+    sum_cos = np.sum(np.dot(np.cos(sigmas[:, 3]), Wm))
+    x[3] = np.atan2(sum_sin, sum_cos)
+    x[4] = np.sum(np.dot(sigmas[:,4], Wm))
+
+    return x
+
 
 @jit
 def plot_phi(x, y, phi, length):
