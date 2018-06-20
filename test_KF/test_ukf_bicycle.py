@@ -46,7 +46,7 @@ for i, car in enumerate(car_list):
         ukf_car[i].update(z)
         px_kf.append(ukf_car[i].ukf.x[0])
         py_kf.append(ukf_car[i].ukf.x[1])
-        phi_kf.append(ukf_car[i].ukf.x[2])
+        phi_kf.append(ukf_car[i].ukf.x[3])
     px_kf_list.append(px_kf)
     py_kf_list.append(py_kf)
     phi_kf_list.append(phi_kf)

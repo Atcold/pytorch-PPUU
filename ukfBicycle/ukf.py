@@ -1,17 +1,17 @@
 import numpy as np
 from filterpy.kalman import UKF
 from filterpy.kalman import MerweScaledSigmaPoints
-from filterpy.common import Q_discrete_white_noise
-import matplotlib.pyplot as plt
 from numba.decorators import jit
 from math import tan, sin, cos, sqrt, atan2
 
 @jit
 def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
-    hdg = x[2]
-    vel = u[0]
+    # state vector: (px, py, v, phi)
+    hdg = x[3]
+    vel = x[2]
     steering_angle = u[1]
-    dist = vel * dt
+    acc = u[0]
+    dist = vel * dt + 0.5 * acc * dt**2
 
     if abs(steering_angle) > eps:  # is robot turning?
         beta = (dist / wheelbase) * tan(steering_angle)
@@ -19,10 +19,10 @@ def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
 
         sinh, sinhb = sin(hdg), sin(hdg + beta)
         cosh, coshb = cos(hdg), cos(hdg + beta)
-        return x + np.array([-r * sinh + r * sinhb,
-                             r * cosh - r * coshb, beta])
+
+        return x + np.array([-r * sinh + r * sinhb, r * cosh - r * coshb, acc*dt, beta])
     else:  # moving in straight line
-        return x + np.array([dist * cos(hdg), dist * sin(hdg), 0])
+        return x + np.array([dist * cos(hdg), dist * sin(hdg), acc * dt, 0])
 
 @jit
 def transition(x, dt, wheelbase, eps=1e-5):
@@ -37,6 +37,10 @@ def transition(x, dt, wheelbase, eps=1e-5):
 
         sinh, sinhb = sin(hdg), sin(hdg + beta)
         cosh, coshb = cos(hdg), cos(hdg + beta)
+
+        if x[3] + beta > np.pi or x[3] + beta < -np.pi:
+            print('transition phi out of range')
+
         return x + np.array([-r*sinh + r*sinhb,
                               r*cosh - r*coshb, beta])
     else: # moving in straight line
@@ -45,9 +49,10 @@ def transition(x, dt, wheelbase, eps=1e-5):
 @jit
 def normalize_angle(x):
     x = x % (2 * np.pi)    # force in range [0, 2 pi)
-    if x > np.pi:          # move to [-pi, pi)
+    if x > 0.5*np.pi:          # move to [-pi, pi)
         x -= 2 * np.pi
     return x
+
 
 # @jit
 # def residual_h(a, b):
@@ -58,8 +63,8 @@ def normalize_angle(x):
 @jit
 def residual_x(a, b):
     x = a - b
-    # state vector is (x, y, phi)
-    x[2] = normalize_angle(x[2])
+    # state vector is (x, y, v, phi)
+    x[3] = normalize_angle(x[3])
     return x
 
 @jit
@@ -72,13 +77,15 @@ def Hx(x):
 
 @jit
 def state_mean(sigmas, Wm):
-    x = np.zeros(3)
+    x = np.zeros(4)
 
-    sum_sin = np.sum(np.dot(np.sin(sigmas[:, 2]), Wm))
-    sum_cos = np.sum(np.dot(np.cos(sigmas[:, 2]), Wm))
     x[0] = np.sum(np.dot(sigmas[:, 0], Wm))
     x[1] = np.sum(np.dot(sigmas[:, 1], Wm))
-    x[2] = atan2(sum_sin, sum_cos)
+    x[2] = np.sum(np.dot(sigmas[:, 2], Wm))
+
+    sum_sin = np.sum(np.dot(np.sin(sigmas[:, 3]), Wm))
+    sum_cos = np.sum(np.dot(np.cos(sigmas[:, 3]), Wm))
+    x[3] = atan2(sum_sin, sum_cos)
     return x
 
 # @jit
@@ -95,13 +102,18 @@ class ukf(object):
     def __init__(self):
         # state vector: [px, py, phi]
         self.dt = 0.1
-        self.points = MerweScaledSigmaPoints(n=3, alpha=.00001, beta=2, kappa=0, subtract=residual_x)
-        self.ukf = UKF.UnscentedKalmanFilter(dim_x=3, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
+        self.points = MerweScaledSigmaPoints(n=4, alpha=.00001, beta=2, kappa=1, subtract=residual_x)
+        self.ukf = UKF.UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
                                              x_mean_fn=state_mean, residual_x=residual_x)
-        self.ukf.x = np.array([0.,0.,0.])
-        self.ukf.P = np.diag([.1, .1, .05])
+        self.ukf.x = np.array([0.,0.,0.,0.])
+        #self.ukf.P = np.diag([.1, .1, .1, .05])
+        self.ukf.P = np.array([[1, 0, 1, 0],
+                               [0, 1, 1, 0],
+                               [1, 1, 2, 0],
+                               [0, 0, 0, 1]])
+
         self.ukf.R = np.diag([0.5**2, 0.25**2])
-        self.ukf.Q = np.eye(3)*0.0001
+        self.ukf.Q = np.eye(4)*0.001
 
     def predict(self):
         self.ukf.predict()
