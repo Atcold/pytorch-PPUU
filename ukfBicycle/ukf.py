@@ -25,28 +25,6 @@ def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
         return x + np.array([dist * cos(hdg), dist * sin(hdg), acc * dt, 0])
 
 @jit
-def transition(x, dt, wheelbase, eps=1e-5):
-    hdg = x[3]
-    vel = x[2]
-    steering_angle = u[1]
-    dist = vel * dt
-
-    if abs(steering_angle) > eps: # is robot turning?
-        beta = (dist / wheelbase) * tan(steering_angle)
-        r = wheelbase / tan(steering_angle) # radius
-
-        sinh, sinhb = sin(hdg), sin(hdg + beta)
-        cosh, coshb = cos(hdg), cos(hdg + beta)
-
-        if x[3] + beta > np.pi or x[3] + beta < -np.pi:
-            print('transition phi out of range')
-
-        return x + np.array([-r*sinh + r*sinhb,
-                              r*cosh - r*coshb, beta])
-    else: # moving in straight line
-        return x + np.array([dist*cos(hdg), dist*sin(hdg), 0])
-
-@jit
 def normalize_angle(x):
     x = x % (2 * np.pi)    # force in range [0, 2 pi)
     if x > 0.5*np.pi:          # move to [-pi, pi)
@@ -88,14 +66,6 @@ def state_mean(sigmas, Wm):
     x[3] = atan2(sum_sin, sum_cos)
     return x
 
-# @jit
-# def z_mean(sigmas, Wm):
-#     z = np.zeros([0,0])
-#     z[0] = np.sum(np.dot(sigmas[:, 0], Wm))
-#     z[1] = np.sum(np.dot(sigmas[:, 1], Wm))
-#
-#     return z
-
 
 class ukf(object):
 
@@ -106,7 +76,6 @@ class ukf(object):
         self.ukf = UKF.UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
                                              x_mean_fn=state_mean, residual_x=residual_x)
         self.ukf.x = np.array([0.,0.,0.,0.])
-        #self.ukf.P = np.diag([.1, .1, .1, .05])
         self.ukf.P = np.array([[1, 0, 1, 0],
                                [0, 1, 1, 0],
                                [1, 1, 2, 0],
