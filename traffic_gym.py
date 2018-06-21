@@ -498,7 +498,7 @@ class Car:
         cost = (proximity_cost, lane_cost, self.collisions_per_frame, pixel_proximity_cost)
         return observation, cost, self.off_screen, self
 
-    def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
+    def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
@@ -507,7 +507,8 @@ class Car:
             return
         im = transpose[0]
         if mode == 'tensor':
-            lane_cost = transpose[1]
+            lane_cost = torch.Tensor(transpose[1])
+            pixel_proximity_cost = torch.Tensor(transpose[2])
             zip_ = list(zip(*self._states))
             proximity_cost = torch.Tensor(zip_[2])
             states = torch.stack(zip_[0])
@@ -518,10 +519,11 @@ class Car:
                 pickle.dump({
                     'images': im_pth,
                     'actions': torch.stack(self._actions),
-                    'lane_cost': torch.Tensor(lane_cost),
+                    'lane_cost': lane_cost,
+                    'pixel_proximity_cost': pixel_proximity_cost,
                     'states': states,
                     'proximity_cost': proximity_cost,
-                    'mask': mask
+                    'mask': mask,
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -834,40 +836,46 @@ class StatefulEnv(core.Env):
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
 
-            if self.collision:
-                self._pause()
-                self.collision = False
+            # if self.collision:
+            #     self._pause()
+            #     self.collision = False
 
         if mode == 'machine':
             max_extension = int(np.linalg.norm(width_height))
-            vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            # vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
+            machine_screen_size = np.array(self.screen_size) + 2 * max_extension
             try:
                 lane_surface = self._lane_surfaces[mode]
 
             except KeyError:
-                lane_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+                lane_surface = pygame.Surface(machine_screen_size)
                 self._draw_lanes(lane_surface, mode=mode, offset=max_extension)
 
-            # draw vehicles
-            for v in self.vehicles:
-                v.draw(vehicle_surface, mode=mode, offset=max_extension)
+            # # draw vehicles
+            # for v in self.vehicles:
+            #     v.draw(vehicle_surface, mode=mode, offset=max_extension)
 
-            vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
+            # vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
 
             # extract states
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
-                    # draw myself blue
-                    vehicle_rect = v.draw(vehicle_surface, mode='ego-car', offset=max_extension)
-                    # paint lane again
-                    vehicle_surface.blit(lane_surface, vehicle_rect, vehicle_rect, special_flags=pygame.BLEND_MAX)
+                    # For every vehicle we want to extract the state, start with a black surface
+                    vehicle_surface = pygame.Surface(machine_screen_size)
+                    # Draw all the other vehicles (in green)
+                    for vv in set(self.vehicles) - {v}:
+                        vv.draw(vehicle_surface, mode=mode, offset=max_extension)
+                    # Superimpose the lanes
+                    vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
+                    # Generate an empty ego-surface
+                    ego_surface  = pygame.Surface(machine_screen_size)
+                    # Draw myself blue on the ego_surface
+                    ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
+                    # Add me on top of others without shadowing
+                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
-                    # draw myself green
-                    v.draw(vehicle_surface, mode=mode, offset=max_extension)
-                    # paint lane again
-                    vehicle_surface.blit(lane_surface, vehicle_rect, vehicle_rect, special_flags=pygame.BLEND_MAX)
 
             # # save surface as image, for visualisation only
             # pygame.image.save(vehicle_surface, "vehicle_surface.png")
