@@ -230,7 +230,7 @@ class RealTraffic(StatefulEnv):
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print('[t={}]'.format(self.frame), end="\r")
+        print('\r[t={}]'.format(self.frame), end='')
 
         for v in self.vehicles[:]:
             if v.off_screen:

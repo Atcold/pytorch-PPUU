@@ -842,10 +842,10 @@ class StatefulEnv(core.Env):
 
         if mode == 'machine':
             max_extension = int(np.linalg.norm(width_height) / 2)
-            # vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            machine_screen_size = np.array(self.screen_size) + 2 * max_extension
+            vehicle_surface = pygame.Surface(machine_screen_size)
 
             # draw lanes
-            machine_screen_size = np.array(self.screen_size) + 2 * max_extension
             try:
                 lane_surface = self._lane_surfaces[mode]
 
@@ -856,21 +856,22 @@ class StatefulEnv(core.Env):
             # # draw vehicles
             # for v in self.vehicles:
             #     v.draw(vehicle_surface, mode=mode, offset=max_extension)
-
+            #
             # vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
 
             # extract states
+            ego_surface  = pygame.Surface(machine_screen_size)
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
                     # For every vehicle we want to extract the state, start with a black surface
-                    vehicle_surface = pygame.Surface(machine_screen_size)
+                    vehicle_surface.fill((0, 0, 0))
                     # Draw all the other vehicles (in green)
                     for vv in set(self.vehicles) - {v}:
                         vv.draw(vehicle_surface, mode=mode, offset=max_extension)
                     # Superimpose the lanes
                     vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
-                    # Generate an empty ego-surface
-                    ego_surface  = pygame.Surface(machine_screen_size)
+                    # Empty ego-surface
+                    ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
