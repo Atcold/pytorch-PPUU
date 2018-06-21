@@ -34,8 +34,8 @@ env = gym.make('Traffic-v' + opt.v)
 
 for episode in range(10):
 
-    env.reset()
-
+    # env.reset()
+    env.reset(frame=0, time_interval=0, control=False)
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))

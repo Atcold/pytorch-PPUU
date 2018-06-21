@@ -8,6 +8,7 @@ import numpy as np
 import pdb
 import bisect
 import pdb, pickle, os
+from ukfBicycle import ukf
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -30,19 +31,38 @@ class RealCar(Car):
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
 
         # X and Y are swapped in the I-80 data set...
-        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
-        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
-        for t in range(len(y) - 1):
-            delta_x = x[t + 1] - x[t]
-            delta_y = y[t + 1] - y[t]
-            if abs(delta_y) > abs(delta_x) * 0.1:
-                y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        x = df['Local Y'].values * FOOT * SCALE - X_OFFSET - self._length
+        y = df['Local X'].values * FOOT * SCALE + y_offset
 
         self._trajectory = np.column_stack((x, y))
         self._position = self._trajectory[0]
         self._df = df
         self._frame = 0
         self._dt = 1 / 10
+
+        self.ukf = ukf.Ukf(dt=self._dt, wheelbase=self._length, startx=self._position[0], starty=self._position[1])
+
+        self._direction_store = []
+        self._speed_store = []
+        self._x_store = []
+        self._y_store = []
+        for px, py in zip(x, y):
+            z = np.array([px, py])
+            self.ukf.step(z)
+            kf_pos = self.ukf.get_position()
+            self._x_store.append(kf_pos[0])
+            self._y_store.append(kf_pos[1])
+            kf_hdg = self.ukf.get_heading()
+            kf_dir = np.array([np.cos(kf_hdg), np.sin(kf_hdg)])
+            self._direction_store.append(kf_dir)
+            kf_speed = self.ukf.get_speed()
+            self._speed_store.append(kf_speed)
+
+        self._trajectory = np.column_stack((self._x_store, self._y_store))
+        self._direction_store = np.array(self._direction_store)
+        self._direction_store[0:30] = 0
+        self._speed_store = np.array(self._speed_store)
+
         self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
         self._direction = self._get('direction', 0)
         self._speed = self._get('speed', 0)
@@ -68,29 +88,21 @@ class RealCar(Car):
         return False
 
     def _get(self, what, k):
-        direction_vector = self._trajectory[k + 1] - self._trajectory[k]  # TODO: use my own coordinates!!!
-        norm = np.linalg.norm(direction_vector)
         if what == 'direction':
-            if norm < 1e-6: return self._direction  # if static returns previous direction
-            return direction_vector / norm
+            return self._direction_store[self._frame]
         if what == 'speed':
-            return norm / self._dt
+            return self._speed_store[self._frame]
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     def step(self, action):
-        position = self._position
         self._position = self._trajectory[self._frame]
-        new_direction = self._position - position
-        self._direction = new_direction if np.linalg.norm(new_direction) > 0.1 else self._direction
-        self._direction /= np.linalg.norm(self._direction)
-        assert 0.99 < np.linalg.norm(self._direction) < 1.01
-        assert self._direction[0] > 0
+        self._direction = self._direction_store[self._frame]
 
     def policy(self, observation, **kwargs):
         self._frame += 1
         self.off_screen = self._frame >= len(self._df) - self._k - 2
 
-        new_speed = self._get('speed', self._frame)
+        new_speed = self._speed_store[self._frame]
         a = (new_speed - self._speed) / self._dt
 
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
