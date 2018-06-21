@@ -3,7 +3,7 @@ from filterpy.kalman import UKF
 from filterpy.kalman import MerweScaledSigmaPoints
 from numba.decorators import jit
 from math import tan, sin, cos, sqrt, atan2
-import scipy
+import copy
 
 @jit
 def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
@@ -86,6 +86,30 @@ def state_mean(sigmas, Wm):
     x[3] = atan2(sum_sin, sum_cos)
     return x
 
+@jit
+def state_mean_iterative(sigmas, Wm):
+    """
+    functor for the Ukf to estimate mean of state vector
+    :param sigmas: sigma points
+    :param Wm: weights
+    :return: state mean estimate
+    """
+    x = np.zeros(4)
+
+    x[0] = np.sum(np.dot(sigmas[:, 0], Wm))
+    x[1] = np.sum(np.dot(sigmas[:, 1], Wm))
+    x[2] = np.sum(np.dot(sigmas[:, 2], Wm))
+    WmCopy = copy.deepcopy(Wm)
+    sigmasCopy = copy.deepcopy(sigmas)
+    for i in range(1, len(Wm)):
+        WmSum = WmCopy[i-1] + WmCopy[i]
+        rollingAvg = (WmCopy[i-1]/WmSum) * sigmasCopy[i-1,3] + (WmCopy[i]/WmSum) * sigmasCopy[i,3]
+        WmCopy[i-1] = WmSum
+        sigmasCopy[i-1,3] = normalize_angle(rollingAvg)
+
+    x[3] = normalize_angle(sigmasCopy[len(Wm)-2, 3])
+    return x
+
 
 class Ukf(object):
     """
@@ -113,7 +137,7 @@ class Ukf(object):
         self.wheelbase = wheelbase
         self.points = MerweScaledSigmaPoints(n=4, alpha=.00001, beta=2, kappa=1, subtract=residual_x)
         self.ukf = UKF.UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
-                                             x_mean_fn=state_mean, residual_x=residual_x)
+                                             x_mean_fn=state_mean_iterative, residual_x=residual_x)
         self.ukf.x = np.array([startx, starty, startspeed, starthdg])
         # initial guess
         self.ukf.P = np.array([[1, 0, 1, 0],
@@ -130,12 +154,12 @@ class Ukf(object):
         self.ukf.R = np.diag([stdx**2, stdy**2])
         self.ukf.Q = np.eye(4, dtype=np.float128)*noise
 
-    def predict(self):
+    def predict(self, action=np.array([0.,0.])):
         """
         prediction step of Ukf using a motion model
         :return:
         """
-        self.ukf.predict(wheelbase=self.wheelbase)
+        self.ukf.predict(wheelbase=self.wheelbase, u=action)
 
     def update(self, meas):
         """
@@ -145,13 +169,13 @@ class Ukf(object):
         """
         self.ukf.update(meas)
 
-    def step(self, meas):
+    def step(self, meas, u=np.array([0.,0.])):
         """
         client code interface to update Ukf with a new measurement
         :param meas: measurement vector [px, py]
         :return: void
         """
-        self.predict()
+        self.predict(action=u)
         self.update(meas)
 
     def get_position(self):

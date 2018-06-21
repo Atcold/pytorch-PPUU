@@ -3,7 +3,7 @@ from filterpy.kalman import UKF
 from filterpy.kalman import MerweScaledSigmaPoints
 from numba.decorators import jit
 from math import tan, sin, cos, sqrt, atan2
-import scipy
+import copy
 
 @jit
 def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
@@ -86,6 +86,28 @@ def state_mean(sigmas, Wm):
     x[2] = atan2(sum_sin, sum_cos)
     return x
 
+@jit
+def state_mean_iterative(sigmas, Wm):
+    """
+    functor for the Ukf to estimate mean of state vector
+    :param sigmas: sigma points
+    :param Wm: weights
+    :return: state mean estimate
+    """
+    x = np.zeros(3)
+
+    x[0] = np.sum(np.dot(sigmas[:, 0], Wm))
+    x[1] = np.sum(np.dot(sigmas[:, 1], Wm))
+    WmCopy = copy.deepcopy(Wm)
+    sigmasCopy = copy.deepcopy(sigmas)
+    for i in range(1, len(Wm)):
+        WmSum = WmCopy[i-1] + WmCopy[i]
+        rollingAvg = (WmCopy[i-1]/WmSum) * sigmasCopy[i-1,2] + (WmCopy[i]/WmSum) * sigmasCopy[i,2]
+        WmCopy[i-1] = WmSum
+        sigmasCopy[i-1,2] = normalize_angle(rollingAvg)
+
+    x[2] = normalize_angle(sigmasCopy[len(Wm)-2, 2])
+    return x
 
 class Ukf(object):
     """

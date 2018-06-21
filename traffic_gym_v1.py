@@ -60,7 +60,6 @@ class RealCar(Car):
 
         self._trajectory = np.column_stack((self._x_store, self._y_store))
         self._direction_store = np.array(self._direction_store)
-        self._direction_store[0:30] = 0
         self._speed_store = np.array(self._speed_store)
 
         self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
