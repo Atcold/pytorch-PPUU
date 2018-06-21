@@ -841,7 +841,7 @@ class StatefulEnv(core.Env):
             #     self.collision = False
 
         if mode == 'machine':
-            max_extension = int(np.linalg.norm(width_height))
+            max_extension = int(np.linalg.norm(width_height) / 2)
             # vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
 
             # draw lanes
