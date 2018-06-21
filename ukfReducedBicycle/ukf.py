@@ -9,19 +9,19 @@ import scipy
 def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
     """
     Bicyle motion model for a Ukf.
-    :param x: state vector [px (m), py (m), speed (m/s), hdg (rad)]
+    :param x: state vector [px (m), py (m), hdg (rad)]
     :param dt: dt
     :param wheelbase: axle distance of a two-axle vehicle
-    :param u: control command if issued: [acceleration (m/s**2), steering angle (rad)]
+    :param u: control command if issued: [speed (m/s), steering angle (rad)]
     :param eps: is used for small number test
     :return: predicted state vector
     """
-    # state vector: (px, py, speed, phi)
-    hdg = x[3]
-    speed = x[2]
-    steering_angle = u[1]
-    acc = u[0]
-    distance_traveled = speed * dt + 0.5 * acc * dt**2
+    # state vector: (px, py, phi)
+    hdg = x[2]
+    speed = u[1]
+    steering_angle = u[0]
+    distance_traveled = speed * dt
+
     ret = np.array([0.,0.,0.,0.])
     if abs(steering_angle) > eps and speed > eps * 1e5:  # non-zero steering: turning
         # beta = change of heading (rad)
@@ -31,10 +31,11 @@ def move(x, dt, wheelbase=2.5, u=np.array([0.,0.]), eps=1e-5):
 
         sinh, sinhb = sin(hdg), sin(hdg + beta)
         cosh, coshb = cos(hdg), cos(hdg + beta)
-        ret = x + np.array([-r * sinh + r * sinhb, r * cosh - r * coshb, acc*dt, beta])
+        ret = x + np.array([-r * sinh + r * sinhb, r * cosh - r * coshb, beta])
     else:  # moving in a straight line
-        ret = x + np.array([distance_traveled * cos(hdg), distance_traveled * sin(hdg), acc * dt, 0])
+        ret = x + np.array([distance_traveled * cos(hdg), distance_traveled * sin(hdg), 0])
 
+    ret[3] = 0.
     return ret
 
 @jit
@@ -53,8 +54,8 @@ def normalize_angle(hdg):
 @jit
 def residual_x(a, b):
     x = a - b
-    # state vector is (x, y, speed, hdg)
-    x[3] = normalize_angle(x[3])
+    # state vector is (x, y, hdg)
+    x[2] = normalize_angle(x[2])
     return x
 
 @jit
@@ -75,15 +76,14 @@ def state_mean(sigmas, Wm):
     :param Wm: weights
     :return: state mean estimate
     """
-    x = np.zeros(4)
+    x = np.zeros(3)
 
     x[0] = np.sum(np.dot(sigmas[:, 0], Wm))
     x[1] = np.sum(np.dot(sigmas[:, 1], Wm))
-    x[2] = np.sum(np.dot(sigmas[:, 2], Wm))
 
-    sum_sin = np.sum(np.dot(np.sin(sigmas[:, 3]), Wm))
-    sum_cos = np.sum(np.dot(np.cos(sigmas[:, 3]), Wm))
-    x[3] = atan2(sum_sin, sum_cos)
+    sum_sin = np.sum(np.dot(np.sin(sigmas[:, 2]), Wm))
+    sum_cos = np.sum(np.dot(np.cos(sigmas[:, 2]), Wm))
+    x[2] = atan2(sum_sin, sum_cos)
     return x
 
 
@@ -107,28 +107,26 @@ class Ukf(object):
         :param stdy: std of measurement for position y (default = 1.0m)
         :param noise: process noise for motion model (default = 0.1m)
         """
-        # state vector: [px, py, speed, hdg (rad)]
+        # state vector: [px, py, hdg (rad)]
         self.dt = dt
-        self.x = np.array([startx, starty, startspeed, starthdg])
         self.wheelbase = wheelbase
-        self.points = MerweScaledSigmaPoints(n=4, alpha=.00001, beta=2, kappa=1, subtract=residual_x)
-        self.ukf = UKF.UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
+        self.points = MerweScaledSigmaPoints(n=3, alpha=.00001, beta=2, kappa=0, subtract=residual_x)
+        self.ukf = UKF.UnscentedKalmanFilter(dim_x=3, dim_z=2, dt=self.dt, fx=move, hx=Hx, points=self.points,
                                              x_mean_fn=state_mean, residual_x=residual_x)
-        self.ukf.x = np.array([startx, starty, startspeed, starthdg])
+        self.ukf.x = np.array([startx, starty, starthdg])
         # initial guess
-        self.ukf.P = np.array([[1, 0, 1, 0],
-                               [0, 1, 1, 0],
-                               [1, 1, 2, 0],
-                               [0, 0, 0, 1]])
+        self.ukf.P = np.array([[1, 0, 0.1],
+                               [0, 1, 0.1],
+                               [0.1, 0.1, 1]], dtype=np.float128)
 
         # estimated from data
-        self.ukf.P = np.array([[ 4.78559217e-01, -1.94838441e-03,  2.48955909e-01, -1.25313018e-03],
-                               [-1.94838441e-03,  7.63804713e-01,  1.69689503e-03,  1.83459578e-01],
-                               [ 2.48955909e-01,  1.69689503e-03,  1.51635257e+00,  6.06738360e-06],
-                               [-1.25313018e-03,  1.83459578e-01,  6.06738360e-06,  2.18001626e-01]], dtype=np.float128)
+        # self.ukf.P = np.array([[ 4.78559217e-01, -1.94838441e-03,  2.48955909e-01, -1.25313018e-03],
+        #                        [-1.94838441e-03,  7.63804713e-01,  1.69689503e-03,  1.83459578e-01],
+        #                        [ 2.48955909e-01,  1.69689503e-03,  1.51635257e+00,  6.06738360e-06],
+        #                        [-1.25313018e-03,  1.83459578e-01,  6.06738360e-06,  2.18001626e-01]], dtype=np.float128)
 
         self.ukf.R = np.diag([stdx**2, stdy**2])
-        self.ukf.Q = np.eye(4, dtype=np.float128)*noise
+        self.ukf.Q = np.eye(3, dtype=np.float128)*noise
 
     def predict(self):
         """
@@ -158,7 +156,5 @@ class Ukf(object):
         return np.array([self.ukf.x[0], self.ukf.x[1]])
 
     def get_heading(self):
-        return self.ukf.x[3]
-
-    def get_speed(self):
         return self.ukf.x[2]
+
