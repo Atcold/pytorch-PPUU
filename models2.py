@@ -400,6 +400,70 @@ class FwdCNN(nn.Module):
 
 
 
+
+
+
+
+# forward LSTM model, deterministic
+class FwdLSTM(nn.Module):
+    def __init__(self, opt, mfile):
+        super(FwdCNN, self).__init__()
+        self.opt = opt
+        # If we are given a model file, use it to initialize this model. 
+        # otherwise initialize from scratch
+        if mfile == '':
+            self.encoder = encoder(opt, opt.n_actions, 1)
+            self.decoder = decoder(opt)
+        else:
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
+            self.mfile = mfile
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+            self.encoder.n_inputs = opt.ncond
+
+    def forward(self, inputs, actions, target, sampling=None):
+        npred = actions.size(1)
+        input_images, input_states = inputs
+        pred_images, pred_states, pred_costs = [], [], []
+        for t in range(npred):
+            h = self.encoder(input_images, input_states, actions[:, t])
+            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            pred_images.append(pred_image)
+            pred_states.append(pred_state)
+            pred_costs.append(pred_cost)
+
+        pred_images = torch.cat(pred_images, 1)
+        pred_states = torch.stack(pred_states, 1)
+        pred_costs = torch.stack(pred_costs, 1)
+        return [pred_images, pred_states, pred_costs], Variable(torch.zeros(1).cuda())
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # forward model, Mixture Density Network. (tried this for comparison, but it's really hard to train). 
 class FwdCNN_MDN(nn.Module):
     def __init__(self, opt, mfile):
@@ -487,7 +551,7 @@ class FwdCNN_MDN(nn.Module):
 
 
 
-# forward TEN model
+# forward TEN model (autoregressive)
 class FwdCNN_TEN(nn.Module):
     def __init__(self, opt, mfile=''):
         super(FwdCNN_TEN, self).__init__()
@@ -664,7 +728,7 @@ class FwdCNN_TEN(nn.Module):
         return [pred_images, pred_states, pred_costs], ploss
 
 
-    def plan_actions_backprop(self, observation, args, verbose=True, normalize=True, optimize_z=False, optimize_a=True):
+    def plan_actions_backprop(self, observation, args, verbose=True, normalize=True, optimize_z=False, optimize_a=True, gamma=0.99):
         input_images, input_states = observation
         input_images = input_images.float().clone()
         input_states = input_states.clone()
@@ -688,6 +752,7 @@ class FwdCNN_TEN(nn.Module):
         Z = self.sample_z(bsize * args.n_rollouts * args.npred, method='fp')[0]
         Z = Z.view(args.npred, bsize * args.n_rollouts, -1)
         Z0 = Z.clone()
+        gamma_mask = Variable(torch.from_numpy(numpy.array([[gamma**t, gamma**t] for t in range(args.npred)])).float().cuda()).unsqueeze(0)
         if optimize_z:
             Z.requires_grad = True
             optimizer_z = optim.Adam([Z], args.lrt)
@@ -698,10 +763,11 @@ class FwdCNN_TEN(nn.Module):
             actions_rep = actions.unsqueeze(1).expand(bsize, args.n_rollouts, args.npred, 2).contiguous().view(bsize * args.n_rollouts, args.npred, 2)
             pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
             costs = pred[2]
-            loss = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
+            weighted_costs = costs * gamma_mask
+            loss = weighted_costs[:, :, 0].mean() + 0.5*weighted_costs[:, :, 1].mean()
             loss.backward()
             if verbose:
-                print('[iter {} | mean pred cost = {}], grad = {}'.format(i, loss.data[0], actions.grad.data.norm()))
+                print('[iter {} | mean pred cost = ({:.4f}, {:.4f})], grad = {}'.format(i, costs.data[:, :, 0].mean(), costs.data[:, :, 1].mean(), actions.grad.data.norm()))
             if optimize_a:
                 torch.nn.utils.clip_grad_norm([actions], 1)
                 optimizer_a.step()
@@ -722,8 +788,7 @@ class FwdCNN_TEN(nn.Module):
         costs = pred[2]
         loss_test = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
         print('\n[pred test cost = {}]\n'.format(loss_test.data[0]))
-                
-
+        
         '''
         # also get predictions using zero actions
         pred_const, _ = self.forward([input_images, input_states], actions.clone().zero_(), None, sampling='fp', z_seq=Z0)
@@ -736,8 +801,97 @@ class FwdCNN_TEN(nn.Module):
         return actions.squeeze().numpy(), pred, pred_const, loss_test.data[0]
 
 
+    def create_policy_net(self, opt):
+        self.policy_net = StochasticPolicy(opt)
 
 
+    def train_policy_net(self, inputs, targets):
+        input_images, input_states = inputs
+        target_images, target_states, target_costs = targets
+        bsize = input_images.size(0)
+        npred = target_images.size(1)
+        pred_images, pred_states, pred_costs = [], [], []
+            
+        z = None
+        for t in range(npred):
+            # encode the inputs
+            actions = self.policy_net(input_images, input_states)
+            h_x = self.encoder(input_images, input_states, actions)
+            target_images, target_states, target_costs = targets
+            # encode the targets into z
+            h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions)
+            z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
+            z_ = z
+            z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+            h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
+            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            pred_images.append(pred_image)
+            pred_states.append(pred_state)
+            pred_costs.append(pred_cost)
+
+        pred_images = torch.cat(pred_images, 1)
+        pred_states = torch.stack(pred_states, 1)
+        pred_costs = torch.stack(pred_costs, 1)
+        return [pred_images, pred_states, pred_costs], None
+
+
+
+    def compute_action_policy_net(self, inputs, npred, n_actions=10, n_futures=5, npred=50, normalize=True):
+        input_images, input_states = inputs
+        pred_images, pred_states, pred_costs = [], [], []
+
+        if normalize:
+            input_images = input_images.clone().float().div_(255.0)
+            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
+            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
+            input_images = Variable(input_images.cuda()).unsqueeze(0)
+            input_states = Variable(input_states.cuda()).unsqueeze(0)
+
+
+        # repeat for multiple rollouts
+        input_images = input_images.unsqueeze(1).expand(bsize, n_futures, opt.ncond, 3, opt.height, opt.width)
+        input_states = input_states.unsqueeze(1).expand(bsize, n_futures, opt.ncond, 4)
+        input_images = input_images.contiguous().view(bsize * n_futures, opt.ncond, 3, opt.height, opt.width)
+        input_states = input_states.contiguous().view(bsize * n_futures, opt.ncond, 4)
+            
+        bsize = input_images.size(0)
+        Z = self.sample_z(bsize * n_futures * npred, method='fp')[0]
+        Z = Z.view(npred, bsize * n_futures, -1)
+        Z0 = Z.clone()
+
+        # sample initial actions
+        actions = self.policy_net(input_images, input_states, sample=True, normalize=False, n_samples=n_actions)
+        for t in range(npred):
+            # encode the inputs
+            actions = self.policy_net(input_images, input_states)
+            h_x = self.encoder(input_images, input_states, actions)
+            z_ = Z[t]
+            z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+            h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
+            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            pred_images.append(pred_image)
+            pred_states.append(pred_state)
+            pred_costs.append(pred_cost)
+
+        pred_images = torch.cat(pred_images, 1)
+        pred_states = torch.stack(pred_states, 1)
+        pred_costs = torch.stack(pred_costs, 1)
+        return [pred_images, pred_states, pred_costs], None
+
+
+        
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
@@ -749,7 +903,6 @@ class FwdCNN_TEN(nn.Module):
             self.use_cuda = False
             if len(self.p_z) > 0:
                 self.p_z = self.p_z.cpu()
-
 
 
 
@@ -1043,6 +1196,81 @@ class PolicyCNN(nn.Module):
             self.cpu()
 
 
+
+# Stochastic Policy, output is a diagonal Gaussian and learning
+# uses the reparameterization trick. 
+class StochasticPolicy(nn.Module):
+    def __init__(self, opt):
+        super(StochasticPolicy, self).__init__()
+        self.opt = opt
+        self.encoder = encoder(opt, 0, opt.ncond)
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.n_outputs = opt.n_actions
+        self.fc = nn.Sequential(
+            nn.Linear(self.hsize, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden)
+        )
+
+        self.mu_net = nn.Linear(opt.n_hidden, self.n_outputs)
+        self.logvar_net = nn.Linear(opt.n_hidden, self.n_outputs)
+
+
+    def forward(self, state_images, states, sample=True, normalize=False, n_samples=1):
+
+        if normalize:
+            state_images = state_images.clone().float().div_(255.0)
+            states -= self.stats['s_mean'].view(1, 4).expand(states.size())
+            states /= self.stats['s_std'].view(1, 4).expand(states.size())
+            state_images = Variable(state_images.cuda()).unsqueeze(0)
+            states = Variable(states.cuda()).unsqueeze(0)
+
+
+        bsize = state_images.size(0)
+
+        h = self.encoder(state_images, states).view(bsize, self.hsize)
+        h = self.fc(h)
+        mu = self.mu_net(h).view(bsize, self.n_outputs)
+        logvar = self.logvar_net(h).view(bsize, self.n_outputs)
+        std = logvar.mul(0.5).exp_()
+        eps = Variable(torch.randn(bsize, n_samples, 2).cuda())
+        a = eps * std.view(bsize, 1, 2)
+        a = a + mu.view(bsize, 1, 2)
+        a = a.squeeze()
+#        eps = Variable(std.data.new(std.size()).normal_())
+#        a = eps.mul(std).add_(mu)
+
+        if normalize:
+            a = a.data
+            a.clamp_(-2, 2)
+            a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
+            a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
+
+        return a.squeeze()
+
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+            if hasattr(self, 'a_mean'):
+                self.a_mean = self.a_mean.cuda()
+                self.a_std = self.a_std.cuda()
+                self.s_mean = self.s_mean.cuda()
+                self.s_std = self.s_std.cuda()
+        elif t == 'cpu':
+            self.cpu()
+            if hasattr(self, 'a_mean'):
+                self.a_mean = self.a_mean.cpu()
+                self.a_std = self.a_std.cpu()
+                self.s_mean = self.s_mean.cpu()
+                self.s_std = self.s_std.cpu()
+
+
+
 # Mixture Density Network model
 class PolicyMDN(nn.Module):
     def __init__(self, opt):
@@ -1067,7 +1295,17 @@ class PolicyMDN(nn.Module):
 
 
     def forward(self, state_images, states, sample=False, unnormalize=False):
+
+        if unnormalize:
+            state_images = state_images.clone().float().div_(255.0)
+            states -= self.stats['s_mean'].view(1, 4).expand(states.size())
+            states /= self.stats['s_std'].view(1, 4).expand(states.size())
+            state_images = Variable(state_images.cuda()).unsqueeze(0)
+            states = Variable(states.cuda()).unsqueeze(0)
+
+
         bsize = state_images.size(0)
+
         h = self.encoder(state_images, states).view(bsize, self.hsize)
         h = self.fc(h)
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
@@ -1077,32 +1315,33 @@ class PolicyMDN(nn.Module):
             k = torch.multinomial(pi, 1)
             a = []
             for b in range(bsize):
-                a.append(torch.randn(self.opt.npred, self.opt.n_actions)*sigma[b][k[b]].data + mu[b][k[b]].data)
+                a.append(torch.randn(self.opt.npred, self.opt.n_actions).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
             a = torch.stack(a).squeeze()
-            a[:, 1].copy_(torch.clamp(a[:, 1], min=-1, max=1))
-            print(print('a:{}, {}'.format(a.min(), a.max())))
+            a = a.view(bsize, self.opt.npred, 2)
+#            a[:, 1].copy_(torch.clamp(a[:, 1], min=-1, max=1))
+#            print(print('a:{}, {}'.format(a.min(), a.max())))
         else:
             a = None
 
         if unnormalize:
-            a *= self.a_std
-            a += self.a_mean
+            a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
+            a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
 
 
-        return pi, mu, sigma, a
+        return pi, mu, sigma, a.cpu().view(self.opt.npred, 2).numpy()
 
 
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
-            if self.a_mean is not None:
+            if hasattr(self, 'a_mean'):
                 self.a_mean = self.a_mean.cuda()
                 self.a_std = self.a_std.cuda()
                 self.s_mean = self.s_mean.cuda()
                 self.s_std = self.s_std.cuda()
         elif t == 'cpu':
             self.cpu()
-            if self.a_mean is not None:
+            if hasattr(self, 'a_mean'):
                 self.a_mean = self.a_mean.cpu()
                 self.a_std = self.a_std.cpu()
                 self.s_mean = self.s_mean.cpu()

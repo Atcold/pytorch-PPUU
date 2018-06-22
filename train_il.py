@@ -17,7 +17,7 @@ parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='policy-cnn-mdn')
 parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/policy_networks/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=10)
@@ -37,7 +37,6 @@ parser.add_argument('-grad_clip', type=float, default=10)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
-opt.model_dir += f'/dataset_{opt.dataset}_costs2/models_il/'
 
 opt.n_actions = 2
 opt.n_inputs = opt.ncond
@@ -57,21 +56,16 @@ elif opt.dataset == 'i80':
 
 
 
-if opt.dataset == 'simulator':
-    opt.model_dir += f'_{opt.nshards}-shards/'
-    data_file = f'{opt.data_dir}/traffic_data_lanes={opt.lanes}-episodes=*-seed=*.pkl'
-else:
-    data_file = None
 os.system('mkdir -p ' + opt.model_dir)
 
-dataloader = DataLoader(data_file, opt, opt.dataset)
+dataloader = DataLoader(None, opt, opt.dataset)
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}'
 
-if 'vae' in opt.model or '-ae-' in opt.model:
+if 'vae' in opt.model or '-ten-' in opt.model:
     opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
 
-print(f'will save model as {opt.model_file}')
+print(f'[will save model as: {opt.model_file}]')
 
 if opt.warmstart == 0:
     prev_model = ''
@@ -92,7 +86,7 @@ def train(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pi, mu, sigma = policy(inputs[0], inputs[1])
+        pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         loss.backward()
         torch.nn.utils.clip_grad_norm(policy.parameters(), opt.grad_clip)
@@ -108,7 +102,7 @@ def test(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pi, mu, sigma = policy(inputs[0], inputs[1])
+        pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         total_loss += loss.data[0]
     return total_loss / nbatches

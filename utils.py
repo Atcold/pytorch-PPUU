@@ -35,12 +35,13 @@ def format_losses(loss_i, loss_s, loss_c, loss_p, split):
     log_string += 'i: {:.5f}, '.format(loss_i)
     log_string += 's: {:.5f}, '.format(loss_s)
     log_string += 'c: {:.5f}, '.format(loss_c)
-    log_string += 'p: {:.5f}] '.format(loss_p)
+    if loss_p is not None:
+        log_string += 'p: {:.5f}] '.format(loss_p)
     return log_string
 
 
 
-def save_movie(dirname, images, states, costs, pytorch=True):
+def save_movie(dirname, images, states, costs, actions=None, pytorch=True):
     os.system('mkdir -p ' + dirname)
     if pytorch:
         images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy() * 255
@@ -55,6 +56,8 @@ def save_movie(dirname, images, states, costs, pytorch=True):
             text = 'x: [{:.2f}, {:.2f} \n'.format(states[t][0], states[t][1])
             text += 'dx: {:.2f}, {:.2f}]\n'.format(states[t][2], states[t][3])
             text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
+        if actions is not None:
+            text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
         draw.text((10, 130*5-10), text, (255,255,255))
         img = numpy.asarray(pil)
         scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)

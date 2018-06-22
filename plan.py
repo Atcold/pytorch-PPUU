@@ -8,6 +8,7 @@ import importlib
 import models2 as models
 import utils
 from dataloader import DataLoader
+from torch.autograd import Variable
 
 
 parser = argparse.ArgumentParser()
@@ -28,8 +29,8 @@ parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-v', type=str, default='3', choices={'3'})
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
-parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/policy_networks/')
+parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
 
 opt = parser.parse_args()
@@ -37,6 +38,12 @@ opt = parser.parse_args()
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
+
+if opt.nexec == -1:
+    opt.save_dir += '_single'
+else:
+    opt.save_dir += '_mpc'
+opt.save_dir += '/'
 
 if opt.dataset == 'i80':
     opt.height = 117
@@ -52,14 +59,18 @@ def load_model():
     importlib.reload(models)
     model = torch.load(opt.model_dir + opt.mfile)
     model.intype('gpu')
-    model.stats=torch.load('data_stats.pth')
-    pzfile = opt.model_dir + opt.mfile + '_100000.pz'
-    p_z = torch.load(pzfile)
-    graph = torch.load(pzfile + '.graph')
-    model.p_z = p_z
-    model.knn_indx = graph.get('knn_indx')
-    model.knn_dist = graph.get('knn_dist')
-    model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
+    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v2/data_stats.pth')
+    model.stats=stats
+    if hasattr(model, 'policy_net'):
+        model.policy_net.stats = stats
+    if 'ten' in opt.mfile and False:
+        pzfile = opt.model_dir + opt.mfile + '_100000.pz'
+        p_z = torch.load(pzfile)
+        graph = torch.load(pzfile + '.graph')
+        model.p_z = p_z
+        model.knn_indx = graph.get('knn_indx')
+        model.knn_dist = graph.get('knn_dist')
+        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
     return model
 
 model = load_model()
@@ -81,7 +92,10 @@ env = gym.make('Traffic-v' + opt.v)
 
 total_cost_test = 0
 n_batches = 20
-plan_file = 'rollouts={}-npred={}-nexec={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.npred, opt.nexec, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
+if 'mbil' in opt.mfile:
+    plan_file = 'mbil'
+else:
+    plan_file = 'rollouts={}-npred={}-nexec={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.npred, opt.nexec, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
 
 use_env = True
@@ -93,7 +107,7 @@ for j in range(n_batches):
         env.reset()
         inputs = None
         done = False
-        images, states, costs = [], [], []        
+        images, states, costs, actions = [], [], [], []        
         while not done:
             if inputs is None:
                 print('[finding valid input]')
@@ -101,29 +115,39 @@ for j in range(n_batches):
                     inputs, cost, done, info = env.step(numpy.zeros((2,)))
                 print('[done]')
             print('[planning action sequence]')
-            a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+            if 'policy' in opt.mfile:
+                _, _, _, a = model(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, unnormalize=True)
+            elif 'mbil' in opt.mfile:
+                a = model.policy_net(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, unnormalize=True)
+                a = a.cpu().view(1, 2).numpy()
+            else:
+                a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
             cost_test = 0
             print('[executing action sequence]')
             t = 0
-            while (t < opt.nexec) and not done:
+            T = opt.npred if opt.nexec == -1 else opt.nexec
+            while (t < T) and not done:
+                print(a[t])
                 inputs, cost, done, info = env.step(a[t])
                 images.append(inputs[0][-1])
                 states.append(inputs[1][-1])
                 costs.append([cost[0][-1], cost[1][-1]])
+                actions.append(a[t])
                 t += 1
             costs_ = numpy.stack(costs)
-            print(costs_[:, 0].mean() + 0.5*costs_[:, 1].mean())
-            if len(images) > 600:
+            print('[true costs: ({:.4f}, {:.4f})]'.format(costs_[:, 0].mean(), costs_[:, 1].mean()))
+            if (len(images) > 600) or (opt.nexec == -1):
                 done = True
 
         images = numpy.stack(images).transpose(0, 2, 3, 1)
         states = numpy.stack(states)
         costs = numpy.stack(costs)
+        actions = numpy.stack(actions)
         cost_test = costs[:, 0].mean() + 0.5*costs[:, 1].mean()
-        print(cost_test)
-        utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, pytorch=False)
-        for i in range(opt.n_rollouts):
-            utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
+        utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, actions, pytorch=False)
+        if 'ten' in opt.mfile and ('mbil' not in opt.mfile):
+            for i in range(opt.n_rollouts):
+                utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
     else:
         inputs, actions, targets = dataloader.get_batch_fm('test', opt.npred)
         inputs = utils.make_variables(inputs)
