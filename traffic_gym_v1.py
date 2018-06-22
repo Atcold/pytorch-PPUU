@@ -66,7 +66,8 @@ class RealCar(Car):
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
         self.ukf = Ukf(
-            dt=self._dt, startx=x[0], starty=y[0], startspeed=self._speed, starthdg=np.arctan2(*self._direction[::-1])
+            dt=self._dt, startx=x[0], starty=y[0], startspeed=self._speed, starthdg=np.arctan2(*self._direction[::-1]),
+            noise=1e-4, wheelbase=df.at[df.index[0], 'Vehicle Length'] * .7
         )
         self._y_offset = y_offset
         # if self.id == 36:
