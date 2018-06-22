@@ -8,6 +8,7 @@ import numpy as np
 import pdb, random
 import bisect
 import pdb, pickle, os
+from ukfBicycle.ukf import Ukf
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -24,19 +25,21 @@ class RealCar(Car):
     LANE_W = LANE_W
 
     def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
-        self._k = kernel  # running window size
+        self._k = 0  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
 
         # X and Y are swapped in the I-80 data set...
-        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
-        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
-        for t in range(len(y) - 1):
-            delta_x = x[t + 1] - x[t]
-            delta_y = y[t + 1] - y[t]
-            if abs(delta_y) > abs(delta_x) * 0.1:
-                y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        # x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
+        # y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
+        # for t in range(len(y) - 1):
+        #     delta_x = x[t + 1] - x[t]
+        #     delta_y = y[t + 1] - y[t]
+        #     if abs(delta_y) > abs(delta_x) * 0.1:
+        #         y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        x = df['Local Y'].values * FOOT * SCALE - X_OFFSET - self._length
+        y = df['Local X'].values * FOOT * SCALE + y_offset
 
         self._trajectory = np.column_stack((x, y))
         self._position = self._trajectory[0]
@@ -62,6 +65,7 @@ class RealCar(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
+        self.ukf = Ukf(dt=self._dt, wheelbase=2.5, startx=x[0], starty=y[0], startspeed=self._speed, starthdg=np.arctan2(*self._direction[::-1]), stdx=1.0, stdy=1.0, noise=0.02)
 
     @property
     def is_autonomous(self):
@@ -86,8 +90,15 @@ class RealCar(Car):
     #     assert 0.99 < np.linalg.norm(self._direction) < 1.01
     #     assert self._direction[0] > 0
 
-    def policy(self, observation, **kwargs):
+    def step(self, action):
         self._frame += 1
+        self.ukf.update(self._trajectory[self._frame])
+        self._position = self.ukf.x[0:2]
+        self._speed = self.ukf.x[2]
+        self._direction = np.array((np.cos(self.ukf.x[3]), np.sin(self.ukf.x[3])))
+
+    def policy(self, observation, **kwargs):
+        # self._frame += 1
         self.off_screen = self._frame >= len(self._df) - self._k - 2
 
         new_speed = self._get('speed', self._frame)
@@ -98,7 +109,8 @@ class RealCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
         if abs(b) > self._speed:
             b = self._speed * np.sign(b)
-        return np.array((a, b))
+        # return np.array((a, b))
+        return np.zeros((2,))
 
     @property
     def current_lane(self):
