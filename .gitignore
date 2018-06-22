@@ -14,3 +14,4 @@ game.py
 data_i80
 .DS_Store
 __pycache__
+*pth

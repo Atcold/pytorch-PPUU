@@ -213,10 +213,8 @@ class Car:
         """
         Draw current car on screen with a specific colour
         :param surface: PyGame ``Surface`` where to draw
-        :param c: default colour
         :param mode: human or machine
         :param offset: for representation cropping
-        :param scale: draw with rescaled coordinates
         """
         x, y = self._position + offset
         rectangle = (int(x), int(y), self._length, self._width)
@@ -227,7 +225,14 @@ class Car:
             if self.is_controlled:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
-            draw_rect(surface, self._colour, rectangle, d)
+
+            # Highlight colliding vehicle / debugging purpose
+            # if self.collisions_per_frame > 0:
+            #     print(f'Accident! Check vehicle {self}')
+            #     pygame.draw.rect(surface, (128, 255, 0),
+            #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
+
+            _r = draw_rect(surface, self._colour, rectangle, d)
 
             # Drawing vehicle number
             self._text[1].left = x
@@ -235,8 +240,11 @@ class Car:
             surface.blit(self._text[0], self._text[1])
 
             if self._braked: self._colour = colours['g']
+            return _r
         if mode == 'machine':
-            draw_rect(surface, colours['g'], rectangle, d)
+            return draw_rect(surface, colours['g'], rectangle, d)
+        if mode == 'ego-car':
+            return draw_rect(surface, colours['b'], rectangle, d)
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
         """
@@ -413,8 +421,10 @@ class Car:
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, theta)
         width_height = np.floor(np.array(width_height))
-        x = (rot_surface.get_width() - width_height[0]) // 2
-        y = (rot_surface.get_height() - width_height[1]) // 2
+        surf_w = rot_surface.get_width()
+        surf_h = rot_surface.get_height()
+        x = (surf_w - width_height[0]) // 2
+        y = (surf_h - width_height[1]) // 2
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
@@ -424,13 +434,32 @@ class Car:
         assert sub_rot_array_scaled_up.max() <= 255
 
         # Compute cost relative to position within the lane
-        x = np.ceil((rot_surface.get_width() - self._length) / 2)
-        y = np.ceil((rot_surface.get_height() - self.LANE_W) / 2)
+        x = np.ceil((surf_w - self._length) / 2)
+        y = np.ceil((surf_h - self.LANE_W) / 2)
         neighbourhood = rot_surface.subsurface(x, y, self._length, self.LANE_W)
         neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
         lanes = neighbourhood_array[:, :, 0]
-        mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
-        lane_cost = (lanes * mask).max() / 255
+        lane_mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
+        lane_cost = (lanes * lane_mask).max() / 255
+
+        # Compute x/y minimum distance to other vehicles (pixel version)
+        # Create separable proximity mask
+        max_x = np.ceil((surf_w - self._length) / 2)
+        max_y = np.ceil((surf_h - self._width) / 2)
+        min_x = max(np.ceil(max_x - self.safe_distance), 0)
+        min_y = np.ceil(surf_h / 2 - self._width)  # assumes other._width / 2 = self._width / 2
+        x_filter = (1 - abs(np.linspace(-1, 1, surf_w))) * surf_w / 2  # 45 degree
+        x_filter[x_filter > max_x] = max_x  # chop off top
+        x_filter[x_filter < min_x] = min_x  # chop off bottom
+        x_filter = (x_filter - min_x) / (max_x - min_x)  # normalise
+        y_filter = (1 - abs(np.linspace(-1, 1, surf_h))) * surf_h / 2  # 45 degree
+        y_filter[y_filter > max_y] = max_y  # chop off top
+        y_filter[y_filter < min_y] = min_y  # chop off bottom
+        y_filter = (y_filter - min_y) / (max_y - min_y)  # normalise
+        proximity_mask = y_filter.reshape(-1, 1) @ x_filter.reshape(1, -1)
+        # Compute cost
+        vehicles = pygame.surfarray.array3d(rot_surface).transpose(1, 0, 2)[:, :, 1]  # flip x and y, get green
+        proximity_cost = (vehicles * proximity_mask).max() / 255
 
         # # Draw boxes, for visualisation purpose
         # # init as: env.reset(time_interval=1, frame=2510, control=False)
@@ -445,7 +474,7 @@ class Car:
 
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
-        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost
+        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost
 
     def store(self, object_name, object_):
         if object_name == 'action':
@@ -465,10 +494,11 @@ class Car:
         observation = (im[-n:], states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
-        cost = (proximity_cost, lane_cost, self.collisions_per_frame)
+        pixel_proximity_cost = torch.Tensor(transpose[2][-n:])
+        cost = (proximity_cost, lane_cost, self.collisions_per_frame, pixel_proximity_cost)
         return observation, cost, self.off_screen, self
 
-    def dump_state_image(self, save_dir='scratch/data_i80_v3/', mode='img'):
+    def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
@@ -477,7 +507,8 @@ class Car:
             return
         im = transpose[0]
         if mode == 'tensor':
-            lane_cost = transpose[1]
+            lane_cost = torch.Tensor(transpose[1])
+            pixel_proximity_cost = torch.Tensor(transpose[2])
             zip_ = list(zip(*self._states))
             proximity_cost = torch.Tensor(zip_[2])
             states = torch.stack(zip_[0])
@@ -488,10 +519,11 @@ class Car:
                 pickle.dump({
                     'images': im_pth,
                     'actions': torch.stack(self._actions),
-                    'lane_cost': torch.Tensor(lane_cost),
+                    'lane_cost': lane_cost,
+                    'pixel_proximity_cost': pixel_proximity_cost,
                     'states': states,
                     'proximity_cost': proximity_cost,
-                    'mask': mask
+                    'mask': mask,
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -804,31 +836,46 @@ class StatefulEnv(core.Env):
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
 
-            if self.collision:
-                self._pause()
-                self.collision = False
+            # if self.collision:
+            #     self._pause()
+            #     self.collision = False
 
         if mode == 'machine':
-            max_extension = int(np.linalg.norm(width_height))
-            vehicle_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
+            max_extension = int(np.linalg.norm(width_height) / 2)
+            machine_screen_size = np.array(self.screen_size) + 2 * max_extension
+            vehicle_surface = pygame.Surface(machine_screen_size)
 
             # draw lanes
             try:
-                screen_surface = self._lane_surfaces[mode]
+                lane_surface = self._lane_surfaces[mode]
 
             except KeyError:
-                screen_surface = pygame.Surface(np.array(self.screen_size) + 2 * max_extension)
-                self._draw_lanes(screen_surface, mode=mode, offset=max_extension)
+                lane_surface = pygame.Surface(machine_screen_size)
+                self._draw_lanes(lane_surface, mode=mode, offset=max_extension)
 
-            # draw vehicles
-            for v in self.vehicles:
-                v.draw(vehicle_surface, mode=mode, offset=max_extension)
-
-            vehicle_surface.blit(screen_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+            # # draw vehicles
+            # for v in self.vehicles:
+            #     v.draw(vehicle_surface, mode=mode, offset=max_extension)
+            #
+            # vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
 
             # extract states
+            ego_surface  = pygame.Surface(machine_screen_size)
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
+                    # For every vehicle we want to extract the state, start with a black surface
+                    vehicle_surface.fill((0, 0, 0))
+                    # Draw all the other vehicles (in green)
+                    for vv in set(self.vehicles) - {v}:
+                        vv.draw(vehicle_surface, mode=mode, offset=max_extension)
+                    # Superimpose the lanes
+                    vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
+                    # Empty ego-surface
+                    ego_surface.fill((0, 0, 0))
+                    # Draw myself blue on the ego_surface
+                    ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
+                    # Add me on top of others without shadowing
+                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
 
             # # save surface as image, for visualisation only
