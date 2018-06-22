@@ -38,8 +38,8 @@ class RealCar(Car):
         #     delta_y = y[t + 1] - y[t]
         #     if abs(delta_y) > abs(delta_x) * 0.1:
         #         y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
-        x = df['Local Y'].values * FOOT * SCALE - X_OFFSET - self._length
-        y = df['Local X'].values * FOOT * SCALE + y_offset
+        x = df['Local Y'].values
+        y = df['Local X'].values
 
         self._trajectory = np.column_stack((x, y))
         self._position = self._trajectory[0]
@@ -65,7 +65,14 @@ class RealCar(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
-        self.ukf = Ukf(dt=self._dt, wheelbase=2.5, startx=x[0], starty=y[0], startspeed=self._speed, starthdg=np.arctan2(*self._direction[::-1]), stdx=1.0, stdy=1.0, noise=0.02)
+        self.ukf = Ukf(
+            dt=self._dt, startx=x[0], starty=y[0], startspeed=self._speed, starthdg=np.arctan2(*self._direction[::-1])
+        )
+        self._y_offset = y_offset
+        # if self.id == 36:
+        #     print(self.ukf.x)
+        #     print('Saving trajectory to file')
+        #     with open('v35.pickle', 'wb') as f: pickle.dump(self._trajectory, f)
 
     @property
     def is_autonomous(self):
@@ -92,10 +99,15 @@ class RealCar(Car):
 
     def step(self, action):
         self._frame += 1
-        self.ukf.update(self._trajectory[self._frame])
-        self._position = self.ukf.x[0:2]
-        self._speed = self.ukf.x[2]
-        self._direction = np.array((np.cos(self.ukf.x[3]), np.sin(self.ukf.x[3])))
+        self.ukf.step(self._trajectory[self._frame])
+        # if self.id == 36:
+        #     print('f:', self._frame, 'x, y:', self._trajectory[self._frame])
+        #     print(self.ukf.x)
+        x = self.ukf.ukf.x[0] * FOOT * SCALE - X_OFFSET - self._length
+        y = self.ukf.ukf.x[1] * FOOT * SCALE + self._y_offset
+        self._position = np.array((x, y))
+        self._speed = self.ukf.ukf.x[2] * FOOT * SCALE
+        self._direction = np.array((np.cos(self.ukf.ukf.x[3]), np.sin(self.ukf.ukf.x[3])))
 
     def policy(self, observation, **kwargs):
         # self._frame += 1
