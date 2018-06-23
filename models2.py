@@ -841,8 +841,8 @@ class FwdCNN_TEN(nn.Module):
         return [pred_images, pred_states, pred_costs], None
 
 
-
-    def compute_action_policy_net(self, inputs, npred, n_actions=10, n_futures=5, npred=50, normalize=True):
+    # assuming this is for a single input sample
+    def compute_action_policy_net(self, inputs, opt, npred=50, n_actions=10, n_futures=5, normalize=True):
         input_images, input_states = inputs
         pred_images, pred_states, pred_costs = [], [], []
 
@@ -855,23 +855,27 @@ class FwdCNN_TEN(nn.Module):
 
 
         # repeat for multiple rollouts
-        input_images = input_images.unsqueeze(1).expand(bsize, n_futures, opt.ncond, 3, opt.height, opt.width)
-        input_states = input_states.unsqueeze(1).expand(bsize, n_futures, opt.ncond, 4)
-        input_images = input_images.contiguous().view(bsize * n_futures, opt.ncond, 3, opt.height, opt.width)
-        input_states = input_states.contiguous().view(bsize * n_futures, opt.ncond, 4)
+        bsize = n_futures * n_actions
+        input_images = input_images.expand(bsize, opt.ncond, 3, opt.height, opt.width)
+        input_states = input_states.expand(bsize, opt.ncond, 4)
+        input_images = input_images.contiguous().view(bsize, opt.ncond, 3, opt.height, opt.width)
+        input_states = input_states.contiguous().view(bsize, opt.ncond, 4)
             
-        bsize = input_images.size(0)
-        Z = self.sample_z(bsize * n_futures * npred, method='fp')[0]
-        Z = Z.view(npred, bsize * n_futures, -1)
+        Z = self.sample_z(n_futures * npred, method='fp')[0]
+        Z = Z.view(npred, 1, n_futures, -1)
+        Z = Z.expand(npred, n_actions, n_futures, -1)
         Z0 = Z.clone()
 
-        # sample initial actions
-        actions = self.policy_net(input_images, input_states, sample=True, normalize=False, n_samples=n_actions)
+        # sample initial actions: we will choose to execute one of these at the end
+        actions_init = self.policy_net(input_images[0].unsqueeze(0), input_states[0].unsqueeze(0), sample=True, normalize=False, n_samples=n_actions)
+        actions = actions.clone().unsqueeze(0).expand(n_futures, n_actions, 2)
+        pdb.set_trace()
         for t in range(npred):
             # encode the inputs
             actions = self.policy_net(input_images, input_states)
             h_x = self.encoder(input_images, input_states, actions)
             z_ = Z[t]
+            pdb.set_trace()
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
@@ -1240,9 +1244,9 @@ class StochasticPolicy(nn.Module):
         eps = Variable(torch.randn(bsize, n_samples, 2).cuda())
         a = eps * std.view(bsize, 1, 2)
         a = a + mu.view(bsize, 1, 2)
-        a = a.squeeze()
 #        eps = Variable(std.data.new(std.size()).normal_())
 #        a = eps.mul(std).add_(mu)
+
 
         if normalize:
             a = a.data
