@@ -26,16 +26,19 @@ class trj(object):
 
 # from data_i80/trajectories-0400-0415
 car_list = [1,100,200,400,250]
+car_list = [1]
 car_data = []
-for i, car in enumerate(car_list):
-    with open('/home/boliu/Projects/pytorch-Traffic-Simulator/test_KF/ScrData/trj'+str(car)+'.pickle', 'rb') as f:
-        car_data.append(pickle.load(f))
+# for i, car in enumerate(car_list):
+#     with open('ScrData/trj'+str(car)+'.pickle', 'rb') as f:
+#         car_data.append(pickle.load(f))
 
+with open('../v35.pickle', 'rb') as f: trajectory = pickle.load(f)
+car_data.append(trj(trajectory[:, 0], trajectory[:, 1]))
 
 ukf_car = []
 for i, car in enumerate(car_list):
     px, py = car_data[i].x[0], car_data[i].y[0]
-    ukf_car.append(ukf.Ukf(dt=0.1, startx=px, starty=py))
+    ukf_car.append(ukf.Ukf(dt=0.1, startx=px, starty=py, noise=1e-6))
 
 px_kf_list = []
 py_kf_list = []
@@ -50,6 +53,7 @@ for i, car in enumerate(car_list):
     for px, py in zip(car_data[i].x, car_data[i].y):
         z = np.array([px, py])
         ukf_car[i].step(z)
+        # print(z, ukf_car[i].ukf.x)
         px_kf.append(ukf_car[i].ukf.x[0])
         py_kf.append(ukf_car[i].ukf.x[1])
         speed_kf.append(ukf_car[i].ukf.x[2])
@@ -60,7 +64,6 @@ for i, car in enumerate(car_list):
     phi_kf_list.append(phi_kf)
 
 fig = plt.figure(figsize=(20, 4))
-plt.subplot(len(car_list),1,1)
 
 for i, car in enumerate(car_list):
     ax = plt.subplot(len(car_list), 1, i+1)
