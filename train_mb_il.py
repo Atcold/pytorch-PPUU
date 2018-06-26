@@ -47,18 +47,11 @@ dataloader = DataLoader(None, opt, opt.dataset)
 
 opt.n_inputs = 4
 opt.n_actions = 2
-
-if opt.dataset == 'simulator':
-    opt.height = 97
-    opt.width = 20
-    opt.h_height = 12
-    opt.h_width = 2
-elif opt.dataset == 'i80':
-    opt.height = 117
-    opt.width = 24
-    opt.h_height = 14
-    opt.h_width = 3
-    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
+opt.height = 117
+opt.width = 24
+opt.h_height = 14
+opt.h_width = 3
+opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 
 # load the model
@@ -70,6 +63,13 @@ opt.model_file = f'{opt.model_dir}/policy_networks/mbil-nfeature={opt.nfeature}-
 
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
 
+    
+# training and testing functions. We will compute several losses:
+# loss_i: images
+# loss_s: states
+# loss_c: costs
+# loss_p: prior (optional)
+
 def compute_loss(targets, predictions, r=True):
     target_images, target_states, target_costs = targets
     pred_images, pred_states, pred_costs = predictions
@@ -77,12 +77,6 @@ def compute_loss(targets, predictions, r=True):
     loss_s = F.mse_loss(pred_states, target_states, reduce=r)
     loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
     return loss_i, loss_s, loss_c
-    
-# training and testing functions. We will compute several losses:
-# loss_i: images
-# loss_s: states
-# loss_c: costs
-# loss_p: prior (optional)
 
 def train(nbatches, npred):
     model.train()

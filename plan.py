@@ -63,8 +63,8 @@ def load_model():
     model.stats=stats
     if hasattr(model, 'policy_net'):
         model.policy_net.stats = stats
-    if 'ten' in opt.mfile and False:
-        pzfile = opt.model_dir + opt.mfile + '_100000.pz'
+    if 'ten' in opt.mfile:
+        pzfile = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/' + opt.mfile.split('mfile=')[1][:-6] + '_100000.pz'
         p_z = torch.load(pzfile)
         graph = torch.load(pzfile + '.graph')
         model.p_z = p_z
@@ -118,7 +118,8 @@ for j in range(n_batches):
             if 'policy' in opt.mfile:
                 _, _, _, a = model(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, unnormalize=True)
             elif 'mbil' in opt.mfile:
-                a = model.policy_net(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, unnormalize=True)
+#                a = model.compute_action_policy_net(inputs, opt)
+                a = model.policy_net(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, normalize=True)
                 a = a.cpu().view(1, 2).numpy()
             else:
                 a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        

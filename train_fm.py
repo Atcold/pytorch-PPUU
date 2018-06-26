@@ -4,10 +4,8 @@ from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
-
 import importlib
-
-import models2 as models
+import models
 
 #################################################
 # Train an action-conditional forward model
@@ -19,16 +17,18 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v3/')
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=16)
 parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-n_hidden', type=int, default=100)
 parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
+parser.add_argument('-ploss', type=str, default='hinge')
 parser.add_argument('-p_dropout', type=float, default=0.0, help='set z=0 with this probability')
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-n_mixture', type=int, default=10)
+parser.add_argument('-z_sphere', type=int, default=0)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=1.0)
 parser.add_argument('-epoch_size', type=int, default=4000)
@@ -52,7 +52,13 @@ if ('vae' in opt.model) or ('fwd-cnn-ten' in opt.model):
     opt.model_file += f'-dropout={opt.p_dropout}'
 
 if ('fwd-cnn-ten' in opt.model) and opt.beta > 0:
-    opt.model_file += f'-nmix={opt.n_mixture}'
+    if opt.ploss == 'pdf':
+        opt.model_file += f'-nmix={opt.n_mixture}'
+    elif opt.ploss == 'hinge':
+        opt.z_sphere = 1
+        opt.model_file += f'-ploss=hinge'
+        opt.model_file += f'-zsphere={opt.z_sphere}'
+        
 
 if opt.grad_clip != -1:
     opt.model_file += f'-gclip={opt.grad_clip}'
@@ -64,25 +70,21 @@ opt.model_file += f'-warmstart={opt.warmstart}'
 print(f'[will save model as: {opt.model_file}]')
 
 
+# specific to the I-80 dataset
 opt.n_inputs = 4
 opt.n_actions = 2
+opt.height = 117
+opt.width = 24
+opt.h_height = 14
+opt.h_width = 3
+opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
-if opt.dataset == 'simulator':
-    opt.height = 97
-    opt.width = 20
-    opt.h_height = 12
-    opt.h_width = 2
-
-elif opt.dataset == 'i80':
-    opt.height = 117
-    opt.width = 24
-    opt.h_height = 14
-    opt.h_width = 3
-    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
-
+# specify previous model we use to initialize parameters, if any
 if opt.warmstart == 1:
-    # previous model we use to initialize parameters
-    prev_model = f'{opt.model_dir}/model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-combine={opt.combine}-gclip=1.0-warmstart=0.model'
+    if opt.zeroact == 0:
+        prev_model = f'{opt.model_dir}/model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-combine={opt.combine}-gclip=1.0-warmstart=0.model'
+    else:
+        prev_model = f'{opt.model_dir}/model=fwd-cnn-bsize=16-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nhidden=100-nfeature={opt.nfeature}-combine={opt.combine}-gclip=1.0-zeroact-warmstart=0.model'        
 else:
     prev_model = ''
 
@@ -95,45 +97,24 @@ elif opt.model == 'fwd-cnn-vae-fp':
     model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
 elif opt.model == 'fwd-cnn-vae-lp':
     model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
-
 model.intype('gpu')
-
 optimizer = optim.Adam(model.parameters(), opt.lrt)
 
-
-def compute_loss(targets, predictions, r=True):
-    target_images, target_states, target_costs = targets
-    if opt.model == 'fwd-cnn-mdn':
-        pred_images, pred_states, pred_costs, latent_probs = predictions
-        pred_images_mu = pred_images[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        pred_images_sigma = pred_images[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        target_images = target_images.view(opt.batch_size*opt.npred, -1)
-        target_states = target_states.view(opt.batch_size*opt.npred, -1)
-        target_costs = target_costs.view(opt.batch_size*opt.npred, -1)
-        latent_probs = latent_probs.view(opt.batch_size*opt.npred, -1)
-
-        loss_i = utils.mdn_loss_fn(latent_probs, pred_images_sigma, pred_images_mu, target_images)
-
-        pred_states_mu = pred_states[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        pred_states_sigma = pred_states[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        loss_s = utils.mdn_loss_fn(latent_probs, pred_states_sigma, pred_states_mu, target_states)
-
-        pred_costs_mu = pred_costs[0].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        pred_costs_sigma = pred_costs[1].view(opt.batch_size*opt.npred, opt.n_mixture, -1)
-        loss_c = utils.mdn_loss_fn(latent_probs, pred_costs_sigma, pred_costs_mu, target_costs)
-
-    else:
-        pred_images, pred_states, pred_costs = predictions
-        loss_i = F.mse_loss(pred_images, target_images, reduce=r)
-        loss_s = F.mse_loss(pred_states, target_states, reduce=r)
-        loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
-    return loss_i, loss_s, loss_c
     
 # training and testing functions. We will compute several losses:
 # loss_i: images
 # loss_s: states
 # loss_c: costs
 # loss_p: prior (optional)
+
+def compute_loss(targets, predictions, r=True):
+    target_images, target_states, target_costs = targets
+    pred_images, pred_states, pred_costs = predictions
+    loss_i = F.mse_loss(pred_images, target_images, reduce=r)
+    loss_s = F.mse_loss(pred_states, target_states, reduce=r)
+    loss_c = F.mse_loss(pred_costs, target_costs, reduce=r)
+    return loss_i, loss_s, loss_c
+
 
 def train(nbatches, npred):
     model.train()

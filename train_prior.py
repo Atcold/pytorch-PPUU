@@ -29,20 +29,13 @@ parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model')
 opt = parser.parse_args()
 
-if opt.dataset == 'simulator':
-    opt.height = 97
-    opt.width = 20
-    opt.h_height = 12
-    opt.h_width = 2
-
-elif opt.dataset == 'i80':
-    opt.height = 117
-    opt.width = 24
-    opt.h_height = 14
-    opt.h_width = 3
-    opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
-
 opt.n_actions = 2
+opt.height = 117
+opt.width = 24
+opt.h_height = 14
+opt.h_width = 3
+opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
+
 dataloader = DataLoader(None, opt, opt.dataset)
 
 
@@ -53,8 +46,6 @@ optimizer = optim.Adam(prior.parameters(), 0.001)
 
 mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-lrt={opt.lrt}-nmixture={opt.n_mixture}.prior'
 print(f'[will save prior model as: {mfile_prior}]')
-
-
 
 
 def train(nbatches):

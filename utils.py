@@ -1,5 +1,5 @@
 import torch
-import os, json, pdb, math, numpy
+import os, json, pdb, math, numpy, random
 from datetime import datetime
 import scipy
 from sklearn import decomposition
@@ -7,6 +7,7 @@ import sklearn.manifold as manifold
 from torch.autograd import Variable
 from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
 # Logging function
 def log(fname, s):
@@ -122,6 +123,21 @@ def log_sum_exp(value, dim=None, keepdim=False):
             return m + math.log(sum_exp)
         else:
             return m + torch.log(sum_exp)
+
+
+
+def hinge_loss(u, z):
+    bsize = z.size(0)
+    nz = z.size(1)
+    uexp = u.view(bsize, 1, nz).expand(bsize, bsize, nz).contiguous()
+    zexp = z.view(1, bsize, nz).expand(bsize, bsize, nz).contiguous()
+    uexp = uexp.view(bsize*bsize, nz)
+    zexp = zexp.view(bsize*bsize, nz)
+    sim = torch.sum(uexp * zexp, 1).view(bsize, bsize)
+    loss = sim - torch.diag(sim).view(-1, 1)
+    loss = F.relu(loss)
+    loss = torch.mean(loss)
+    return loss
 
 # TODO: check this again by hand
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
