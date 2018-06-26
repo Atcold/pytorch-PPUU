@@ -10,12 +10,6 @@ import utils
 
 
 
-
-# this file will implement new changes such as fully-connected layers, LSTMs etc
-# we keep old models.py for now, for backward compatibility
-
-
-
 ####################
 # Basic modules
 ####################
@@ -75,47 +69,37 @@ class decoder(nn.Module):
         super(decoder, self).__init__()
         self.opt = opt
         self.n_out = n_out
-        # minor adjustments to make output size same as input
-        if self.opt.dataset == 'simulated':
-            self.f_decoder = nn.Sequential(
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 5), 2, 1),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (1, 1)),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, 3, (2, 2), 2, (0, 1))
-            )
-        elif self.opt.dataset == 'i80':
-            self.f_decoder = nn.Sequential(
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (0, 1))
-            )
+        self.f_decoder = nn.Sequential(
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (0, 1))
+        )
 
-            self.h_reducer = nn.Sequential(
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
-                nn.LeakyReLU(0.2, inplace=True)
-            )
+        self.h_reducer = nn.Sequential(
+            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        
+        self.c_predictor = nn.Sequential(
+            nn.Linear(2*opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, self.n_out*2),
+            nn.Sigmoid()
+        )
 
-            self.c_predictor = nn.Sequential(
-                nn.Linear(2*opt.nfeature, opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.n_out*2),
-                nn.Sigmoid()
-            )
-
-            self.s_predictor = nn.Sequential(
-                nn.Linear(2*opt.nfeature, opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.n_out*4)
-            )
+        self.s_predictor = nn.Sequential(
+            nn.Linear(2*opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(opt.nfeature, self.n_out*4)
+        )
 
 
     def forward(self, h):
