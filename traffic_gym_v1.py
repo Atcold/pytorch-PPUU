@@ -32,11 +32,11 @@ class RealCar(Car):
         # X and Y are swapped in the I-80 data set...
         x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
         y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
-        for t in range(len(y) - 1):
-            delta_x = x[t + 1] - x[t]
-            delta_y = y[t + 1] - y[t]
-            if abs(delta_y) > abs(delta_x) * 0.1:
-                y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        # for t in range(len(y) - 1):
+        #     delta_x = x[t + 1] - x[t]
+        #     delta_y = y[t + 1] - y[t]
+        #     if abs(delta_y) > abs(delta_x) * 0.1:
+        #         y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
 
         self._trajectory = np.column_stack((x, y))
         self._position = self._trajectory[0]
@@ -68,7 +68,7 @@ class RealCar(Car):
         return False
 
     def _get(self, what, k):
-        direction_vector = self._trajectory[k + 1] - self._trajectory[k]  # TODO: use my own coordinates!!!
+        direction_vector = self._trajectory[k + 1] - self._trajectory[k]
         norm = np.linalg.norm(direction_vector)
         if what == 'direction':
             if norm < 1e-6: return self._direction  # if static returns previous direction
@@ -96,8 +96,15 @@ class RealCar(Car):
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
         new_direction = self._get('direction', self._frame)
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
-        if abs(b) > self._speed:
-            b = self._speed * np.sign(b)
+        # if abs(b) > self._speed:
+        #     b = self._speed * np.sign(b)
+
+        # From an analysis of the action histograms -> limit a, b to sensible range
+        max_a = 40
+        max_b = 0.01 * (25 / self._length) ** 2
+        a = a if abs(a) < max_a else np.sign(a) * max_a
+        b = b if abs(b) < max_b else np.sign(b) * max_b
+
         return np.array((a, b))
 
     @property
@@ -141,13 +148,18 @@ class RealTraffic(StatefulEnv):
         self._t_slot = None
         self._black_list = {
             self._time_slots[0]:
-                {1628, 2089, 2834, 2818, 2874},
+                {1628, 2089, 2834, 2818, 2874,  # ground truth errors (GTE)
+                 1383, 1430, 1456, 1589, 1913},  # kinematic modelling errors (KME)
             self._time_slots[1]:
                 {537, 1119, 1261, 1215, 1288, 1381, 1382, 1348, 2512, 2462, 2442, 2427,
-                 2407, 2486, 2296, 2427, 2552, 2500, 2616, 2555, 2586, 2669},
+                 2407, 2486, 2296, 2427, 2552, 2500, 2616, 2555, 2586, 2669,
+                 876, 882, 953, 1290, 1574, 2053, 2054, 2134, 2332, 2117, 2301, 2488,  # KME
+                 2519, 2421, 2788},  # KME
             self._time_slots[2]:
                 {269, 567, 722, 790, 860, 1603, 1651, 1734, 1762, 1734,
-                 1800, 1722, 1878, 2056, 2075, 2258, 2252, 2285, 2362},
+                 1800, 1722, 1878, 2056, 2075, 2258, 2252, 2285, 2362,
+                 3004, 401, 510, 682, 680, 815, 827, 1675, 1780, 1751, 1831,  # KME
+                 2200, 2080, 2119, 2170, 2369, 2480, 1797},  # KME
         }
         self.df = None
         self.vehicles_history = None
