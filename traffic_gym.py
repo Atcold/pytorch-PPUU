@@ -283,7 +283,7 @@ class Car:
 
     @property
     def safe_distance(self):
-        return self._speed * self._safe_factor + 1 * self.SCALE  # plus one metre
+        return abs(self._speed) * self._safe_factor + 1 * self.SCALE  # plus one metre
 
     @property
     def front(self):

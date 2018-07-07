@@ -4,10 +4,9 @@ from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
-
+import models
 import importlib
 
-import models2 as models
 
 #################################################
 # Train an action-conditional forward model
@@ -17,12 +16,14 @@ parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
+parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v4/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
-parser.add_argument('-batch_size', type=int, default=16)
+parser.add_argument('-batch_size', type=int, default=4)
+parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-n_hidden', type=int, default=128)
 parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
@@ -34,12 +35,17 @@ parser.add_argument('-grad_clip', type=float, default=1.0)
 parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
+parser.add_argument('-targetprop', type=int, default=1)
+parser.add_argument('-lambda_c', type=float, default=1.0)
+parser.add_argument('-lambda_lane', type=float, default=0.1)
+parser.add_argument('-lrt_traj', type=float, default=0.1)
+parser.add_argument('-niter_traj', type=int, default=20)
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-layers=3-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=256-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
-os.system('mkdir -p ' + opt.model_dir)
+os.system('mkdir -p ' + opt.model_dir + '/policy_networks/')
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
@@ -59,7 +65,13 @@ model = torch.load(opt.model_dir + opt.mfile)
 model.create_policy_net(opt)
 model.intype('gpu')
 
-opt.model_file = f'{opt.model_dir}/policy_networks/mbil-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-mfile={opt.mfile}'
+opt.model_file = f'{opt.model_dir}/policy_networks/mbil-layers={opt.layers}-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-npred={opt.npred}-mfile={opt.mfile}-costcoeff={opt.lambda_c}-costlane={opt.lambda_lane}-targetprop={opt.targetprop}'
+
+if opt.targetprop == 1:
+    opt.model_file += f'-lrt={opt.lrt_traj}-niter={opt.niter_traj}'
+
+opt.model_file += f'-seed={opt.seed}'
+print(f'[will save as: {opt.model_file}]')
 
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
 
@@ -81,28 +93,36 @@ def compute_loss(targets, predictions, r=True):
 def train(nbatches, npred):
     model.train()
     model.policy_net.train()
-    total_loss_i, total_loss_s, total_loss_c = 0, 0, 0
+    total_loss_i, total_loss_s, total_loss_c, total_loss_policy = 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, _ = model.train_policy_net(inputs, targets)
-        loss_i, loss_s, loss_c = compute_loss(targets, pred)
-        loss = loss_i + loss_s #+ loss_c
-        loss.backward()
+        if opt.targetprop == 0:
+            pred, _ = model.train_policy_net(inputs, targets)
+            loss_i, loss_s, _ = compute_loss(targets, pred)
+            proximity_cost = pred[2][:, :, 0]
+            lane_cost = pred[2][:, :, 1]
+            loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
+            loss_policy = loss_i + loss_s + opt.lambda_c*loss_c
+        else:
+            loss_i, loss_s, loss_c, loss_policy = model.train_policy_net_targetprop(inputs, targets, niter_traj=opt.niter_traj)
+        loss_policy.backward()
         torch.nn.utils.clip_grad_norm(model.policy_net.parameters(), opt.grad_clip)
         optimizer.step()
         total_loss_i += loss_i.data[0]
         total_loss_s += loss_s.data[0]
         total_loss_c += loss_c.data[0]
+        total_loss_policy += loss_policy.data[0]
         del inputs, actions, targets
 
     total_loss_i /= nbatches
     total_loss_s /= nbatches
     total_loss_c /= nbatches
-    return total_loss_i, total_loss_s, total_loss_c, None
+    total_loss_policy /= nbatches
+    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy
 
 
 def test(nbatches):
@@ -113,17 +133,26 @@ def test(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, _ = model.train_policy_net(inputs, targets)
-        loss_i, loss_s, loss_c = compute_loss(targets, pred)
+        if opt.targetprop == 0:
+            pred, _ = model.train_policy_net(inputs, targets)
+            loss_i, loss_s, _ = compute_loss(targets, pred)
+            proximity_cost = pred[2][:, :, 0]
+            lane_cost = pred[2][:, :, 1]
+            loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
+            loss_policy = loss_i + loss_s + opt.lambda_c*loss_c
+        else:
+            loss_i, loss_s, loss_c, loss_policy = model.train_policy_net_targetprop(inputs, targets, niter_traj = opt.niter_traj)
         total_loss_i += loss_i.data[0]
         total_loss_s += loss_s.data[0]
         total_loss_c += loss_c.data[0]
+        total_loss_policy += loss_policy.data[0]
         del inputs, actions, targets
 
     total_loss_i /= nbatches
     total_loss_s /= nbatches
     total_loss_c /= nbatches
-    return total_loss_i, total_loss_s, total_loss_c, None
+    total_loss_policy /= nbatches
+    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy
         
 
 print('[training]')

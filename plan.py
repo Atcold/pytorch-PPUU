@@ -5,7 +5,7 @@ import numpy
 import gym
 import pdb
 import importlib
-import models2 as models
+import models
 import utils
 from dataloader import DataLoader
 from torch.autograd import Variable
@@ -13,25 +13,25 @@ from torch.autograd import Variable
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
+parser.add_argument('-v', type=str, default='3')
 parser.add_argument('-seed', type=int, default=333333)
 # planning params
 parser.add_argument('-batch_size', type=int, default=1)
 parser.add_argument('-lrt', type=float, default=0.01)
-parser.add_argument('-ncond', type=int, default=10)
-parser.add_argument('-npred', type=int, default=50)
-parser.add_argument('-nexec', type=int, default=20)
+parser.add_argument('-ncond', type=int, default=20)
+parser.add_argument('-npred', type=int, default=1)
+parser.add_argument('-nexec', type=int, default=1)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-n_iter', type=int, default=100)
 parser.add_argument('-opt_z', type=int, default=0)
 parser.add_argument('-opt_a', type=int, default=1)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-models_dir', type=str, default='./models_il/')
-parser.add_argument('-v', type=str, default='3', choices={'3'})
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/policy_networks/')
-parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v4/policy_networks/')
+parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il_v4')
+parser.add_argument('-mfile', type=str, default='mbil-layers=3-nfeature=256-nhidden=256-npred=100-mfile=model=fwd-cnn-ten-layers=3-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=256-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=0.model-costcoeff=0.1-seed=1.model')
+#parser.add_argument('-mfile', type=str, default='mbil-layers=3-nfeature=256-nhidden=256-mfile=model=fwd-cnn-ten-layers=3-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=256-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=0.model-seed=1.model')
 
 opt = parser.parse_args()
 
@@ -59,12 +59,12 @@ def load_model():
     importlib.reload(models)
     model = torch.load(opt.model_dir + opt.mfile)
     model.intype('gpu')
-    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v2/data_stats.pth')
+    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
     model.stats=stats
     if hasattr(model, 'policy_net'):
         model.policy_net.stats = stats
-    if 'ten' in opt.mfile:
-        pzfile = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/' + opt.mfile.split('mfile=')[1][:-6] + '_100000.pz'
+    if 'ten' in opt.mfile and False:
+        pzfile = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v{}/'.format(opt.v) + opt.mfile.split('mfile=')[1][:-6] + '_100000.pz'
         p_z = torch.load(pzfile)
         graph = torch.load(pzfile + '.graph')
         model.p_z = p_z
@@ -93,7 +93,7 @@ env = gym.make('Traffic-v' + opt.v)
 total_cost_test = 0
 n_batches = 20
 if 'mbil' in opt.mfile:
-    plan_file = 'mbil'
+    plan_file = opt.mfile
 else:
     plan_file = 'rollouts={}-npred={}-nexec={}-optz={}-opta={}-iter={}-lrt={}'.format(opt.n_rollouts, opt.npred, opt.nexec, opt.opt_z, opt.opt_a, opt.n_iter, opt.lrt)
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))

@@ -22,13 +22,25 @@ class encoder(nn.Module):
         self.a_size = a_size
         self.n_inputs = opt.ncond if n_inputs is None else n_inputs
         # frame encoder
-        self.f_encoder = nn.Sequential(
-            nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-        )
+        if opt.layers == 3:
+            self.f_encoder = nn.Sequential(
+                nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+            )
+        elif opt.layers == 4:
+            self.f_encoder = nn.Sequential(
+                nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1)
+            )
+
 
         if states:
             # state encoder
@@ -69,20 +81,38 @@ class decoder(nn.Module):
         super(decoder, self).__init__()
         self.opt = opt
         self.n_out = n_out
-        self.f_decoder = nn.Sequential(
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (0, 1))
-        )
+        if self.opt.layers == 3:
+            self.f_decoder = nn.Sequential(
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (0, 1))
+            )
 
-        self.h_reducer = nn.Sequential(
-            nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
+            self.h_reducer = nn.Sequential(
+                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
+
+        elif self.opt.layers == 4:
+            self.f_decoder = nn.Sequential(
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (2, 4), 2, (1, 0)),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (1, 0))
+            )
+
+            self.h_reducer = nn.Sequential(
+                nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
+
         
         self.c_predictor = nn.Sequential(
             nn.Linear(2*opt.nfeature, opt.nfeature),
@@ -108,7 +138,9 @@ class decoder(nn.Module):
         h_reduced = self.h_reducer(h).view(bsize, -1)
         pred_cost = self.c_predictor(h_reduced)
         pred_state = self.s_predictor(h_reduced)
-        pred_image = self.f_decoder(h)[:, :, :-1].clone().view(bsize, 1, 3*self.n_out, self.opt.height, self.opt.width)
+        pred_image = self.f_decoder(h)
+        pred_image = pred_image[:, :, :self.opt.height, :self.opt.width].clone()
+        pred_image = pred_image.view(bsize, 1, 3*self.n_out, self.opt.height, self.opt.width)
         return pred_image, pred_state, pred_cost
 
 
@@ -659,8 +691,22 @@ class FwdCNN_TEN(nn.Module):
             dist = torch.norm(self.p_z.view(-1, 1, nz) - z_sample.view(1, -1, nz), 2, 2)
             _, z_ind = torch.topk(dist, 1, dim=0, largest=False)
             z = self.p_z.index(z_ind.squeeze().cuda())
+        elif method == 'hinge_knn':
+            M = self.p_z.size(0)
+            nz = self.p_z.size(1)
+            h_x = self.encoder(input_images, input_states, action)
+            u = self.prior_network(h_x).data
+            bsize = u.size(0)
+            sim = torch.sum(self.p_z.view(-1, 1, nz)*u.view(1, -1, nz), 2)
+            topsim, z_ind = torch.topk(sim, 100, dim=0, largest=True)
+            pdb.set_trace()
+            z = []
+            for b in range(bsize):
+                indx = random.choice(z_ind[:, b])
+                z.append(self.p_z[indx])
+            z = torch.stack(z).contiguous()
             
-
+            
         if self.use_cuda: z = z.cuda()
         return [Variable(z), z_indx]
 
@@ -713,7 +759,7 @@ class FwdCNN_TEN(nn.Module):
             z_ = z if sampling is None else z[0]
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
+            h = utils.combine(h_x, z_exp, self.opt.combine)
 
             pred_image, pred_state, pred_cost = self.decoder(h)
             if sampling is not None:
@@ -809,7 +855,10 @@ class FwdCNN_TEN(nn.Module):
 
 
     def create_policy_net(self, opt):
-        self.policy_net = StochasticPolicy(opt)
+        if opt.targetprop == 0:
+            self.policy_net = StochasticPolicy(opt)
+        elif opt.targetprop == 1:
+            self.policy_net = PolicyMDN(opt)
 
 
     def train_policy_net(self, inputs, targets):
@@ -846,6 +895,69 @@ class FwdCNN_TEN(nn.Module):
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
         return [pred_images, pred_states, pred_costs], None
+
+
+    def train_policy_net_targetprop(self, inputs, targets, lrt_traj=0.1, niter_traj=100, lambda_c=0.1):
+        input_images_, input_states_ = inputs
+        target_images, target_states, target_costs = targets
+        bsize = input_images_.size(0)
+        npred = target_images.size(1)
+        policy_input_images, policy_input_states = [], []
+            
+        z = None
+        loss_i, loss_s, loss_c = None, None, None
+        self.actions = Variable(torch.randn(bsize, npred, self.opt.n_actions).cuda().mul_(0.1), requires_grad=True)
+        self.optimizer_a = optim.Adam([self.actions], lrt_traj)
+
+        for i in range(niter_traj):
+            pred_images, pred_states, pred_costs = [], [], []
+            policy_input_images, policy_input_states = [], []
+            self.optimizer_a.zero_grad()
+            self.zero_grad()
+            for t in range(npred):
+                # encode the inputs
+                input_images = Variable(input_images_.data)
+                input_states = Variable(input_states_.data)
+                policy_input_images.append(input_images)
+                policy_input_states.append(input_states)
+                h_x = self.encoder(input_images, input_states, self.actions[:, t])
+                target_images, target_states, target_costs = targets
+                # encode the targets into z
+                h_y = self.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, self.actions[:, t])
+                z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
+                z_ = z
+                z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+                h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+                h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
+                pred_image, pred_state, pred_cost = self.decoder(h)
+                pred_image = F.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+                # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+                pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+                input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+                input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+                pred_images.append(pred_image)
+                pred_states.append(pred_state)
+                pred_costs.append(pred_cost)
+
+            pred_images = torch.cat(pred_images, 1)
+            pred_states = torch.stack(pred_states, 1)
+            pred_costs = torch.stack(pred_costs, 1)
+            loss_i = F.mse_loss(pred_images, target_images)
+            loss_s = F.mse_loss(pred_states, target_states)
+            loss_c = pred_costs.mean()
+#            print(loss_i.data[0], loss_s.data[0], loss_c.data[0])
+            loss = loss_i + loss_s + lambda_c*loss_c
+            loss.backward()
+            self.optimizer_a.step()
+
+        policy_input_images = torch.stack(policy_input_images).view(bsize*npred, self.opt.ncond, 3, self.opt.height, self.opt.width)
+        policy_input_states = torch.stack(policy_input_states).view(bsize*npred, self.opt.ncond, 4)
+        self.actions = self.actions.permute(1, 0, 2).contiguous().view(bsize*npred, 2)
+        pi, mu, sigma, _ = self.policy_net(policy_input_images, policy_input_states)
+        loss_mdn = utils.mdn_loss_fn(pi, sigma, mu, self.actions)
+        self.optim_stats = self.optimizer_a.state_dict()
+        return loss_i, loss_s, loss_c, loss_mdn
+
 
 
     # assuming this is for a single input sample
@@ -1257,7 +1369,7 @@ class StochasticPolicy(nn.Module):
 
         if normalize:
             a = a.data
-            a.clamp_(-2, 2)
+            a.clamp_(-3, 3)
             a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
             a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
 
@@ -1284,12 +1396,15 @@ class StochasticPolicy(nn.Module):
 
 # Mixture Density Network model
 class PolicyMDN(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, n_mixture=10, npred=1):
         super(PolicyMDN, self).__init__()
         self.opt = opt
+        self.npred = npred
+        if not hasattr(opt, 'n_mixture'):
+            self.opt.n_mixture = n_mixture
         self.encoder = encoder(opt, 0, opt.ncond)
         self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
-        self.n_outputs = opt.npred*opt.n_actions
+        self.n_outputs = self.npred*opt.n_actions
         self.fc = nn.Sequential(
             nn.Linear(self.hsize, opt.n_hidden),
             nn.ReLU(),
@@ -1326,11 +1441,9 @@ class PolicyMDN(nn.Module):
             k = torch.multinomial(pi, 1)
             a = []
             for b in range(bsize):
-                a.append(torch.randn(self.opt.npred, self.opt.n_actions).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
+                a.append(torch.randn(self.npred, self.opt.n_actions).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
             a = torch.stack(a).squeeze()
-            a = a.view(bsize, self.opt.npred, 2)
-#            a[:, 1].copy_(torch.clamp(a[:, 1], min=-1, max=1))
-#            print(print('a:{}, {}'.format(a.min(), a.max())))
+            a = a.view(bsize, self.npred, 2)
         else:
             a = None
 
@@ -1338,8 +1451,9 @@ class PolicyMDN(nn.Module):
             a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
             a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
 
-
-        return pi, mu, sigma, a.cpu().view(self.opt.npred, 2).numpy()
+        if a is not None:
+            a = a.cpu().view(self.opt.npred, 2).numpy()
+        return pi, mu, sigma, a
 
 
     def intype(self, t):

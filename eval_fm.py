@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-batch_size', type=int, default=4)
-parser.add_argument('-v', type=int, default=1)
+parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=8)
@@ -27,14 +27,19 @@ parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v3/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v4/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.001-dropout=0.0-ploss=hinge-zsphere=1-gclip=1.0-zeroact-warmstart=1.model')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0001-nmix=1-warmstart=1.model')
 
 
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
+
+if 'zeroact' in opt.mfile:
+    opt.zeroact = 1
+else:
+    opt.zeroact = 0
 
 random.seed(opt.seed)
 np.random.seed(opt.seed)
@@ -46,9 +51,9 @@ opt.eval_dir = opt.model_dir + f'/eval/'
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
 model = torch.load(opt.model_dir + opt.mfile)
+model.eval()
 if opt.cuda == 1:
     model.intype('gpu')
-model.eval()
 
 
 
@@ -80,6 +85,8 @@ def compute_pz(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = utils.Variable(actions)
+        if opt.zeroact == 1:
+            actions.data.zero_()
         pred, loss_kl = model(inputs, actions, targets, save_z = True, sampling=None)
         del inputs, actions, targets
 
@@ -103,6 +110,8 @@ if '-ten' in opt.mfile:
         torch.save({'knn_dist': model.knn_dist, 'knn_indx': model.knn_indx}, pzfile + '.graph')
     print('[done]')
 
+if opt.cuda == 1:
+    model.intype('gpu')
 
 loss_i = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
 loss_s = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npred)
@@ -139,6 +148,8 @@ for i in range(opt.n_batches):
         targets = utils.make_variables(targets_)
         actions = utils.Variable(actions_)
 
+        if opt.zeroact == 1:
+            actions.data.zero_()
         pred_, _= model(inputs, actions, targets, sampling=opt.sampling)
         loss_i_s, loss_s_s, loss_c_s = compute_loss(targets, pred_, r=False)
         loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).data.cpu()
