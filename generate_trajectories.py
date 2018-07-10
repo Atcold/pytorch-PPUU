@@ -19,9 +19,9 @@ parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='scratch/nvidia-collab/data/')
 parser.add_argument('-steps', type=int, default=500)
-parser.add_argument('-v', type=str, default='1')
 parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101'})
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -54,8 +54,20 @@ register(
     kwargs=kwargs
 )
 
+gym.envs.registration.register(
+    id='US-101-v0',
+    entry_point='map_us101:US101',
+    kwargs=kwargs,
+)
+
+env_names = {
+    'ai': 'Traffic-v0',
+    'i80': 'Traffic-v1',
+    'us101': 'US-101-v0',
+}
+
 print('Building the environment (loading data, if any)')
-env = gym.make('Traffic-v' + opt.v)
+env = gym.make(env_names[opt.map])
 
 
 def run_episode():
