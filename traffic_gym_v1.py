@@ -22,6 +22,7 @@ class RealCar(Car):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
+    X_OFFSET = X_OFFSET
 
     def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
         self._k = kernel  # running window size
@@ -30,7 +31,7 @@ class RealCar(Car):
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
 
         # X and Y are swapped in the I-80 data set...
-        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - X_OFFSET - self._length
+        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - self.X_OFFSET - self._length
         y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
         # for t in range(len(y) - 1):
         #     delta_x = x[t + 1] - x[t]
@@ -44,7 +45,7 @@ class RealCar(Car):
         self._frame = 0
         self._dt = 1 / 10
         self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
-        self._direction = self._get('direction', 0)
+        # self._direction = self._get('direction', 0)
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
@@ -62,6 +63,8 @@ class RealCar(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
+        self._lane_list = df['Lane Identification'].values
+        self.collisions_per_frame = 0
 
     @property
     def is_autonomous(self):
@@ -110,7 +113,24 @@ class RealCar(Car):
     @property
     def current_lane(self):
         # 1: left-most, 6: right-most, 7: ramp
-        return self._df.at[self._df.index[self._frame], 'Lane Identification'] - 1
+        return self._lane_list[self._frame] - 1
+
+    def count_collisions(self, state):
+        self.collisions_per_frame = 0
+        alpha = 1 * self.SCALE  # 1 m overlap collision
+        for cars in state:
+            if cars:
+                behind, ahead = cars
+                if behind:
+                    d = self - behind
+                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
+                        self.collisions_per_frame += 1
+                        # print('Collision {}/6, behind, vehicle {}'.format(self.collisions_per_frame, behind.id))
+                if ahead:
+                    d = ahead - self
+                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
+                        self.collisions_per_frame += 1
+                        # print('Collision {}/6, ahead, vehicle {}'.format(self.collisions_per_frame, ahead.id))
 
 
 class RealTraffic(StatefulEnv):
@@ -120,6 +140,7 @@ class RealTraffic(StatefulEnv):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
+    X_OFFSET = X_OFFSET
 
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6
@@ -167,11 +188,9 @@ class RealTraffic(StatefulEnv):
         self._lane_surfaces = dict()
         self.nb_lanes = 7
         self.smoothing_window = 15
-        self.random = random.Random()
-        self.random.seed(54321)
 
     @staticmethod
-    def _get_data_frame(file_name, x_max):
+    def _get_data_frame(file_name, x_max, X_OFFSET):
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
@@ -202,7 +221,7 @@ class RealTraffic(StatefulEnv):
     def reset(self, frame=None, time_slot=None):
         super().reset(control=(frame is None))
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
-        self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0])
+        self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0], self.X_OFFSET)
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
@@ -255,6 +274,7 @@ class RealTraffic(StatefulEnv):
             else:
                 # Insort it in my vehicle list
                 lane_idx = v.current_lane
+                assert v.current_lane < self.nb_lanes, f'{v} is in lane {v.current_lane} at frame {self.frame}'
                 bisect.insort(self.lane_occupancy[lane_idx], v)
 
         if self.state_image or self.controlled_car and self.controlled_car['locked']:
@@ -309,18 +329,19 @@ class RealTraffic(StatefulEnv):
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['w']  # colour white
+            g = (128, 128, 128)
             sw = self.screen_size[0]  # screen width
 
             for lane in lanes:
-                draw_dashed_line(s, w, (0, lane['min']), (sw, lane['min']), 3)
-                draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
+                draw_line(s, g, (0, lane['min']), (sw, lane['min']), 1)
+                # draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
             draw_line(s, w, (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
             bottom = lanes[-1]['max']
             draw_line(s, w, (0, bottom), (18 * LANE_W, bottom), 3)
             draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 3)
-            draw_dashed_line(s, w, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 3)
-            draw_dashed_line(s, colours['r'], (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W))
+            # draw_line(s, g, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 1)
+            draw_line(s, g, (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W), 1)
             draw_line(s, w, (0, bottom + 53), (60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 3)
             draw_line(s, w, (60 * LANE_W, bottom + 3), (sw, bottom + 2), 3)
 
@@ -340,7 +361,6 @@ class RealTraffic(StatefulEnv):
             for lane in lanes:
                 draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
 
-            draw_line(s, w, (0, lanes[0]['min'] + m), (sw, lanes[0]['min'] + m), 1)
             bottom = lanes[-1]['max'] + m
             draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
             draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
@@ -349,3 +369,5 @@ class RealTraffic(StatefulEnv):
             draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
 
             self._lane_surfaces[mode] = surface.copy()
+            # pygame.image.save(surface, "i80-machine.png")
+

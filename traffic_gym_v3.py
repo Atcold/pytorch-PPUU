@@ -12,7 +12,6 @@ class ControlledCar(RealCar):
         self.is_controlled = False
         self.buffer_size = 0
         self.lanes = None
-        self.collisions_per_frame = 0
 
     @property
     def current_lane(self):
@@ -49,23 +48,6 @@ class ControlledCar(RealCar):
     @property
     def is_autonomous(self):
         return self.is_controlled and len(self._states_image) > self.buffer_size
-
-    def count_collisions(self, state):
-        self.collisions_per_frame = 0
-        alpha = 1 * self.SCALE  # 1 m overlap collision
-        for cars in state:
-            if cars:
-                behind, ahead = cars
-                if behind:
-                    d = self - behind
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
-                        self.collisions_per_frame += 1
-                        # print('Collision {}/6, behind, vehicle {}'.format(self.collisions_per_frame, behind.id))
-                if ahead:
-                    d = ahead - self
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
-                        self.collisions_per_frame += 1
-                        # print('Collision {}/6, ahead, vehicle {}'.format(self.collisions_per_frame, ahead.id))
 
 
 class ControlledI80(RealTraffic):
