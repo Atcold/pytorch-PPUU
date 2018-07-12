@@ -44,8 +44,8 @@ class RealCar(Car):
         self._df = df
         self._frame = 0
         self._dt = 1 / 10
-        self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
-        # self._direction = self._get('direction', 0)
+        # self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
+        self._direction = self._get('init_direction', 0)
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
@@ -78,6 +78,12 @@ class RealCar(Car):
             return direction_vector / norm
         if what == 'speed':
             return norm / self._dt
+        if what == 'init_direction':  # median over first half-second of trajectory
+            steps = min(5, len(self._trajectory) - 1)
+            dir_vectors = self._trajectory[1:steps + 1] - self._trajectory[:steps]
+            thetas = np.arctan2(dir_vectors[:,1], dir_vectors[:,0])
+            theta_median = np.median(thetas)
+            return np.array((np.cos(theta_median), np.sin(theta_median)))
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
@@ -340,8 +346,8 @@ class RealTraffic(StatefulEnv):
             bottom = lanes[-1]['max']
             draw_line(s, w, (0, bottom), (18 * LANE_W, bottom), 3)
             draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 3)
-            # draw_line(s, g, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 1)
-            draw_line(s, g, (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W), 1)
+            draw_line(s, g, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 1)
+            # draw_line(s, g, (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W), 1)
             draw_line(s, w, (0, bottom + 53), (60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 3)
             draw_line(s, w, (60 * LANE_W, bottom + 3), (sw, bottom + 2), 3)
 
