@@ -141,6 +141,11 @@ def log_sum_exp(value, dim=None, keepdim=False):
         else:
             return m + torch.log(sum_exp)
 
+# inputs are:
+# pi: categorical distribution over mixture components
+# mu: means of mixture components
+# sigma: variances of mixture components (note, all mixture components are assumed to be diagonal)
+# y: points to evaluate the negative-log-likelihood of, under the model determined by these parameters
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     minsigma = sigma.min().data[0]
     assert(minsigma >= 0, '{} < 0'.format(minsigma))
