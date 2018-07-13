@@ -1543,6 +1543,8 @@ class PolicyMDN(nn.Module):
     def forward(self, state_images, states, sample=False, unnormalize=False):
 
         if unnormalize:
+            # policy network is trained with states normalized by mean and standard dev. 
+            # this is to unnormalize the predictions at evaluation time. 
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())
@@ -1551,16 +1553,18 @@ class PolicyMDN(nn.Module):
 
 
         bsize = state_images.size(0)
-
         h = self.encoder(state_images, states).view(bsize, self.hsize)
         h = self.fc(h)
+        # get parameters of output distribution
         pi = F.softmax(self.pi_net(h).view(bsize, self.opt.n_mixture), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.n_outputs)
         sigma = F.softplus(self.sigma_net(h)).view(bsize, self.opt.n_mixture, self.n_outputs)
         if sample:
+            # pick a mixture component (one for each element in minibatch)
             k = torch.multinomial(pi, 1)
             a = []
             for b in range(bsize):
+                # sample from Gaussian associated with those components
                 a.append(torch.randn(self.npred, self.opt.n_actions).cuda()*sigma[b][k[b]].data + mu[b][k[b]].data)
             a = torch.stack(a).squeeze()
             a = a.view(bsize, self.npred, 2)
