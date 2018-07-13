@@ -590,6 +590,9 @@ class StatefulEnv(core.Env):
                 30: pygame.font.SysFont(None, 30),
             }
 
+        self.random = random.Random()
+        self.random.seed(54321)
+
     def build_lanes(self, nb_lanes):
         return tuple(
             {'min': self.offset + n * self.LANE_W,
