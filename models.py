@@ -23,43 +23,56 @@ class encoder(nn.Module):
         self.n_inputs = opt.ncond if n_inputs is None else n_inputs
         # frame encoder
         if opt.layers == 3:
+            if self.opt.fmap_geom == 0:
+                self.feature_maps = [opt.nfeature, opt.nfeature, opt.nfeature]
+            elif self.opt.fmap_geom == 1:
+                assert(opt.nfeature % 4 == 0)
+                self.feature_maps = [int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
+
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(3*self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(self.feature_maps[1], self.feature_maps[2], 4, 2, 1),
             )
         elif opt.layers == 4:
+            if self.opt.fmap_geom == 0:
+                self.feature_maps = [opt.nfeature, opt.nfeature, opt.nfeature, opt.nfeature]
+            elif self.opt.fmap_geom == 1:
+                assert(opt.nfeature % 8 == 0)
+                self.feature_maps = [int(opt.nfeature/8), int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3*self.n_inputs, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(3*self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(self.feature_maps[1], self.feature_maps[2], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1)
+                nn.Conv2d(self.feature_maps[2], self.feature_maps[3], 4, 2, 1)
             )
 
 
         if states:
+            n_hidden = self.feature_maps[-1]
             # state encoder
             self.s_encoder = nn.Sequential(
-                nn.Linear(state_input_size*opt.ncond, opt.nfeature),
+                nn.Linear(state_input_size*opt.ncond, n_hidden),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
+                nn.Linear(n_hidden, n_hidden),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.opt.hidden_size)
+                nn.Linear(n_hidden, self.opt.hidden_size)
             )
 
         if a_size > 0:
             # action or cost encoder
+            n_hidden = self.feature_maps[-1]
             self.a_encoder = nn.Sequential(
-                nn.Linear(a_size, opt.nfeature),
+                nn.Linear(a_size, n_hidden),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, opt.nfeature),
+                nn.Linear(n_hidden, n_hidden),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(opt.nfeature, self.opt.hidden_size)
+                nn.Linear(n_hidden, self.opt.hidden_size)
             )
 
     def forward(self, images, states=None, actions=None):
@@ -82,30 +95,42 @@ class decoder(nn.Module):
         self.opt = opt
         self.n_out = n_out
         if self.opt.layers == 3:
+            if self.opt.fmap_geom == 0:
+                self.feature_maps = [opt.nfeature, opt.nfeature, opt.nfeature]
+            elif self.opt.fmap_geom == 1:
+                assert(opt.nfeature % 4 == 0)
+                self.feature_maps = [int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
+
             self.f_decoder = nn.Sequential(
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+                nn.ConvTranspose2d(self.feature_maps[2], self.feature_maps[1], (4, 4), 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+                nn.ConvTranspose2d(self.feature_maps[1], self.feature_maps[0], (5, 5), 2, (0, 1)),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (0, 1))
+                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (0, 1))
             )
 
             self.h_reducer = nn.Sequential(
-                nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
+                nn.Conv2d(self.feature_maps[2], self.feature_maps[2], 4, 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(opt.nfeature, opt.nfeature, (4, 1), (2, 1), 0),
+                nn.Conv2d(self.feature_maps[2], self.feature_maps[2], (4, 1), (2, 1), 0),
                 nn.LeakyReLU(0.2, inplace=True)
             )
 
         elif self.opt.layers == 4:
+            if self.opt.fmap_geom == 0:
+                self.feature_maps = [opt.nfeature, opt.nfeature, opt.nfeature, opt.nfeature]
+            elif self.opt.fmap_geom == 1:
+                assert(opt.nfeature % 8 == 0)
+                self.feature_maps = [int(opt.nfeature/8), int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
+
             self.f_decoder = nn.Sequential(
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (4, 4), 2, 1),
+                nn.ConvTranspose2d(self.feature_maps[3], self.feature_maps[2], (4, 4), 2, 1),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (5, 5), 2, (0, 1)),
+                nn.ConvTranspose2d(self.feature_maps[2], self.feature_maps[1], (5, 5), 2, (0, 1)),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, opt.nfeature, (2, 4), 2, (1, 0)),
+                nn.ConvTranspose2d(self.feature_maps[1], self.feature_maps[0], (2, 4), 2, (1, 0)),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(opt.nfeature, self.n_out*3, (2, 2), 2, (1, 0))
+                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (1, 0))
             )
 
             self.h_reducer = nn.Sequential(
@@ -114,27 +139,30 @@ class decoder(nn.Module):
             )
 
         
+        n_hidden = self.feature_maps[-1]
         self.c_predictor = nn.Sequential(
-            nn.Linear(2*opt.nfeature, opt.nfeature),
+            nn.Linear(2*n_hidden, n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.Linear(n_hidden, n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, self.n_out*2),
+            nn.Linear(n_hidden, self.n_out*2),
             nn.Sigmoid()
         )
 
         self.s_predictor = nn.Sequential(
-            nn.Linear(2*opt.nfeature, opt.nfeature),
+            nn.Linear(2*n_hidden, n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, opt.nfeature),
+            nn.Linear(n_hidden, n_hidden),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(opt.nfeature, self.n_out*4)
+            nn.Linear(n_hidden, self.n_out*4)
         )
 
 
     def forward(self, h):
         bsize = h.size(0)
-        h = h.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+        if not hasattr(self, 'feature_maps'):
+            self.feature_maps = [self.opt.nfeature for i in range(self.opt.layers)]
+        h = h.view(bsize, self.feature_maps[-1], self.opt.h_height, self.opt.h_width)
         h_reduced = self.h_reducer(h).view(bsize, -1)
         pred_cost = self.c_predictor(h_reduced)
         pred_state = self.s_predictor(h_reduced)
@@ -412,6 +440,7 @@ class FwdCNN(nn.Module):
             self.encoder.n_inputs = opt.ncond
 
     def forward(self, inputs, actions, target, sampling=None, p_dropout=None):
+        t0 = time.time()
         npred = actions.size(1)
         input_images, input_states = inputs
         pred_images, pred_states, pred_costs = [], [], []
@@ -430,6 +459,7 @@ class FwdCNN(nn.Module):
         pred_images = torch.cat(pred_images, 1)
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
+        print(time.time() - t0)
         return [pred_images, pred_states, pred_costs], Variable(torch.zeros(1).cuda())
 
     def intype(self, t):
@@ -437,6 +467,76 @@ class FwdCNN(nn.Module):
             self.cuda()
         elif t == 'cpu':
             self.cpu()
+
+
+
+class FwdCNN2(nn.Module):
+    def __init__(self, opt, mfile):
+        super(FwdCNN2, self).__init__()
+        self.opt = opt
+        # If we are given a model file, use it to initialize this model. 
+        # otherwise initialize from scratch
+        if mfile == '':
+            self.encoder = encoder(opt, 0, opt.ncond)
+            self.decoder = decoder(opt)
+            self.a_network = nn.Sequential(
+                nn.Linear(self.opt.n_actions, self.opt.nfeature), 
+                nn.LeakyReLU(0.2, inplace=True), 
+                nn.Linear(self.opt.nfeature, self.opt.nfeature), 
+                nn.LeakyReLU(0.2, inplace=True), 
+                nn.Linear(self.opt.nfeature, self.opt.hidden_size)
+            )
+
+            self.h_network = nn.Sequential(
+                nn.Linear(self.opt.hidden_size, self.opt.n_hidden), 
+                nn.LeakyReLU(0.2, inplace=True), 
+                nn.Linear(self.opt.n_hidden, self.opt.n_hidden), 
+                nn.LeakyReLU(0.2, inplace=True), 
+                nn.Linear(self.opt.n_hidden, self.opt.n_hidden), 
+                nn.LeakyReLU(0.2, inplace=True), 
+                nn.Linear(self.opt.n_hidden, self.opt.hidden_size)
+            )
+
+        else:
+            print('[initializing encoder and decoder with: {}]'.format(mfile))
+            self.mfile = mfile
+            pretrained_model = torch.load(mfile)
+            self.encoder = pretrained_model.encoder
+            self.decoder = pretrained_model.decoder
+            self.encoder.n_inputs = opt.ncond
+
+    def forward(self, inputs, actions, target, sampling=None, p_dropout=None):
+        t0 = time.time()
+        bsize = actions.size(0)
+        npred = actions.size(1)
+        input_images, input_states = inputs
+        pred_images, pred_states, pred_costs = [], [], []
+        h = self.encoder(input_images, input_states)
+        h = h.view(bsize, self.opt.hidden_size)
+        for t in range(npred):
+            h = h + self.a_network(actions[:, t])
+            h = h + self.h_network(h)
+            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image = F.sigmoid(pred_image + pred_images_images[:, -1].unsqueeze(1))
+            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            pred_images.append(pred_image)
+            pred_states.append(pred_state)
+            pred_costs.append(pred_cost)
+
+        pred_images = torch.cat(pred_images, 1)
+        pred_states = torch.stack(pred_states, 1)
+        pred_costs = torch.stack(pred_costs, 1)
+        print(time.time() - t0)
+        return [pred_images, pred_states, pred_costs], Variable(torch.zeros(1).cuda())
+
+    def intype(self, t):
+        if t == 'gpu':
+            self.cuda()
+        elif t == 'cpu':
+            self.cpu()
+
 
 
 
@@ -861,17 +961,22 @@ class FwdCNN_TEN(nn.Module):
             self.policy_net = PolicyMDN(opt)
 
 
-    def train_policy_net(self, inputs, targets):
+    def train_policy_net(self, inputs, targets, targetprop=0):
+        t0 = time.time()
         input_images, input_states = inputs
         target_images, target_states, target_costs = targets
         bsize = input_images.size(0)
         npred = target_images.size(1)
-        pred_images, pred_states, pred_costs = [], [], []
+        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
             
         z = None
         for t in range(npred):
             # encode the inputs
-            actions = self.policy_net(input_images, input_states)
+            if targetprop == 0:
+                actions = self.policy_net(input_images, input_states)
+            elif targetprop == 1:
+                _, _, _, actions = self.policy_net(input_images, input_states, sample=True)
+                actions = Variable(actions)
             h_x = self.encoder(input_images, input_states, actions)
             target_images, target_states, target_costs = targets
             # encode the targets into z
@@ -890,26 +995,32 @@ class FwdCNN_TEN(nn.Module):
             pred_images.append(pred_image)
             pred_states.append(pred_state)
             pred_costs.append(pred_cost)
+            pred_actions.append(actions)
 
         pred_images = torch.cat(pred_images, 1)
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
-        return [pred_images, pred_states, pred_costs], None
+        pred_actions = torch.stack(pred_actions, 1)
+#        print(time.time() - t0)
+        return [pred_images, pred_states, pred_costs], pred_actions
 
 
-    def train_policy_net_targetprop(self, inputs, targets, lrt_traj=0.1, niter_traj=100, lambda_c=0.1):
+    def train_policy_net_targetprop(self, inputs, targets, opt):
         input_images_, input_states_ = inputs
         target_images, target_states, target_costs = targets
         bsize = input_images_.size(0)
         npred = target_images.size(1)
         policy_input_images, policy_input_states = [], []
+
+        gamma_mask = torch.Tensor([opt.gamma**t for t in range(opt.npred)]).view(1, -1).cuda()
+
             
         z = None
         loss_i, loss_s, loss_c = None, None, None
         self.actions = Variable(torch.randn(bsize, npred, self.opt.n_actions).cuda().mul_(0.1), requires_grad=True)
-        self.optimizer_a = optim.Adam([self.actions], lrt_traj)
+        self.optimizer_a = optim.Adam([self.actions], opt.lrt_traj)
 
-        for i in range(niter_traj):
+        for i in range(opt.niter_traj):
             pred_images, pred_states, pred_costs = [], [], []
             policy_input_images, policy_input_states = [], []
             self.optimizer_a.zero_grad()
@@ -920,6 +1031,9 @@ class FwdCNN_TEN(nn.Module):
                 input_states = Variable(input_states_.data)
                 policy_input_images.append(input_images)
                 policy_input_states.append(input_states)
+                if i == 0:
+                    _, _, _, a = self.policy_net(input_images, input_states, sample=True)
+                    self.actions[:, t].data.copy_(a.squeeze())
                 h_x = self.encoder(input_images, input_states, self.actions[:, t])
                 target_images, target_states, target_costs = targets
                 # encode the targets into z
@@ -942,11 +1056,19 @@ class FwdCNN_TEN(nn.Module):
             pred_images = torch.cat(pred_images, 1)
             pred_states = torch.stack(pred_states, 1)
             pred_costs = torch.stack(pred_costs, 1)
-            loss_i = F.mse_loss(pred_images, target_images)
-            loss_s = F.mse_loss(pred_states, target_states)
-            loss_c = pred_costs.mean()
-#            print(loss_i.data[0], loss_s.data[0], loss_c.data[0])
-            loss = loss_i + loss_s + lambda_c*loss_c
+            loss_i = F.mse_loss(pred_images, target_images, reduce=False).mean(4).mean(3).mean(2)
+            loss_s = F.mse_loss(pred_states, target_states, reduce=False).mean(2)
+
+            proximity_cost = pred_costs[:, :, 0]
+            lane_cost = pred_costs[:, :, 1]
+            proximity_cost = proximity_cost * Variable(gamma_mask)
+            lane_cost = lane_cost * Variable(gamma_mask)
+            loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
+            loss_i = loss_i * Variable(gamma_mask)
+            loss_s = loss_s * Variable(gamma_mask)
+            loss_i = loss_i.mean()
+            loss_s = loss_s.mean()
+            loss = loss_i + loss_s + opt.lambda_c*loss_c
             loss.backward()
             self.optimizer_a.step()
 
@@ -988,13 +1110,11 @@ class FwdCNN_TEN(nn.Module):
         # sample initial actions: we will choose to execute one of these at the end
         actions_init = self.policy_net(input_images[0].unsqueeze(0), input_states[0].unsqueeze(0), sample=True, normalize=False, n_samples=n_actions)
         actions = actions.clone().unsqueeze(0).expand(n_futures, n_actions, 2)
-        pdb.set_trace()
         for t in range(npred):
             # encode the inputs
             actions = self.policy_net(input_images, input_states)
             h_x = self.encoder(input_images, input_states, actions)
             z_ = Z[t]
-            pdb.set_trace()
             z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
             h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
@@ -1451,8 +1571,6 @@ class PolicyMDN(nn.Module):
             a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
             a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
 
-        if a is not None:
-            a = a.cpu().view(self.opt.npred, 2).numpy()
         return pi, mu, sigma, a
 
 
