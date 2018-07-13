@@ -1,6 +1,6 @@
 import torch, numpy, argparse, pdb, os
 import utils
-import models2 as models
+import models
 from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -14,7 +14,10 @@ import torch.optim as optim
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
+parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='policy-cnn-mdn')
+parser.add_argument('-layers', type=int, default=3)
+parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-nshards', type=int, default=40)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v2/policy_networks/')
@@ -70,7 +73,7 @@ print(f'[will save model as: {opt.model_file}]')
 if opt.warmstart == 0:
     prev_model = ''
 
-policy = models.PolicyMDN(opt)
+policy = models.PolicyMDN(opt, npred=opt.npred)
     
 
 policy.intype('gpu')
