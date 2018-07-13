@@ -104,6 +104,23 @@ def gaussian_distribution(y, mu, sigma):
     return result
 
 
+
+
+
+def hinge_loss(u, z):
+    bsize = z.size(0)
+    nz = z.size(1)
+    uexp = u.view(bsize, 1, nz).expand(bsize, bsize, nz).contiguous()
+    zexp = z.view(1, bsize, nz).expand(bsize, bsize, nz).contiguous()
+    uexp = uexp.view(bsize*bsize, nz)
+    zexp = zexp.view(bsize*bsize, nz)
+    sim = torch.sum(uexp * zexp, 1).view(bsize, bsize)
+    loss = sim - torch.diag(sim).view(-1, 1)
+    loss = F.relu(loss)
+    loss = torch.mean(loss)
+    return loss
+
+
 def log_sum_exp(value, dim=None, keepdim=False):
     """Numerically stable implementation of the operation
     value.exp().sum(dim, keepdim).log()
@@ -124,41 +141,19 @@ def log_sum_exp(value, dim=None, keepdim=False):
         else:
             return m + torch.log(sum_exp)
 
-
-
-def hinge_loss(u, z):
-    bsize = z.size(0)
-    nz = z.size(1)
-    uexp = u.view(bsize, 1, nz).expand(bsize, bsize, nz).contiguous()
-    zexp = z.view(1, bsize, nz).expand(bsize, bsize, nz).contiguous()
-    uexp = uexp.view(bsize*bsize, nz)
-    zexp = zexp.view(bsize*bsize, nz)
-    sim = torch.sum(uexp * zexp, 1).view(bsize, bsize)
-    loss = sim - torch.diag(sim).view(-1, 1)
-    loss = F.relu(loss)
-    loss = torch.mean(loss)
-    return loss
-
-# TODO: check this again by hand
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     minsigma = sigma.min().data[0]
-    if minsigma < 0:
-        pdb.set_trace()
     assert(minsigma >= 0, '{} < 0'.format(minsigma))
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
     result -= torch.log(pi)
     result += 0.5*c*math.log(2*math.pi)
-#    result += torch.log(torch.prod(sigma, 2))
-#    result += torch.log(torch.prod(sigma, 2))
     result += torch.sum(torch.log(sigma), 2)
     result = -result
     result = -log_sum_exp(result, dim=1)
     if avg:
         result = torch.mean(result)
-#    if math.isnan(result.data[0]):
-#        pdb.set_trace()
     return result
 
 
