@@ -56,9 +56,9 @@ class US101(RealTraffic):
         # self.photos_rect = (
         #     self.photos[0].get_rect().move([0, 33]),
         #     self.photos[1].get_rect().move([552, 33 + 2]),
-        #     self.photos[1].get_rect().move([552 + 472, 33 + 2]),
-        #     self.photos[1].get_rect().move([552 + 472 + 388, 33 + 3]),
-        #     self.photos[1].get_rect().move([552 + 472 + 388 + 532, 33 + 3]),
+        #     self.photos[2].get_rect().move([552 + 472, 33 + 2]),
+        #     self.photos[3].get_rect().move([552 + 472 + 388, 33 + 3]),
+        #     self.photos[4].get_rect().move([552 + 472 + 388 + 532, 33 + 3]),
         # )
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
@@ -80,7 +80,6 @@ class US101(RealTraffic):
         self.df = None
         self.vehicles_history = None
         self.lane_occupancy = None
-        self._lane_surfaces = dict()
         self.nb_lanes = 6
         self.smoothing_window = 15
 
