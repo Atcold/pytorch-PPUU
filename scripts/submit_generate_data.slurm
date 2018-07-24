@@ -14,5 +14,5 @@
 
 source activate py35
 cd ../
-srun python generate_trajectories.py -time_interval $1 -v 1
+srun python generate_trajectories.py -time_slot $1 -v 1
 

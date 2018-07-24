@@ -15,5 +15,5 @@
 
 module load python-3.6
 cd ../
-srun python train_il.py -model $1 -lrt $2 -n_hidden $3 -ncond $4 -npred $5 -beta $6 -nshards $7 -nz $8
+srun python train_il.py -model $1 -lrt $2 -n_hidden $3 -ncond $4 -npred $5 -beta $6 -nz $7 -n_mixture $8
 
