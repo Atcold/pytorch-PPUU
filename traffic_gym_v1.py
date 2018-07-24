@@ -191,12 +191,11 @@ class RealTraffic(StatefulEnv):
         self.df = None
         self.vehicles_history = None
         self.lane_occupancy = None
-        self._lane_surfaces = dict()
         self.nb_lanes = 7
         self.smoothing_window = 15
 
     @staticmethod
-    def _get_data_frame(file_name, x_max, X_OFFSET):
+    def _get_data_frame(file_name, x_max, x_offset):
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
@@ -219,7 +218,7 @@ class RealTraffic(StatefulEnv):
         ))
 
         # Get valid x coordinate rows
-        valid_x = (df['Local Y'] * FOOT * SCALE - X_OFFSET).between(0, x_max)
+        valid_x = (df['Local Y'] * FOOT * SCALE - x_offset).between(0, x_max)
 
         # Restrict data frame to valid x coordinates
         return df[valid_x]

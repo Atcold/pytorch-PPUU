@@ -232,10 +232,16 @@ class Car:
             #     pygame.draw.rect(surface, (128, 255, 0),
             #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
 
+            if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
+            if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
+
             _r = draw_rect(surface, self._colour, rectangle, d)
 
             # Drawing vehicle number
-            self._text[1].left = x
+            if x < self.front[0]:
+                self._text[1].left = x
+            else:
+                self._text[1].right = x
             self._text[1].top = y - self._width // 2
             surface.blit(self._text[0], self._text[1])
 
