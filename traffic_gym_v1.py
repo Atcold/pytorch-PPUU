@@ -280,7 +280,7 @@ class RealTraffic(StatefulEnv):
             else:
                 # Insort it in my vehicle list
                 lane_idx = v.current_lane
-                assert v.current_lane < self.nb_lanes, f'{v} is in lane {v.current_lane} at frame {self.frame}'
+                assert v.current_lane < self.nb_lanes, '{} is in lane {} at frame {}'.format(v, v.current_lane, self.frame)
                 bisect.insort(self.lane_occupancy[lane_idx], v)
 
         if self.state_image or self.controlled_car and self.controlled_car['locked']:
