@@ -24,19 +24,17 @@ parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-n_batches', type=int, default=200)
 parser.add_argument('-n_samples', type=int, default=10)
+parser.add_argument('-n_action_seq', type=int, default=5)
 parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v4/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.001-dropout=0.0-ploss=hinge-zsphere=1-gclip=1.0-zeroact-warmstart=1.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0001-nmix=1-warmstart=1.model')
-
-
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
 
-if 'zeroact' in opt.mfile:
+if 'zeroact=1' in opt.mfile:
     opt.zeroact = 1
 else:
     opt.zeroact = 0
@@ -50,7 +48,7 @@ opt.eval_dir = opt.model_dir + f'/eval/'
 
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
-model = torch.load(opt.model_dir + opt.mfile)
+model = torch.load(opt.model_dir + opt.mfile)['model']
 model.eval()
 if opt.cuda == 1:
     model.intype('gpu')
@@ -70,9 +68,6 @@ if '-ten' in opt.mfile:
         model.prior = torch.load(mfile_prior).cuda()
 dirname += '.eval'
 os.system('mkdir -p ' + dirname)
-
-
-
 
 
 dataloader = DataLoader(None, opt, opt.dataset)
@@ -123,7 +118,7 @@ pred_states = torch.zeros(opt.n_batches, opt.batch_size, opt.n_samples, opt.npre
 
 
 def compute_loss(targets, predictions, r=True):
-    pred_images, pred_states, pred_costs = predictions
+    pred_images, pred_states, pred_costs, _ = predictions
     target_images, target_states, target_costs = targets
     loss_i = F.mse_loss(pred_images, target_images, reduce=r)
     loss_s = F.mse_loss(pred_states, target_states, reduce=r)
@@ -141,7 +136,7 @@ for i in range(opt.n_batches):
             dirname_movie = '{}/videos/x{:d}/y/'.format(dirname, i*opt.batch_size + b)
             print('[saving ground truth video: {}]'.format(dirname_movie))
             utils.save_movie(dirname_movie, targets_[0][b], targets_[1][b], targets_[2][b])
-
+            
     for s in range(opt.n_samples):
         print('[batch {}, sample {}'.format(i, s), end="\r")
         inputs = utils.make_variables(inputs_)
@@ -150,6 +145,7 @@ for i in range(opt.n_batches):
 
         if opt.zeroact == 1:
             actions.data.zero_()
+
         pred_, _= model(inputs, actions, targets, sampling=opt.sampling)
         loss_i_s, loss_s_s, loss_c_s = compute_loss(targets, pred_, r=False)
         loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).data.cpu()
@@ -160,12 +156,19 @@ for i in range(opt.n_batches):
         pred_states[i, :, s].copy_(pred_[1].data)
         true_states[i].copy_(targets[1].data)
 
-
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
                 dirname_movie = '{}/videos/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
                 utils.save_movie(dirname_movie, pred_[0][b].data, pred_[1][b].data, pred_[2][b].data)
+
+        # also generate videos with different action sequences
+        pred_perm, _= model(inputs, actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()], targets, sampling=opt.sampling)
+        if i < 10 and s < 20 and opt.save_video:
+            for b in range(opt.batch_size):
+                dirname_movie = '{}/videos/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                print('[saving video: {}]'.format(dirname_movie), end="\r")
+                utils.save_movie(dirname_movie, pred_perm[0][b].data, pred_perm[1][b].data, pred_perm[2][b].data)
 
         del inputs, actions, targets, pred_
 

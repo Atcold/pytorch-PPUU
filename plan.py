@@ -28,10 +28,9 @@ parser.add_argument('-opt_a', type=int, default=1)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v4/policy_networks/')
-parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il_v4')
-parser.add_argument('-mfile', type=str, default='mbil-layers=3-nfeature=256-nhidden=256-npred=100-mfile=model=fwd-cnn-ten-layers=3-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=256-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=0.model-costcoeff=0.1-seed=1.model')
-#parser.add_argument('-mfile', type=str, default='mbil-layers=3-nfeature=256-nhidden=256-mfile=model=fwd-cnn-ten-layers=3-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=256-combine=add-nz=32-beta=0.0-dropout=0.5-gclip=1.0-warmstart=0.model-seed=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/policy_networks/')
+parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il_v6')
+parser.add_argument('-mfile', type=str, default='mbil-nfeature=256-npred=100-lambdac=0.0-lambdah=0.0-lanecost=0.1-tprop=0-gamma=0.997-curr=10-subs=10-seed=1.model')
 
 opt = parser.parse_args()
 
@@ -57,10 +56,12 @@ opt.opt_a = (opt.opt_a == 1)
 # load the model
 def load_model():
     importlib.reload(models)
-    model = torch.load(opt.model_dir + opt.mfile)
+    model = torch.load(opt.model_dir + opt.mfile)['model']
     model.intype('gpu')
     stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
     model.stats=stats
+    model.policy_net1.stats = stats
+    model.policy_net2.stats = stats
     if hasattr(model, 'policy_net'):
         model.policy_net.stats = stats
     if 'ten' in opt.mfile and False:
@@ -71,9 +72,9 @@ def load_model():
         model.knn_indx = graph.get('knn_indx')
         model.knn_dist = graph.get('knn_dist')
         model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
-    return model
+    return model, stats
 
-model = load_model()
+model, data_stats = load_model()
 
 gym.envs.registration.register(
     id='Traffic-v3',
@@ -83,11 +84,6 @@ gym.envs.registration.register(
 
 print('Building the environment (loading data, if any)')
 env = gym.make('Traffic-v' + opt.v)
-
-
-# load the dataset
-#dataloader = DataLoader(None, opt, opt.dataset)
-
 
 
 total_cost_test = 0
@@ -107,7 +103,9 @@ for j in range(n_batches):
         env.reset()
         inputs = None
         done = False
-        images, states, costs, actions = [], [], [], []        
+        images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
+        cntr = 0
+        actions_context = None
         while not done:
             if inputs is None:
                 print('[finding valid input]')
@@ -118,9 +116,15 @@ for j in range(n_batches):
             if 'policy' in opt.mfile:
                 _, _, _, a = model(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, unnormalize=True)
             elif 'mbil' in opt.mfile:
-#                a = model.compute_action_policy_net(inputs, opt)
-                a = model.policy_net(inputs[0].contiguous(), inputs[1].contiguous(), sample=True, normalize=True)
+                input_images = inputs[0].contiguous()
+                input_states = inputs[1].contiguous()
+                if cntr % model.opt.actions_subsample == 0:
+                    print('new context vector')
+                    actions_context, entropy, _, _ = model.policy_net2(input_images, input_states, normalize_inputs=True, normalize_outputs=False)
+                a, entropy, mu, std = model.policy_net1(input_images, input_states, context=actions_context, sample=True, normalize_inputs=True, normalize_outputs=True)
+                print(entropy.data)
                 a = a.cpu().view(1, 2).numpy()
+                cntr += 1
             else:
                 a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
             cost_test = 0
@@ -133,7 +137,10 @@ for j in range(n_batches):
                 images.append(inputs[0][-1])
                 states.append(inputs[1][-1])
                 costs.append([cost[0][-1], cost[1][-1]])
-                actions.append(a[t])
+#                actions.append(a[t])
+                actions.append(((a[t]-data_stats['a_mean'].numpy())/data_stats['a_std']))
+                mu_list.append(mu.data.cpu().numpy())
+                std_list.append(std.data.cpu().numpy())
                 t += 1
             costs_ = numpy.stack(costs)
             print('[true costs: ({:.4f}, {:.4f})]'.format(costs_[:, 0].mean(), costs_[:, 1].mean()))
@@ -144,8 +151,10 @@ for j in range(n_batches):
         states = numpy.stack(states)
         costs = numpy.stack(costs)
         actions = numpy.stack(actions)
+        mu_list = numpy.stack(mu_list)
+        std_list = numpy.stack(std_list)
         cost_test = costs[:, 0].mean() + 0.5*costs[:, 1].mean()
-        utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, actions, pytorch=False)
+        utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, actions=actions, mu=mu_list, std=std_list, pytorch=False)
         if 'ten' in opt.mfile and ('mbil' not in opt.mfile):
             for i in range(opt.n_rollouts):
                 utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)

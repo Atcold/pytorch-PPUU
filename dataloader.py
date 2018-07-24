@@ -13,7 +13,7 @@ class DataLoader():
         self.random.seed(12345) # use this so that the same batches will always be picked
 
         if dataset == 'i80':
-            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v2/'
+            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v{}/'.format(opt.v)
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
@@ -40,15 +40,12 @@ class DataLoader():
                     for f in glob.glob(data_dir + '{}/car*.pkl'.format(df)):
                         print('[loading {}]'.format(f))
                         fd = pickle.load(open(f, 'rb'))
-                        try:
-                            T = fd.get('actions').size(0)
-                            self.data += [{'images': fd.get('images'), 
-                                           'actions': fd.get('actions'), 
-                                           'costs': torch.cat((fd.get('proximity_cost').view(-1,1), fd.get('lane_cost')[:T].view(-1,1)), 1), 
-                                           'states': fd.get('states'),
-                                           'proximity_cost': fd.get('proximity_cost')}]
-                        except:
-                            pdb.set_trace()
+                        T = fd.get('actions').size(0)
+                        self.data += [{'images': fd.get('images'), 
+                                       'actions': fd.get('actions'), 
+                                       'costs': torch.cat((fd.get('pixel_proximity_cost')[:T].view(-1,1), fd.get('lane_cost')[:T].view(-1,1)), 1), 
+                                       'states': fd.get('states'),
+                                       'pixel_proximity_cost': fd.get('pixel_proximity_cost')}]
                         
                     images = []
                     actions = []
@@ -211,6 +208,7 @@ class DataLoader():
 
         actions = actions[:, (self.opt.ncond-1):(self.opt.ncond+npred-1)].float().contiguous()
         input_images = images[:, :self.opt.ncond].float().contiguous()
+#        input_actions = actions[:, :(self.opt.ncond-1)].float().contiguous()
         input_states = states[:, :self.opt.ncond].float().contiguous()
         target_images = images[:, self.opt.ncond:(self.opt.ncond+npred)].float().contiguous()
         target_states = states[:, self.opt.ncond:(self.opt.ncond+npred)].float().contiguous()

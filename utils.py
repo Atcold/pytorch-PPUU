@@ -30,20 +30,79 @@ def combine(x, y, method):
     elif method == 'mult':
         return x * y
 
-def format_losses(loss_i, loss_s, loss_c, loss_p, split):
-    log_string = ''
+def format_losses(loss_i, loss_s, loss_c, loss_p=None, loss_p2=None, split='train'):
+    log_string = ' '
     log_string += '{} loss ['.format(split)
     log_string += 'i: {:.5f}, '.format(loss_i)
     log_string += 's: {:.5f}, '.format(loss_s)
-    log_string += 'c: {:.5f}, '.format(loss_c)
+    log_string += 'c: {:.5f}'.format(loss_c)
     if loss_p is not None:
-        log_string += 'p: {:.5f}] '.format(loss_p)
+        log_string += ', p: {:.5f}'.format(loss_p)
+    if loss_p2 is not None:
+        log_string += ', p2: {:.5f}'.format(loss_p2)
+    log_string += ']'
     return log_string
 
+def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
+    targets = [targets_[i] for i in range(0, 3)]
+    # speed up
+    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_.data[:, :, 0].fill_(std)
+    pred_speed, _ = model(inputs, actions_, targets)
+    for p in pred_speed:
+        if p is not None:
+            p.detach()
+    model.zero_grad()
+    for b in range(min(actions.size(0), 10)):
+        movie_dir = '{}/pred_speed/mov{}/'.format(mdir, b)
+        save_movie(movie_dir, pred_speed[0][b].data, pred_speed[1][b].data, pred_speed[2][b].data, actions[b].data)
+    del pred_speed, _
+
+    # brake
+    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_.data[:, :, 0].fill_(-std)
+    pred_brake, _ = model(inputs, actions_, targets)
+    for p in pred_brake:
+        if p is not None:
+            p.detach()
+    model.zero_grad()
+    for b in range(min(actions.size(0), 10)):
+        movie_dir = '{}/pred_brake/mov{}/'.format(mdir, b)
+        save_movie(movie_dir, pred_brake[0][b].data, pred_brake[1][b].data, pred_brake[2][b].data, actions[b].data)
+    del pred_brake, _
+
+    # turn left
+    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_.data[:, :, 1].fill_(std)
+    pred_left, _ = model(inputs, actions_, targets)
+    for p in pred_left:
+        if p is not None:
+            p.detach()
+    model.zero_grad()
+    for b in range(min(actions.size(0), 10)):
+        movie_dir = '{}/pred_left/mov{}/'.format(mdir, b)
+        save_movie(movie_dir, pred_left[0][b].data, pred_left[1][b].data, pred_left[2][b].data, actions[b].data)
+    del pred_left, _
+
+    # turn right
+    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_.data[:, :, 1].fill_(-std)
+    pred_right, _ = model(inputs, actions_, targets)
+    for p in pred_right:
+        if p is not None:
+            p.detach()
+    model.zero_grad()
+    for b in range(min(actions.size(0), 10)):
+        movie_dir = '{}/pred_right/mov{}/'.format(mdir, b)
+        save_movie(movie_dir, pred_right[0][b].data, pred_right[1][b].data, pred_right[2][b].data, actions[b].data)
+    del pred_right, _
 
 
-def save_movie(dirname, images, states, costs, actions=None, pytorch=True):
+def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, pytorch=True):
     os.system('mkdir -p ' + dirname)
+    print('[saving movie to {}]'.format(dirname))
+    mu = mu.squeeze()
+    std = std.squeeze()
     if pytorch:
         images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy() * 255
     for t in range(images.shape[0]):
@@ -59,6 +118,17 @@ def save_movie(dirname, images, states, costs, actions=None, pytorch=True):
             text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
         if actions is not None:
             text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
+#            x = int(img.shape[1]/2 + mu[t][1] * 100) 
+#            y = int(img.shape[0]/2 + mu[t][0] * 100) 
+            x = int(img.shape[1]/2 + mu[t][1] * 30) 
+            y = int(img.shape[0]/2 + mu[t][0] * 30) 
+
+            ex = max(3, int(std[t][1] * 100))
+            ey = max(3, int(std[t][0] * 100))
+            bbox =  (x - ex, y - ey, x + ex, y + ey)
+            draw.ellipse(bbox, fill=(200, 200, 200))
+#            pdb.set_trace()
+#            pdb.set_trace()
         draw.text((10, 130*5-10), text, (255,255,255))
         img = numpy.asarray(pil)
         scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)
