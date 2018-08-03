@@ -81,12 +81,17 @@ class RealCar(Car):
             return direction_vector / norm
         if what == 'speed':
             return norm / self._dt
-        if what == 'init_direction':  # median over first half-second of trajectory
-            steps = min(5, len(self._trajectory) - 1)
-            dir_vectors = self._trajectory[1:steps + 1] - self._trajectory[:steps]
-            thetas = np.arctan2(dir_vectors[:,1], dir_vectors[:,0])
-            theta_median = np.median(thetas)
-            return np.array((np.cos(theta_median), np.sin(theta_median)))
+        if what == 'init_direction':  # valid direction can be computed when speed is non-zero
+            t = 1  # check if the car is in motion the next step
+            while self._df.at[self._df.index[t], 'Vehicle Velocity'] < 5 and t < self._max_t: t += 1
+            # t point to the point in time where speed is > 5
+            direction_vector = self._trajectory[t] - self._trajectory[t - 1]
+            norm = np.linalg.norm(direction_vector)
+            # assert norm > 1e-6, f'norm: {norm} -> too small!'
+            if norm < 1e-6:
+                print(f'{self} has undefined direction, assuming horizontal')
+                return np.array((1, 0), dtype=np.float)
+            return direction_vector / norm
 
     # This was trajectories replay (to be used as ground truth, without any policy and action generation)
     # def step(self, action):
