@@ -23,9 +23,12 @@ class RealCar(Car):
     SCALE = SCALE
     LANE_W = LANE_W
     X_OFFSET = X_OFFSET
+    max_a = 40
+    max_b = 0.01
 
     def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
         self._k = kernel  # running window size
+        self._max_t = len(df) - kernel - 2
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
@@ -97,7 +100,7 @@ class RealCar(Car):
 
     def policy(self, observation, **kwargs):
         self._frame += 1
-        self.off_screen = self._frame >= len(self._df) - self._k - 2
+        self.off_screen = self._frame >= self._max_t
 
         new_speed = self._get('speed', self._frame)
         a = (new_speed - self._speed) / self._dt
@@ -109,12 +112,22 @@ class RealCar(Car):
         #     b = self._speed * np.sign(b)
 
         # From an analysis of the action histograms -> limit a, b to sensible range
-        max_a = 40
-        max_b = 0.01 * (25 / self._length) ** 2
-        a = a if abs(a) < max_a else np.sign(a) * max_a
-        b = b if abs(b) < max_b else np.sign(b) * max_b
+        a, b = self.action_clipping(a, b)
+
+        # # Colour code for identifying trajectory divergence
+        # measurement = self._trajectory[self._frame]
+        # current_position = self._position
+        # distance = min(np.linalg.norm(current_position - measurement) / (2 * LANE_W) * 255, 255)
+        # self._colour = (distance, 255 - distance, 0)
 
         return np.array((a, b))
+
+    def action_clipping(self, a, b):
+        max_a = self.max_a
+        max_b = self.max_b * min((25 / self._length) ** 2, 1)
+        a = a if abs(a) < max_a else np.sign(a) * max_a
+        b = b if abs(b) < max_b else np.sign(b) * max_b
+        return a, b
 
     @property
     def current_lane(self):
@@ -196,6 +209,7 @@ class RealTraffic(StatefulEnv):
 
     @staticmethod
     def _get_data_frame(file_name, x_max, x_offset):
+        print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
