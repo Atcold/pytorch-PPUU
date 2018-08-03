@@ -9,6 +9,7 @@ import numpy as np
 import pdb, random
 import bisect
 import pdb, pickle, os
+from tqdm import tqdm
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -24,6 +25,7 @@ class LankerCar(RealCar):
     SCALE = SCALE
     LANE_W = LANE_W
     X_OFFSET = X_OFFSET
+    max_b = 0.05  # set a looser max turning limitation
 
     @property
     def current_lane(self):
@@ -70,9 +72,11 @@ class Lankershim(RealTraffic):
         self._t_slot = None
         self._black_list = {
             self._time_slots[0]:
-                set(),
+                {128, 65, 995, 1124, 377, 810, 1003, 172, 335, 591,  # off track (OT)
+                 560, 1173, 1399, 1437, 153, 890, 1308, 1405, 413, 639},  # OT
             self._time_slots[1]:
-                set(),
+                {1539, 772, 517, 267, 396, 1164, 1421, 1549, 530, 664, 1570, 1059, 804, 169, 812, 1453, 48, 53,  # OT
+                 1469, 1600, 1472, 1474, 451, 580, 1478, 584, 212, 1492, 1114, 228, 233, 625, 1394, 1268, 1023},  # OT
         }
         self.df = None
         self.vehicles_history = None
@@ -84,6 +88,7 @@ class Lankershim(RealTraffic):
 
     @staticmethod
     def _get_data_frame(file_name, x_max, x_offset):
+        print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
@@ -112,7 +117,7 @@ class Lankershim(RealTraffic):
         ))
 
         # Get valid x coordinate rows
-        valid_x = (df['Local Y'] * FOOT * SCALE - x_offset).between(0, x_max)
+        valid_x = (df['Local Y'] * FOOT * SCALE - x_offset).between(0, x_max).values
 
         # Restrict data frame to valid x coordinates
         return df[valid_x]

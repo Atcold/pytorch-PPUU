@@ -232,8 +232,8 @@ class Car:
             #     pygame.draw.rect(surface, (128, 255, 0),
             #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
 
-            if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
-            if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
+            # if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
+            # if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
 
             _r = draw_rect(surface, self._colour, rectangle, d)
 
