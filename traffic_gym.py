@@ -229,8 +229,8 @@ class Car:
             # Highlight colliding vehicle / debugging purpose
             # if self.collisions_per_frame > 0:
             #     print(f'Accident! Check vehicle {self}')
-            #     pygame.draw.rect(surface, (128, 255, 0),
-            #                      (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
+            #     larger_rectangle = (*((x, y) - self._direction * 10), self._length + 10 + 10, self._width + 10 + 10,)
+            #     draw_rect(surface, colours['g'], larger_rectangle, d, 2)
 
             # if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
             # if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
@@ -422,7 +422,7 @@ class Car:
         d = self._direction
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
-        centre = self._position + (self._length // 2, 0)
+        centre = self._position + (d * self._length) // 2
         sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, theta)
@@ -450,21 +450,22 @@ class Car:
 
         # Compute x/y minimum distance to other vehicles (pixel version)
         # Create separable proximity mask
-        max_x = np.ceil((surf_w - self._length) / 2)
-        max_y = np.ceil((surf_h - self._width) / 2)
+        crop_h, crop_w, _ = sub_rot_array.shape
+        max_x = np.ceil((crop_w - self._length) / 2)
+        max_y = np.ceil((crop_h - self._width) / 2)
         min_x = max(np.ceil(max_x - self.safe_distance), 0)
-        min_y = np.ceil(surf_h / 2 - self._width)  # assumes other._width / 2 = self._width / 2
-        x_filter = (1 - abs(np.linspace(-1, 1, surf_w))) * surf_w / 2  # 45 degree
+        min_y = np.ceil(crop_h / 2 - self._width)  # assumes other._width / 2 = self._width / 2
+        x_filter = (1 - abs(np.linspace(-1, 1, crop_w))) * crop_w / 2  # 45 degree
         x_filter[x_filter > max_x] = max_x  # chop off top
         x_filter[x_filter < min_x] = min_x  # chop off bottom
         x_filter = (x_filter - min_x) / (max_x - min_x)  # normalise
-        y_filter = (1 - abs(np.linspace(-1, 1, surf_h))) * surf_h / 2  # 45 degree
+        y_filter = (1 - abs(np.linspace(-1, 1, crop_h))) * crop_h / 2  # 45 degree
         y_filter[y_filter > max_y] = max_y  # chop off top
         y_filter[y_filter < min_y] = min_y  # chop off bottom
         y_filter = (y_filter - min_y) / (max_y - min_y)  # normalise
         proximity_mask = y_filter.reshape(-1, 1) @ x_filter.reshape(1, -1)
         # Compute cost
-        vehicles = pygame.surfarray.array3d(rot_surface).transpose(1, 0, 2)[:, :, 1]  # flip x and y, get green
+        vehicles = sub_rot_array[:, :, 1]  # flip x and y, get green
         proximity_cost = (vehicles * proximity_mask).max() / 255
 
         # # Draw boxes, for visualisation purpose
