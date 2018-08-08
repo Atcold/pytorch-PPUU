@@ -509,7 +509,7 @@ class Car:
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
         if len(transpose) == 0:
-            print('failure, {}'.format(save_dir))
+            print(f'failure, {save_dir}')
             # print(transpose)
             return
         im = transpose[0]
@@ -522,7 +522,7 @@ class Car:
             mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
-            with open(os.path.join(save_dir, 'car{}.pkl'.format(self.id)), 'wb') as f:
+            with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
                 pickle.dump({
                     'images': im_pth,
                     'actions': torch.stack(self._actions),
@@ -536,7 +536,7 @@ class Car:
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
             for t in range(len(im)):
-                imwrite('{}/im{:05d}.png'.format(save_dir, t), im[t].numpy())
+                imwrite(f'{save_dir}/im{t:05d}.png', im[t].numpy())
 
     @property
     def valid(self):
@@ -544,7 +544,7 @@ class Car:
 
     def __repr__(self) -> str:
         cls = self.__class__
-        return '{}.{}.{}'.format(cls.__module__, cls.__name__, self.id)
+        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 #        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 
 
@@ -622,7 +622,7 @@ class StatefulEnv(core.Env):
         self.next_car_id = 0
         self.mean_fps = None
         self.time_counter = 0
-        pygame.display.set_caption('Traffic simulator, episode {}, start from frame {}'.format(self.episode, self.frame))
+        pygame.display.set_caption(f'Traffic simulator, episode {self.episode}, start from frame {self.frame}')
         if control:
             self.controlled_car = {
                 'locked': False,
@@ -831,9 +831,9 @@ class StatefulEnv(core.Env):
             for v in self.vehicles:
                 v.draw(self.screen)
 
-            draw_text(self.screen, '# cars: {}'.format(len(self.vehicles)), (10, 2), font=self.font[30])
-            draw_text(self.screen, 'frame #: {}'.format(self.frame), (120, 2), font=self.font[30])
-            draw_text(self.screen, 'fps: {:.0f}'.format(self.mean_fps), (270, 2), font=self.font[30])
+            draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2), font=self.font[30])
+            draw_text(self.screen, f'frame #: {self.frame}', (120, 2), font=self.font[30])
+            draw_text(self.screen, f'fps: {self.mean_fps:.0f}', (270, 2), font=self.font[30])
 
             pygame.display.flip()
 

@@ -282,11 +282,11 @@ class RealTraffic(StatefulEnv):
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.look_ahead = self.look_ahead
-                    print('Controlling car {}'.format(car.id))
+                    print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print('\r[t={}]'.format(self.frame), end='')
+        print(f'\r[t={self.frame}]', end='')
 
         for v in self.vehicles[:]:
             if v.off_screen:
@@ -299,7 +299,7 @@ class RealTraffic(StatefulEnv):
             else:
                 # Insort it in my vehicle list
                 lane_idx = v.current_lane
-                assert v.current_lane < self.nb_lanes, '{} is in lane {} at frame {}'.format(v, v.current_lane, self.frame)
+                assert v.current_lane < self.nb_lanes, f'{v} is in lane {v.current_lane} at frame {self.frame}'
                 bisect.insort(self.lane_occupancy[lane_idx], v)
 
         if self.state_image or self.controlled_car and self.controlled_car['locked']:
