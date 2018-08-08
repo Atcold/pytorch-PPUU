@@ -449,10 +449,12 @@ class Car:
         lane_cost = (lanes * lane_mask).max() / 255
 
         # Compute x/y minimum distance to other vehicles (pixel version)
+        # Account for 1 metre overlap (low data accuracy)
+        alpha = 1 * self.SCALE  # 1 m overlap collision
         # Create separable proximity mask
         crop_h, crop_w, _ = sub_rot_array.shape
-        max_x = np.ceil((crop_w - self._length) / 2)
-        max_y = np.ceil((crop_h - self._width) / 2)
+        max_x = np.ceil((crop_w - max(self._length - alpha, 0)) / 2)
+        max_y = np.ceil((crop_h - max(self._width - alpha, 0)) / 2)
         min_x = max(np.ceil(max_x - self.safe_distance), 0)
         min_y = np.ceil(crop_h / 2 - self._width)  # assumes other._width / 2 = self._width / 2
         x_filter = (1 - abs(np.linspace(-1, 1, crop_w))) * crop_w / 2  # 45 degree
