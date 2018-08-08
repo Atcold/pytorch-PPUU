@@ -228,7 +228,6 @@ class Car:
 
             # Highlight colliding vehicle / debugging purpose
             # if self.collisions_per_frame > 0:
-            #     print(f'Accident! Check vehicle {self}')
             #     larger_rectangle = (*((x, y) - self._direction * 10), self._length + 10 + 10, self._width + 10 + 10,)
             #     draw_rect(surface, colours['g'], larger_rectangle, d, 2)
 

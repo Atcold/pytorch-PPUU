@@ -264,6 +264,10 @@ class RealTraffic(StatefulEnv):
                 new_vehicles -= self._black_list[self._t_slot]  # clean up fuckers
         self.frame = frame
         self.vehicles_history = set()
+        # # Account for off-track vehicles
+        # with open('off_track.pkl', 'rb') as f:
+        #     self.off_track = pickle.load(f)
+        # self.off_track = set()
 
     def step(self, policy_action=None):
 
@@ -339,6 +343,14 @@ class RealTraffic(StatefulEnv):
             if v.is_controlled and v.valid:
                 v.count_collisions(state)
                 if v.collisions_per_frame > 0: self.collision = True
+
+            # # Create set of off track vehicles
+            # if v._colour[0] > 128:  # one lane away
+            #     if v.id not in self.off_track:
+            #         print(f'Adding {v} to off_track set and saving it to disk')
+            #         self.off_track.add(v.id)
+            #         with open('off_track.pkl', 'wb') as f:
+            #             pickle.dump(self.off_track, f)
 
         self.frame += 1
 
