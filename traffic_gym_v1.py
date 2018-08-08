@@ -141,20 +141,26 @@ class RealCar(Car):
 
     def count_collisions(self, state):
         self.collisions_per_frame = 0
-        alpha = 1 * self.SCALE  # 1 m overlap collision
-        for cars in state:
-            if cars:
-                behind, ahead = cars
-                if behind:
-                    d = self - behind
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
-                        self.collisions_per_frame += 1
-                        # print('Collision {}/6, behind, vehicle {}'.format(self.collisions_per_frame, behind.id))
-                if ahead:
-                    d = ahead - self
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
-                        self.collisions_per_frame += 1
-                        # print('Collision {}/6, ahead, vehicle {}'.format(self.collisions_per_frame, ahead.id))
+        # alpha = 1 * self.SCALE  # 1 m overlap collision
+        # for cars in state:
+        #     if cars:
+        #         behind, ahead = cars
+        #         if behind:
+        #             d = self - behind
+        #             if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
+        #                 self.collisions_per_frame += 1
+        #                 # print(f'Collision {self.collisions_per_frame}/6, behind, vehicle {behind.id}')
+        #         if ahead:
+        #             d = ahead - self
+        #             if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
+        #                 self.collisions_per_frame += 1
+        #                 # print(f'Collision {self.collisions_per_frame}/6, ahead, vehicle {ahead.id}')
+
+        beta = 0.99
+        if self._states_image and self._states_image[-1][2] > beta:
+            self.collisions_per_frame += 1
+            # print(f'Collision registered for vehicle {self}')
+            print(f'Accident! Check vehicle {self}. Proximity of {self._states_image[-1][2]}.')
 
 
 class RealTraffic(StatefulEnv):

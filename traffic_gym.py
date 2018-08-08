@@ -418,7 +418,7 @@ class Car:
         if state[2][1] and (state[2][1] - self)[0] < self.safe_distance: return False
         return True
 
-    def _get_observation_image(self, m, screen_surface, width_height, scale):
+    def _get_observation_image(self, m, screen_surface, width_height, scale, global_frame):
         d = self._direction
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
@@ -470,6 +470,16 @@ class Car:
         vehicles = sub_rot_array[:, :, 1]  # flip x and y, get green
         proximity_cost = (vehicles * proximity_mask).max() / 255
 
+        # Inspecting collisions
+        # if proximity_cost > 0.99:
+        #     with open(f'scratch/collisions/{self}-{self._frame}.pkl', 'wb') as f:
+        #         pickle.dump({
+        #             'vehicles': vehicles,
+        #             'proximity_mask': proximity_mask,
+        #             'proximity_cost': proximity_cost,
+        #             'sub_rot_array': sub_rot_array,
+        #         }, f)
+
         # # Draw boxes, for visualisation purpose
         # # init as: env.reset(time_interval=1, frame=2510, control=False)
         # if self.id in (1033, 987, 992, 958, 961):
@@ -483,7 +493,7 @@ class Car:
 
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
-        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost
+        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
 
     def store(self, object_name, object_):
         if object_name == 'action':
@@ -518,6 +528,7 @@ class Car:
         if mode == 'tensor':
             lane_cost = torch.Tensor(transpose[1])
             pixel_proximity_cost = torch.Tensor(transpose[2])
+            frames = np.array(transpose[3])
             zip_ = list(zip(*self._states))
             proximity_cost = torch.Tensor(zip_[2])
             states = torch.stack(zip_[0])
@@ -533,6 +544,7 @@ class Car:
                     'states': states,
                     'proximity_cost': proximity_cost,
                     'mask': mask,
+                    'frames': frames,
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -889,7 +901,7 @@ class StatefulEnv(core.Env):
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
                     vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
-                    v.store('state_image', (max_extension, vehicle_surface, width_height, scale))
+                    v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
 
             # # save surface as image, for visualisation only
             # pygame.image.save(vehicle_surface, "vehicle_surface.png")
