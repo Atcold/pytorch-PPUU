@@ -165,6 +165,7 @@ class RealTraffic(StatefulEnv):
     SCALE = SCALE
     LANE_W = LANE_W
     X_OFFSET = X_OFFSET
+    DUMP_NAME = 'data_i80_v0'
 
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6
@@ -291,8 +292,8 @@ class RealTraffic(StatefulEnv):
             if v.off_screen:
                 # print(f'vehicle {v.id} [off screen]')
                 if self.state_image and self.store:
-                    file_name = os.path.join('scratch/data/data_us101_v0/', os.path.basename(self._t_slot))
-                    print('[dumping {}]'.format(file_name))
+                    file_name = os.path.join('scratch/data', self.DUMP_NAME, os.path.basename(self._t_slot))
+                    print(f'[dumping {v} in {file_name}]')
                     v.dump_state_image(file_name, 'tensor')
                 self.vehicles.remove(v)
             else:

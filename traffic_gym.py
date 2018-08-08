@@ -555,6 +555,7 @@ class StatefulEnv(core.Env):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
+    DUMP_NAME = 'data_ai_v0'
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0):

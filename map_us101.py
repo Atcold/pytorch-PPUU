@@ -39,6 +39,7 @@ class US101(RealTraffic):
     SCALE = SCALE
     LANE_W = LANE_W
     X_OFFSET = X_OFFSET
+    DUMP_NAME = 'data_us101_v0'
 
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 5
