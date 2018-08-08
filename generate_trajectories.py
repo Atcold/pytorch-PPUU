@@ -13,7 +13,6 @@ parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-lanes', type=int, default=3)
 parser.add_argument('-traffic_rate', type=int, default=15)
-parser.add_argument('-n_episodes', type=int, default=1000)
 parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
@@ -76,15 +75,10 @@ env_names = {
 print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
+env.reset(frame=0, time_slot=opt.time_slot)
+done = False
+while not done:
+    observation, reward, done, info = env.step()
+    env.render()
 
-def run_episode():
-    env.reset(frame=0, time_slot=opt.time_slot)
-    while True:
-        env.step(None)
-        env.render()
-
-
-episodes = []
-for i in range(opt.n_episodes):
-    run_episode()
-    episodes += runs
+print(f'Data generation for <{opt.map}, time slot {opt.time_slot}> completed')

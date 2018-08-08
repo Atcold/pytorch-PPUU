@@ -502,7 +502,7 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last(self, n):
+    def get_last(self, n, done):
         if len(self._states_image) < n: return None
         transpose = list(zip(*self._states_image))
         im = transpose[0]
@@ -514,7 +514,7 @@ class Car:
         lane_cost = torch.Tensor(transpose[1][-n:])
         pixel_proximity_cost = torch.Tensor(transpose[2][-n:])
         cost = (proximity_cost, lane_cost, self.collisions_per_frame, pixel_proximity_cost)
-        return observation, cost, self.off_screen, self
+        return observation, cost, self.off_screen or done, self
 
     def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
