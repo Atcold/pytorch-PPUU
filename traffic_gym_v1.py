@@ -254,7 +254,7 @@ class RealTraffic(StatefulEnv):
         super().reset(control=(frame is None))
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0], self.X_OFFSET)
-        self.max_frame = self.df.loc[self.df.index[-1], 'Frame ID']
+        self.max_frame = max(self.df['Frame ID'])
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
