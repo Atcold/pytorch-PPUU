@@ -571,7 +571,7 @@ class StatefulEnv(core.Env):
     DUMP_NAME = 'data_ai_v0'
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
-                 policy_type='hardcoded', nb_states=0):
+                 policy_type='hardcoded', nb_states=0, data_dir=''):
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -600,6 +600,7 @@ class StatefulEnv(core.Env):
         self.time_counter = None
         self.controlled_car = None
         self.nb_states = nb_states
+        self.data_dir = data_dir
 
         self.display = display
         if self.display:  # if display is required

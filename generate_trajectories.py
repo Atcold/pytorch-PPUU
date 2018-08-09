@@ -16,7 +16,7 @@ parser.add_argument('-traffic_rate', type=int, default=15)
 parser.add_argument('-state_image', type=int, default=1)
 parser.add_argument('-save_images', type=int, default=0)
 parser.add_argument('-store', type=int, default=1)
-parser.add_argument('-data_dir', type=str, default='scratch/data/')
+parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/')
 parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
 parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker'})
@@ -38,6 +38,7 @@ kwargs = {
     'fps': opt.fps,
     'nb_lanes': opt.lanes,
     'traffic_rate': opt.traffic_rate,
+    'data_dir': opt.data_dir,
 }
 
 register(

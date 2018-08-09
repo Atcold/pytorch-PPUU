@@ -67,8 +67,8 @@ class Lankershim(RealTraffic):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self._time_slots = (
-            './data_lanker/trajectories-0830am-0845am',
-            './data_lanker/trajectories-0845am-0900am'
+            './traffic-data/xy-trajectories/lanker/trajectories-0830am-0845am',
+            './traffic-data/xy-trajectories/lanker/trajectories-0845am-0900am',
         )
         self._t_slot = None
         self._black_list = {
