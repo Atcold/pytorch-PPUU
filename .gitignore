@@ -15,3 +15,5 @@ data_i80
 .DS_Store
 __pycache__
 *pth
+*err
+traffic-data
