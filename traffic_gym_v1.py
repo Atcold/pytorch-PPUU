@@ -221,7 +221,8 @@ class RealTraffic(StatefulEnv):
         self.max_frame = -1
 
     @staticmethod
-    def _get_data_frame(file_name, x_max, x_offset):
+    def _get_data_frame(time_slot, x_max, x_offset):
+        file_name = time_slot  + '.txt'
         print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
@@ -253,7 +254,7 @@ class RealTraffic(StatefulEnv):
     def reset(self, frame=None, time_slot=None):
         super().reset(control=(frame is None))
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
-        self.df = self._get_data_frame(self._t_slot + '.txt', self.screen_size[0], self.X_OFFSET)
+        self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
