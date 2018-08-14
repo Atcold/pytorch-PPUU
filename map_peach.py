@@ -45,27 +45,27 @@ class Peachtree(RealTraffic):
         super(RealTraffic, self).__init__(**kwargs)
 
         w = (640, 624, 472, 688, 456, 472, 752, 280)
-        self.screen_size = (sum(w[-8:]) - 270, 20 * self.LANE_W)
-        self.photos = (
-            pygame.image.load('Peachtree/cam8.png'),
-            pygame.image.load('Peachtree/cam7.png'),
-            pygame.image.load('Peachtree/cam6.png'),
-            pygame.image.load('Peachtree/cam5.png'),
-            pygame.image.load('Peachtree/cam4.png'),
-            pygame.image.load('Peachtree/cam3.png'),
-            pygame.image.load('Peachtree/cam2.png'),
-            pygame.image.load('Peachtree/cam1.png'),
-        )
-        self.photos_rect = (
-            self.photos[0].get_rect().move([0, 25]),
-            self.photos[1].get_rect().move([w[-1] - 25, 25]),
-            self.photos[2].get_rect().move([sum(w[-2:]) - 30, 25]),
-            self.photos[3].get_rect().move([sum(w[-3:]) - 35, 25]),
-            self.photos[4].get_rect().move([sum(w[-4:]) - 120, 25]),
-            self.photos[5].get_rect().move([sum(w[-5:]) - 220, 25]),
-            self.photos[5].get_rect().move([sum(w[-6:]) - 230, 25]),
-            self.photos[5].get_rect().move([sum(w[-7:]) - 270, 25]),
-        )
+        self.screen_size = (sum(w[-8:]) - 270, 315)
+        # self.photos = (
+        #     pygame.image.load('Peachtree/cam8.png'),
+        #     pygame.image.load('Peachtree/cam7.png'),
+        #     pygame.image.load('Peachtree/cam6.png'),
+        #     pygame.image.load('Peachtree/cam5.png'),
+        #     pygame.image.load('Peachtree/cam4.png'),
+        #     pygame.image.load('Peachtree/cam3.png'),
+        #     pygame.image.load('Peachtree/cam2.png'),
+        #     pygame.image.load('Peachtree/cam1.png'),
+        # )
+        # self.photos_rect = (
+        #     self.photos[0].get_rect().move([0, 25]),
+        #     self.photos[1].get_rect().move([w[-1] - 25, 25]),
+        #     self.photos[2].get_rect().move([sum(w[-2:]) - 30, 25]),
+        #     self.photos[3].get_rect().move([sum(w[-3:]) - 35, 25]),
+        #     self.photos[4].get_rect().move([sum(w[-4:]) - 120, 25]),
+        #     self.photos[5].get_rect().move([sum(w[-5:]) - 220, 25]),
+        #     self.photos[5].get_rect().move([sum(w[-6:]) - 230, 25]),
+        #     self.photos[5].get_rect().move([sum(w[-7:]) - 270, 25]),
+        # )
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
@@ -76,9 +76,11 @@ class Peachtree(RealTraffic):
         self._t_slot = None
         self._black_list = {
             self._time_slots[0]:
-                set(),
+                {256, 137, 11, 1293, 399, 1551, 794, 556, 942, 562, 307, 1077, 694, 188, 63, 705, 451, 579, 1098, 605,
+                 606, 95, 225, 611, 997, 107, 1643, 366, 624, 245, 255},  # off track
             self._time_slots[1]:
-                set(),
+                {391, 1037, 399, 404, 1459, 948, 1206, 440, 314, 1339, 829, 577, 962, 67, 219, 861, 863, 991, 358, 998,
+                 246, 1022, 127},  # off track
         }
         self.df = None
         self.vehicles_history = None
@@ -145,19 +147,17 @@ class Peachtree(RealTraffic):
 
         if mode == 'human':
 
-            # # load lanes, if not already done so
-            # if mode not in self._lane_surfaces:
-            #     self._lane_surfaces[mode] = pygame.image.load('Lankershim/lanes_human.png')
-            #
-            # surface.blit(self._lane_surfaces[mode], (0, 0))
-            pass
+            # load lanes, if not already done so
+            if mode not in self._lane_surfaces:
+                self._lane_surfaces[mode] = pygame.image.load('Peachtree/lanes_human.png')
+
+            surface.blit(self._lane_surfaces[mode], (0, 0))
 
         if mode == 'machine':
 
             # load lanes
-            lanes_surface = pygame.image.load('Lankershim/lanes_machine.png')
+            lanes_surface = pygame.image.load('Peachtree/lanes_machine.png')
             surface.blit(lanes_surface, (offset, offset))
 
             # save for later
             self._lane_surfaces[mode] = surface.copy()
-            # pygame.image.save(surface, "us101-machine.png")
