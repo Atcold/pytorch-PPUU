@@ -19,7 +19,7 @@ parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/')
 parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
-parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker'})
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -65,11 +65,18 @@ gym.envs.registration.register(
     kwargs=kwargs,
 )
 
+gym.envs.registration.register(
+    id='Peachtree-v0',
+    entry_point='map_peach:Peachtree',
+    kwargs=kwargs,
+)
+
 env_names = {
     'ai': 'Traffic-v0',
     'i80': 'Traffic-v1',
     'us101': 'US-101-v0',
     'lanker': 'Lankershim-v0',
+    'peach': 'Peachtree-v0',
 }
 
 print('Building the environment (loading data, if any)')
