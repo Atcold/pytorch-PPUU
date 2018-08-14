@@ -86,7 +86,7 @@ class Peachtree(RealTraffic):
         # self._lane_surfaces = dict()
         # self.nb_lanes = 1
         self.smoothing_window = 15
-        self.offset = -180
+        self.offset = None  # data is fucked up here, fixing it in the custom reset method
 
     def reset(self, frame=None, time_slot=None):
         super().reset(frame, time_slot)
@@ -129,7 +129,8 @@ class Peachtree(RealTraffic):
         # Invert coordinates (IDK WTF is going on with these trajectories)
         max_x = df['Local Y'].max()
         max_y = df['Local X'].max()
-        df['Local Y'] = max_x + 30 - df['Local Y']
+        extra_offset = 30 if time_slot == 0 else 17
+        df['Local Y'] = max_x + extra_offset - df['Local Y']
         df['Local X'] = max_y - df['Local X']
 
         # Dropping cars with lifespan shorter than 5 second
