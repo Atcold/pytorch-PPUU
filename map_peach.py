@@ -1,7 +1,8 @@
 from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
-from traffic_gym_v1 import RealTraffic, RealCar, colours
+from map_lanker import LankerCar
+from traffic_gym_v1 import RealTraffic, colours
 from traffic_gym import StatefulEnv
 import pygame
 import pandas as pd
@@ -20,17 +21,12 @@ X_OFFSET = 0  # horizontal offset (camera 2 leftmost view)
 MAX_SPEED = 130
 
 
-class PeachCar(RealCar):
+class PeachCar(LankerCar):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
     X_OFFSET = X_OFFSET
     max_b = 0.05  # set a looser max turning limitation
-
-    @property
-    def current_lane(self):
-        # 1: left-most, 5: right-most, 6: auxiliary lane, 7: on-ramp, 8: off-ramp
-        return 0
 
 
 class Peachtree(RealTraffic):
