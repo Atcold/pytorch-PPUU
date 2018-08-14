@@ -88,6 +88,10 @@ class Peachtree(RealTraffic):
         self.smoothing_window = 15
         self.offset = -180
 
+    def reset(self, frame=None, time_slot=None):
+        super().reset(frame, time_slot)
+        self.offset = -180 if time_slot == 0 else -15
+
     def _get_data_frame(self, time_slot, x_max, x_offset):
         file_name = time_slot + '.txt'
         print(f'Loading trajectories from {file_name}')
@@ -127,6 +131,11 @@ class Peachtree(RealTraffic):
         max_y = df['Local X'].max()
         df['Local Y'] = max_x + 30 - df['Local Y']
         df['Local X'] = max_y - df['Local X']
+
+        # Dropping cars with lifespan shorter than 5 second
+        baby_cars = set(df[df['Total Frames'] < 50]['Vehicle ID'])
+        print(f'Removing {len(baby_cars)} baby vehicles from the database')
+        self._black_list[time_slot] |= baby_cars
 
         # Restrict data frame to valid x coordinates
         return df
