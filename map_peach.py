@@ -137,10 +137,6 @@ class Peachtree(RealTraffic):
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
-        slope = 0.07
-
-        lanes = self.lanes  # lanes
-
         if mode == 'human':
 
             # # load lanes, if not already done so
