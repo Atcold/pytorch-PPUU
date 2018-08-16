@@ -7,25 +7,25 @@ class DataLoader():
         if opt.debug == 1:
             single_shard = True
         self.opt = opt
-        self.data = []
-        self.dataset = dataset
         self.random = random.Random()
         self.random.seed(12345) # use this so that the same batches will always be picked
 
         if dataset == 'i80':
             data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v{}/'.format(opt.v)
+            data_dir = './traffic-data/state-action-cost/data_i80_v0'
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
             else:
-                data_files = ['trajectories-0400-0415/', 
-                              'trajectories-0500-0515/', 
+                data_files = ['trajectories-0400-0415/',
+                              'trajectories-0500-0515/',
                               'trajectories-0515-0530/']
 
             self.images = []
             self.actions = []
             self.costs = []
             self.states = []
+            self.ids = []
             for df in data_files:
                 combined_data_path = data_dir + '{}/all_data.pth'.format(df)
                 if os.path.isfile(combined_data_path):
@@ -37,31 +37,38 @@ class DataLoader():
                     self.states += data.get('states')
                 else:
                     print(data_dir)
-                    for f in glob.glob(data_dir + '{}/car*.pkl'.format(df)):
-                        print('[loading {}]'.format(f))
-                        fd = pickle.load(open(f, 'rb'))
-                        T = fd.get('actions').size(0)
-                        self.data += [{'images': fd.get('images'), 
-                                       'actions': fd.get('actions'), 
-                                       'costs': torch.cat((fd.get('pixel_proximity_cost')[:T].view(-1,1), fd.get('lane_cost')[:T].view(-1,1)), 1), 
-                                       'states': fd.get('states'),
-                                       'pixel_proximity_cost': fd.get('pixel_proximity_cost')}]
-                        
                     images = []
                     actions = []
                     costs = []
                     states = []
-                    for run in self.data:
-                        images.append(run.get('images'))
-                        actions.append(run.get('actions'))
-                        costs.append(run.get('costs'))
-                        states.append(run.get('states'))
-                    torch.save({'images': images, 'actions': actions, 'costs': costs, 'states': states}, combined_data_path)
+                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
+                    for f in ids:
+                        print('[loading {}]'.format(f))
+                        fd = pickle.load(open(f, 'rb'))
+                        Ta = fd['actions'].size(0)
+                        Tp = fd['pixel_proximity_cost'].size(0)
+                        Tl = fd['lane_cost'].size(0)
+                        # assert Ta == Tp == Tl
+                        if not(Ta == Tp == Tl): pdb.set_trace()
+                        images.append(fd['images'])
+                        actions.append(fd['actions'])
+                        costs.append(torch.cat((fd.get('pixel_proximity_cost')[:T].view(-1,1), fd.get('lane_cost')[:T].view(-1,1)), 1),)
+                        states.append(fd['states'])
+
+                    torch.save({
+                        'images': images,
+                        'actions': actions,
+                        'costs': costs,
+                        'states': states,
+                        'ids': ids,
+                    }, combined_data_path)
                     self.images += images
                     self.actions += actions
                     self.costs += costs
                     self.states += states
-
+                    self.ids += ids
+        else
+            assert False, 'Data set not supported'
 
             self.n_episodes = len(self.images)
             self.n_train = int(math.floor(self.n_episodes * 0.9))
@@ -70,44 +77,18 @@ class DataLoader():
             splits_path = data_dir + '/splits.pth'
             if os.path.exists(splits_path):
                 print('[loading data splits: {}]'.format(splits_path))
-                self.splits = torch.load(splits_path)                
+                self.splits = torch.load(splits_path)
                 self.train_indx = self.splits.get('train_indx')
                 self.valid_indx = self.splits.get('valid_indx')
                 self.test_indx = self.splits.get('test_indx')
             else:
                 print('[generating data splits]')
+                np.random.seed(0)
                 perm = numpy.random.permutation(self.n_episodes)
                 self.train_indx = perm[0:self.n_train]
                 self.valid_indx = perm[self.n_train+1:self.n_train+self.n_valid]
                 self.test_indx = perm[self.n_train+self.n_valid+1:self.n_train+self.n_valid+self.n_test]
                 torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
-
-        elif dataset == 'simulator':        
-            for i in range(opt.nshards):
-                f = '{}/traffic_data_lanes={}-episodes={}-seed={}.pkl'.format(opt.data_dir, opt.lanes, opt.n_episodes, i+1)
-                print('[loading {}]'.format(f))
-                self.data += pickle.load(open(f, 'rb'))
-
-            self.images = []
-            self.states = []
-            self.actions = []
-            self.masks = []
-            for run in self.data:
-                self.images.append(run.get('images'))
-                self.actions.append(run.get('actions'))
-                self.states.append(run.get('states'))
-                self.masks.append(run.get('masks'))
-
-        
-            self.n_episodes = len(self.images)
-            print('Number of episodes: {}'.format(self.n_episodes))
-            self.n_train = int(math.floor(self.n_episodes * 0.9))
-            self.n_valid = int(math.floor(self.n_episodes * 0.05))
-            self.n_test = int(math.floor(self.n_episodes * 0.05))
-            self.train_indx = range(0, self.n_train)
-            self.valid_indx = range(self.n_train+1, self.n_train+self.n_valid)
-            self.test_indx = range(self.n_train+self.n_valid+1, self.n_episodes)        
-            self.test_indx_iterator = 0
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
@@ -132,16 +113,13 @@ class DataLoader():
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
-            torch.save({'a_mean': self.a_mean, 
-                        'a_std': self.a_std, 
-                        's_mean': self.s_mean, 
+            torch.save({'a_mean': self.a_mean,
+                        'a_std': self.a_std,
+                        's_mean': self.s_mean,
                         's_std': self.s_std}, stats_path)
 
-
-
-
     # get batch to use for forward modeling
-    # a sequence of ncond given states, a sequence of npred actions, 
+    # a sequence of ncond given states, a sequence of npred actions,
     # and a sequence of npred states to be predicted
     def get_batch_fm(self, split, npred=-1, cuda=True):
         if self.opt.debug == 1 and False:
@@ -151,7 +129,7 @@ class DataLoader():
             input_images = torch.randn(self.opt.batch_size, self.opt.ncond, 3, self.opt.height, self.opt.width)
             actions = torch.randn(self.opt.batch_size, self.opt.npred, self.opt.n_actions)
             target_images = torch.randn(self.opt.batch_size, self.opt.npred, 3, self.opt.height, self.opt.width)
-            return input_images.cuda(), actions.cuda(), target_images.cuda(), None, None 
+            return input_images.cuda(), actions.cuda(), target_images.cuda(), None, None
 
         if split == 'train':
             indx = self.train_indx
@@ -180,7 +158,7 @@ class DataLoader():
                 states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 nb += 1
-                            
+
         images = torch.stack(images).float()
         images.div_(255.0)
 
@@ -219,6 +197,6 @@ class DataLoader():
             input_images = input_images.cpu()
             actions = actions.cpu()
             target_images = target_images.cpu()
-            
+
         return [input_images, input_states], actions, [target_images, target_states, target_costs]
 
