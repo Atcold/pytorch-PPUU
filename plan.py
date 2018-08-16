@@ -28,9 +28,10 @@ parser.add_argument('-opt_a', type=int, default=1)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/policy_networks/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/policy_networks_il/')
 parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_il_v6')
-parser.add_argument('-mfile', type=str, default='mbil-nfeature=256-npred=100-lambdac=0.0-lambdah=0.0-lanecost=0.1-tprop=0-gamma=0.997-curr=10-subs=10-seed=1.model')
+#parser.add_argument('-mfile', type=str, default='mbil-nfeature=256-npred=100-lambdac=0.0-lambdah=0.0-lanecost=0.1-tprop=0-gamma=0.997-curr=10-subs=10-seed=1.model')
+parser.add_argument('-mfile', type=str, default='mbil-nfeature=256-npred=100-lambdac=0.0-lambdah=0.0-lanecost=0.1-tprop=0-gamma=0.997-curr=10-subs=10-cdim=2-lossc=1-seed=1.model')
 
 opt = parser.parse_args()
 
@@ -56,7 +57,7 @@ opt.opt_a = (opt.opt_a == 1)
 # load the model
 def load_model():
     importlib.reload(models)
-    model = torch.load(opt.model_dir + opt.mfile)['model']
+    model = torch.load(opt.model_dir + opt.mfile)#['model']
     model.intype('gpu')
     stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
     model.stats=stats

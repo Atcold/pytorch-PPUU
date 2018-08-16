@@ -15,7 +15,7 @@ parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=16)
-parser.add_argument('-ncond', type=int, default=10)
+parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-nz', type=int, default=32)
 parser.add_argument('-npred', type=int, default=50)
 parser.add_argument('-nfeature', type=int, default=128)

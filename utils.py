@@ -9,6 +9,26 @@ from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
+
+
+def plot_mean_and_CI(mean, lb, ub, color_mean=None, color_shading=None):
+    # plot the shaded range of the confidence intervals                                                                                                                                                   
+    time_steps = [i+3 for i in range(len(mean))]
+    plt.fill_between(time_steps, ub, lb,
+                     color=color_shading, alpha=0.2)
+    # plot the mean on top                                                                                                                                                                                
+    plt.plot(time_steps, mean, color_mean)
+
+
+def mean_confidence_interval(data, confidence=0.95):
+    n = data.shape[0]
+    m, se = numpy.mean(data, 0), scipy.stats.sem(data, 0)
+    h = numpy.std(data, 0)
+#    h = se * scipy.stats.t._ppf((1+confidence)/2., n-1)
+    return m, m-h, m+h
+
+
+
 # Logging function
 def log(fname, s):
     if not os.path.isdir(os.path.dirname(fname)):
@@ -101,8 +121,11 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
 def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, pytorch=True):
     os.system('mkdir -p ' + dirname)
     print('[saving movie to {}]'.format(dirname))
-    mu = mu.squeeze()
-    std = std.squeeze()
+    if mu is not None:
+        mu = mu.squeeze()
+        std = std.squeeze()
+    else:
+        mu = actions
     if pytorch:
         images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy() * 255
     for t in range(images.shape[0]):
@@ -118,17 +141,16 @@ def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, 
             text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
         if actions is not None:
             text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
-#            x = int(img.shape[1]/2 + mu[t][1] * 100) 
-#            y = int(img.shape[0]/2 + mu[t][0] * 100) 
-            x = int(img.shape[1]/2 + mu[t][1] * 30) 
-            y = int(img.shape[0]/2 + mu[t][0] * 30) 
+            x = int(images[t].shape[1]*5/2 - mu[t][1] * 30) 
+            y = int(images[t].shape[0]*5/2 - mu[t][0] * 30) 
 
-            ex = max(3, int(std[t][1] * 100))
-            ey = max(3, int(std[t][0] * 100))
+            if std is not None:
+                ex = max(3, int(std[t][1] * 100))
+                ey = max(3, int(std[t][0] * 100))
+            else:
+                ex, ey = 3, 3
             bbox =  (x - ex, y - ey, x + ex, y + ey)
             draw.ellipse(bbox, fill=(200, 200, 200))
-#            pdb.set_trace()
-#            pdb.set_trace()
         draw.text((10, 130*5-10), text, (255,255,255))
         img = numpy.asarray(pil)
         scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)
@@ -190,6 +212,17 @@ def hinge_loss(u, z):
     loss = torch.mean(loss)
     return loss
 
+# second represents the prior
+def kl_criterion(mu1, logvar1, mu2, logvar2):
+    # KL( N(mu_1, sigma2_1) || N(mu_2, sigma2_2)) = 
+    #   log( sqrt(
+    # 
+    bsize = mu1.size(0)
+    sigma1 = logvar1.mul(0.5).exp() 
+    sigma2 = logvar2.mul(0.5).exp() 
+    kld = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+    return kld.sum()/bsize
+
 
 def log_sum_exp(value, dim=None, keepdim=False):
     """Numerically stable implementation of the operation
@@ -211,13 +244,15 @@ def log_sum_exp(value, dim=None, keepdim=False):
         else:
             return m + torch.log(sum_exp)
 
+
+
 # inputs are:
 # pi: categorical distribution over mixture components
 # mu: means of mixture components
 # sigma: variances of mixture components (note, all mixture components are assumed to be diagonal)
 # y: points to evaluate the negative-log-likelihood of, under the model determined by these parameters
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
-    minsigma = sigma.min().data[0]
+    minsigma = sigma.min().item()
     assert(minsigma >= 0, '{} < 0'.format(minsigma))
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)

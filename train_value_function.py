@@ -19,13 +19,14 @@ parser.add_argument('-model', type=str, default='policy-cnn-mdn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/policy_networks_il_local/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/value_functions/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
-parser.add_argument('-ncond', type=int, default=10)
-parser.add_argument('-npred', type=int, default=20)
+parser.add_argument('-ncond', type=int, default=20)
+parser.add_argument('-npred', type=int, default=200)
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=64)
+parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-dropout', type=float, default=0.0)
 parser.add_argument('-nfeature', type=int, default=256)
 parser.add_argument('-n_hidden', type=int, default=256)
@@ -33,7 +34,6 @@ parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-beta', type=float, default=0.1)
 parser.add_argument('-lrt', type=float, default=0.0001)
-parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-grad_clip', type=float, default=10)
@@ -55,23 +55,26 @@ os.system('mkdir -p ' + opt.model_dir)
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}'
-
-if 'vae' in opt.model or '-ten-' in opt.model:
-    opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'
+opt.model_file = f'{opt.model_dir}/model=value-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-gclip={opt.grad_clip}-dropout={opt.dropout}-gamma={opt.gamma}'
 
 print(f'[will save model as: {opt.model_file}]')
 
-if opt.warmstart == 0:
-    prev_model = ''
 
-policy = models.PolicyMDN(opt, npred=opt.npred)
-policy.intype('gpu')
+model = models.ValueFunction(opt)
+model.intype('gpu')
 
-optimizer = optim.Adam(policy.parameters(), opt.lrt)
+optimizer = optim.Adam(model.parameters(), opt.lrt)
+
+def last_state(targets):
+    images = targets[0]
+    states = targets[1]
+
+
+gamma_mask = Variable(torch.from_numpy(numpy.array([opt.gamma**t for t in range(opt.npred + 1)])).float().cuda()).unsqueeze(0).expand(opt.batch_size, opt.npred + 1)
+
 
 def train(nbatches):
-    policy.train()
+    model.train()
     total_loss, nb = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
@@ -79,13 +82,15 @@ def train(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pi, mu, sigma, _ = policy(inputs[0], inputs[1])
-        loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
+        v = model(inputs[0], inputs[1])
+        v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
+        cost = targets[2][:, :, 0]
+        v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
+        loss = F.mse_loss(v, Variable(v_target.data))
         if not math.isnan(loss.item()):
             loss.backward()
-#            print(utils.grad_norm(policy).item())
             if opt.grad_clip != -1:
-                torch.nn.utils.clip_grad_norm_(policy.parameters(), opt.grad_clip)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
             optimizer.step()
             total_loss += loss.item()
             nb += 1
@@ -93,22 +98,29 @@ def train(nbatches):
             print('warning, NaN')
     return total_loss / nb
 
+
 def test(nbatches):
-    policy.eval()
+    model.eval()
     total_loss, nb = 0, 0
     for i in range(nbatches):
+        optimizer.zero_grad()
         inputs, actions, targets = dataloader.get_batch_fm('valid')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pi, mu, sigma, _ = policy(inputs[0], inputs[1])
-        loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
+        v = model(inputs[0], inputs[1])
+        v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
+        cost = targets[2][:, :, 0]
+        v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
+        loss = F.mse_loss(v, Variable(v_target.data))
         if not math.isnan(loss.item()):
             total_loss += loss.item()
             nb += 1
         else:
             print('warning, NaN')
     return total_loss / nb
+
+
 
 
 
@@ -120,9 +132,9 @@ for i in range(100):
     valid_loss = test(opt.epoch_size)
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
-        policy.intype('cpu')
-        torch.save(policy, opt.model_file + '.model')
-        policy.intype('gpu')
+        model.intype('cpu')
+        torch.save(model, opt.model_file + '.model')
+        model.intype('gpu')
 
     log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)

@@ -15,5 +15,5 @@
 
 module load python-3.6
 cd ../
-srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -dataset $9 -p_dropout ${10} -n_mixture 1 -zeroact ${11} -layers ${12} -n_hidden ${13} -a_noise_penalty ${14} -batch_size ${15} -seed ${16}
+srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -dataset $9 -z_dropout ${10} -n_mixture 1 -zeroact ${11} -layers ${12} -n_hidden ${13} -a_noise_penalty ${14} -batch_size ${15} -seed ${16} -dropout ${17} -zmult ${18}
 

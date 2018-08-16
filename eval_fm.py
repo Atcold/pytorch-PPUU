@@ -26,10 +26,11 @@ parser.add_argument('-n_batches', type=int, default=200)
 parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-n_action_seq', type=int, default=5)
 parser.add_argument('-sampling', type=str, default='fp')
+parser.add_argument('-noise', type=float, default=0.0)
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten-bsize=16-ncond=20-npred=20-lrt=0.0001-nhidden=100-nfeature=128-combine=add-nz=32-beta=0.001-dropout=0.0-ploss=hinge-zsphere=1-gclip=1.0-zeroact-warmstart=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
@@ -90,7 +91,7 @@ model.opt.npred = opt.npred
 
 
 if '-ten' in opt.mfile:
-    pzfile = opt.model_dir + opt.mfile + '_100000.pz'
+    pzfile = opt.model_dir + opt.mfile + '.pz'
     if os.path.isfile(pzfile):
         p_z = torch.load(pzfile)
         graph = torch.load(pzfile + '.graph')
@@ -146,7 +147,7 @@ for i in range(opt.n_batches):
         if opt.zeroact == 1:
             actions.data.zero_()
 
-        pred_, _= model(inputs, actions, targets, sampling=opt.sampling)
+        pred_, _= model(inputs, actions, targets, sampling=opt.sampling, noise=opt.noise)
         loss_i_s, loss_s_s, loss_c_s = compute_loss(targets, pred_, r=False)
         loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).data.cpu()
         loss_s[i, :, s] += loss_s_s.mean(2).data.cpu()
@@ -158,17 +159,37 @@ for i in range(opt.n_batches):
 
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
-                dirname_movie = '{}/videos/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                dirname_movie = '{}/videos/sampled_z/true_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
                 utils.save_movie(dirname_movie, pred_[0][b].data, pred_[1][b].data, pred_[2][b].data)
 
+        actions_perm = actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()]
+
         # also generate videos with different action sequences
-        pred_perm, _= model(inputs, actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()], targets, sampling=opt.sampling)
+        pred_perm, _= model(inputs, actions_perm, targets, sampling=opt.sampling, noise=opt.noise)
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
-                dirname_movie = '{}/videos/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                dirname_movie = '{}/videos/sampled_z/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
                 utils.save_movie(dirname_movie, pred_perm[0][b].data, pred_perm[1][b].data, pred_perm[2][b].data)
+
+
+        # also generate videos with true z vectors
+        if s == 0:
+            pred_true_z, _= model(inputs, actions, targets, noise=opt.noise)
+            for b in range(opt.batch_size):
+                dirname_movie = '{}/videos/true_z/true_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                print('[saving video: {}]'.format(dirname_movie), end="\r")
+                utils.save_movie(dirname_movie, pred_true_z[0][b].data, pred_true_z[1][b].data, pred_true_z[2][b].data)
+
+            pred_true_z_perm, _= model(inputs, actions_perm, targets, noise=opt.noise)
+            for b in range(opt.batch_size):
+                dirname_movie = '{}/videos/true_z/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
+                print('[saving video: {}]'.format(dirname_movie), end="\r")
+                utils.save_movie(dirname_movie, pred_true_z_perm[0][b].data, pred_true_z_perm[1][b].data, pred_true_z_perm[2][b].data)
+
+
+
 
         del inputs, actions, targets, pred_
 

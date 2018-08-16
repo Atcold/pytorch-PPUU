@@ -20,18 +20,19 @@ parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=64)
 parser.add_argument('-nfeature', type=int, default=256)
-parser.add_argument('-n_hidden', type=int, default=256)
+parser.add_argument('-n_hidden', type=int, default=128)
 parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-sigmoid_out', type=int, default=1)
 parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
 parser.add_argument('-a_noise_penalty', type=float, default=0.0)
 parser.add_argument('-ploss', type=str, default='hinge')
-parser.add_argument('-p_dropout', type=float, default=0.0, help='set z=0 with this probability')
+parser.add_argument('-z_dropout', type=float, default=0.0, help='set z=0 with this probability')
+parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
 parser.add_argument('-nz', type=int, default=32)
 parser.add_argument('-n_mixture', type=int, default=10)
 parser.add_argument('-z_sphere', type=int, default=0)
@@ -45,6 +46,7 @@ parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-combine', type=str, default='add')
+parser.add_argument('-zmult', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
@@ -58,12 +60,12 @@ dataloader = DataLoader(None, opt, opt.dataset)
 
 
 # define model file name
-opt.model_file = f'{opt.model_dir}/model={opt.model}-layers={opt.layers}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-fgeom={opt.fmap_geom}-anoise={opt.a_noise_penalty}-zeroact={opt.zeroact}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-layers={opt.layers}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-fgeom={opt.fmap_geom}-zeroact={opt.zeroact}-zmult={opt.zmult}-dropout={opt.dropout}'
 
 if ('vae' in opt.model) or ('fwd-cnn-ten' in opt.model):
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
-    opt.model_file += f'-dropout={opt.p_dropout}'
+    opt.model_file += f'-zdropout={opt.z_dropout}'
 
 if ('fwd-cnn-ten' in opt.model) and opt.beta > 0:
     if opt.ploss == 'pdf':
@@ -102,11 +104,11 @@ elif opt.layers == 4:
 opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 mfile = opt.model_file + '.model'
-#mfile = '/home/mbhenaff/projects/pytorch-Traffic-Simulator/scratch/models_v6/model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-anoise=0.0-zeroact=0-nz=32-beta=0.0-dropout=0.0-gclip=5.0-warmstart=0.model'
 if os.path.isfile(mfile):
     print(f'[loading previous checkpoint: {mfile}]')
     checkpoint = torch.load(mfile)
     model = checkpoint['model']
+    model.cuda()
     optimizer = optim.Adam(model.parameters(), opt.lrt)
     optimizer.load_state_dict(checkpoint['optimizer'])
     n_iter = checkpoint['n_iter']
@@ -115,22 +117,28 @@ else:
     # create new model
     # specify deterministic model we use to initialize parameters with
     if opt.warmstart == 1:
-        prev_model = f'{opt.model_dir}/model=fwd-cnn3-layers={opt.layers}-bsize=64-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-nhidden=128-fgeom={opt.fmap_geom}-anoise=0.0-zeroact={opt.zeroact}-gclip=5.0-warmstart=0.model'
+        prev_model = f'{opt.model_dir}/model=fwd-cnn3-layers=3-bsize=64-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-nhidden=128-fgeom={opt.fmap_geom}-zeroact={opt.zeroact}-zmult={opt.zmult}-dropout={opt.dropout}-gclip=5.0-warmstart=0-seed=1.model'
     else:
         prev_model = ''
 
     if opt.model == 'fwd-cnn':
         model = models.FwdCNN(opt, mfile=prev_model)
-    if opt.model == 'fwd-cnn2':
+    elif opt.model == 'fwd-cnn2':
         model = models.FwdCNN2(opt, mfile=prev_model)
-    if opt.model == 'fwd-cnn3':
+    elif opt.model == 'fwd-cnn3':
         model = models.FwdCNN3(opt, mfile=prev_model)
+    elif opt.model == 'fwd-cnn3-stn':
+        model = models.FwdCNN3_STN(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-ten':
         model = models.FwdCNN_TEN(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-ten2':
         model = models.FwdCNN_TEN2(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-ten3':
         model = models.FwdCNN_TEN3(opt, mfile=prev_model)
+    elif opt.model == 'fwd-cnn-vae3-fp':
+        model = models.FwdCNN_VAE3(opt, mfile=prev_model)
+    elif opt.model == 'fwd-cnn-vae3-lp':
+        model = models.FwdCNN_VAE3(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-vae-fp':
         model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-vae-lp':
@@ -183,7 +191,7 @@ def perturbation_loss(inputs, actions, targets, pred):
     bsize = actions.size(0)
     npred = actions.size(1)
     noise = Variable(torch.randn(actions.size()).cuda())
-    pred_n, _ = model(inputs, actions + noise, targets, p_dropout=opt.p_dropout)
+    pred_n, _ = model(inputs, actions + noise, targets, z_dropout=opt.z_dropout)
     loss_i_n, loss_s_n, loss_c_n = compute_loss(pred, pred_n, r=False)
     pred_i = pred[0].view(bsize, npred, -1)
     pred_s = pred[1].view(bsize, npred, -1)
@@ -233,37 +241,26 @@ def train(nbatches, npred):
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
-        pred, loss_p = model(inputs, actions, targets, p_dropout=opt.p_dropout)
+        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
-        loss = loss_i + loss_s + loss_c
+        loss = loss_i + loss_s + loss_c + opt.beta*loss_p[0]
 
-        if opt.a_noise_penalty > 0.0:
-            # actions with noise added: we want the output of these to be different
-            loss_p = perturbation_loss(inputs, actions, targets, pred)
-            loss += opt.a_noise_penalty * loss_p
-        elif opt.adv_loss > 0.0:
-            z = pred[3]
-            loss_p = discriminator_loss(actions, z)
-            loss += opt.adv_loss * loss_p
-        elif opt.action_indep_net == 1:
-            loss += loss_p[1]
-#            loss += (opt.a_indep_lambda * loss_p[0]) + loss_p[1]
-
-        loss.backward(retain_graph=False)
-        torch.nn.utils.clip_grad_norm(model.parameters(), opt.grad_clip)
-        optimizer.step()
+        if not math.isnan(loss.item()):
+            loss.backward(retain_graph=False)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
+            optimizer.step()
 
         if opt.adv_loss > 0.0:
             z = pred[3]
             z.detach()
             loss_d, acc = train_discriminator(actions, z)
 
-        total_loss_i += loss_i.data[0]
-        total_loss_s += loss_s.data[0]
-        total_loss_c += loss_c.data[0]
-        total_loss_p += loss_p[0].data[0]
+        total_loss_i += loss_i.item()
+        total_loss_s += loss_s.item()
+        total_loss_c += loss_c.item()
+        total_loss_p += loss_p[0].item()
         if len(loss_p) > 1:
-            total_loss_p2 += loss_p[1].data[0]
+            total_loss_p2 += loss_p[1].item()
         del inputs, actions, targets
 
     total_loss_i /= nbatches
@@ -284,20 +281,18 @@ def test(nbatches):
         actions = Variable(actions)
         if opt.zeroact == 1:
             actions.data.zero_()
-        pred, loss_p = model(inputs, actions, targets, p_dropout=0)
+        pred, loss_p = model(inputs, actions, targets, z_dropout=0)
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
-#        loss_p = perturbation_loss(inputs, actions, targets, pred)
 
-        total_loss_i += loss_i.data[0]
-        total_loss_s += loss_s.data[0]
-        total_loss_c += loss_c.data[0]
-        total_loss_p += loss_p[0].data[0]
+        total_loss_i += loss_i.item()
+        total_loss_s += loss_s.item()
+        total_loss_c += loss_c.item()
+        total_loss_p += loss_p[0].item()
         if len(loss_p) > 1:
-            total_loss_p2 += loss_p[1].data[0]
+            total_loss_p2 += loss_p[1].item()
 
-        if i == 0 and opt.model_dir != 'tmp/':
+        if i == 0 and opt.model_dir != 'tmp/' and False: #TODO
             utils.test_actions(opt.model_file + '.mov/', model, inputs, actions, targets)
-
 
         del inputs, actions, targets
 

@@ -6,11 +6,12 @@ from mpl_toolkits.mplot3d import Axes3D
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=1)
+parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-nshards', type=int, default=1)
 parser.add_argument('-T', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=64)
 parser.add_argument('-lanes', type=int, default=8)
-parser.add_argument('-ncond', type=int, default=10)
+parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
@@ -43,9 +44,9 @@ for i in range(500):
     costs, min_dist, speed = get_data_stats(targets, costs, min_dist, speed)
 
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(min_dist, speed, costs, s=2)
+#fig = plt.figure()
+#ax = fig.add_subplot(111, projection='3d')
+#ax.scatter(min_dist, speed, costs, s=2)
 
 
 

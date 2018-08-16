@@ -18,8 +18,9 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
+parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v6/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=16)
 parser.add_argument('-batch_size', type=int, default=8)
@@ -28,9 +29,10 @@ parser.add_argument('-nfeature', type=int, default=256)
 parser.add_argument('-n_hidden', type=int, default=256)
 parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
 parser.add_argument('-p_dropout', type=float, default=0.0, help='set z=0 with this probability')
+parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
 parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-n_mixture', type=int, default=10)
-parser.add_argument('-context_dim', type=int, default=10)
+parser.add_argument('-context_dim', type=int, default=2)
 parser.add_argument('-actions_subsample', type=int, default=4)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=1.0)
@@ -39,13 +41,16 @@ parser.add_argument('-curriculum_length', type=int, default=16)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-targetprop', type=int, default=0)
+parser.add_argument('-loss_c', type=int, default=1)
 parser.add_argument('-lambda_c', type=float, default=0.0)
 parser.add_argument('-lambda_h', type=float, default=0.0)
 parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-anoise=0.0-zeroact=0-nz=32-beta=0.0-dropout=0.5-gclip=5.0-warmstart=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-anoise=0.0-zeroact=0-nz=32-beta=0.0-dropout=0.5-gclip=5.0-warmstart=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
+parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-test_only', type=int, default=0)
@@ -62,43 +67,55 @@ opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 os.system('mkdir -p ' + opt.model_dir + '/policy_networks/')
 
+random.seed(opt.seed)
+numpy.random.seed(opt.seed)
+torch.manual_seed(opt.seed)
+torch.cuda.manual_seed(opt.seed)
 
-opt.model_file = f'{opt.model_dir}/policy_networks/mbil-nfeature={opt.nfeature}-npred={opt.npred}-lambdac={opt.lambda_c}-lambdah={opt.lambda_h}-lanecost={opt.lambda_lane}-tprop={opt.targetprop}-gamma={opt.gamma}-curr={opt.curriculum_length}-subs={opt.actions_subsample}'
 
-if opt.targetprop == 1:
-    opt.model_file += f'-lrt={opt.lrt_traj}-niter={opt.niter_traj}'
 
-opt.model_file += f'-seed={opt.seed}'
+opt.model_file = f'{opt.model_dir}/policy_networks/'
+opt.model_file += f'mbil-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdac={opt.lambda_c}-gamma={opt.gamma}-seed={opt.seed}'
+
 print(f'[will save as: {opt.model_file}]')
 
-if os.path.isfile(opt.model_file + '.model'): 
+if os.path.isfile(opt.model_file + '.model') and False: 
     print('[found previous checkpoint, loading]')
     checkpoint = torch.load(opt.model_file + '.model')
     model = checkpoint['model']
-    optimizer1 = optim.Adam(model.policy_net1.parameters(), opt.lrt)
-    optimizer2 = optim.Adam(model.policy_net2.parameters(), opt.lrt)
-    optimizer1.load_state_dict(checkpoint['optimizer1'])
-    optimizer2.load_state_dict(checkpoint['optimizer2'])
+    optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
+    optimizer.load_state_dict(checkpoint['optimizer'])
     n_iter = checkpoint['n_iter']
-    utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
+    if opt.test_only == 0:
+        utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
 else:
     # load the model
     model = torch.load(opt.model_dir + opt.mfile)['model']
-    opt.fmap_geom = 1
     model.create_policy_net(opt)
     model.opt.actions_subsample = opt.actions_subsample
-    optimizer1 = optim.Adam(model.policy_net1.parameters(), opt.lrt)
-    optimizer2 = optim.Adam(model.policy_net2.parameters(), opt.lrt)
+    optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
     n_iter = 0
+    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
+    model.stats=stats
+    if 'ten' in opt.mfile:
+        pzfile = opt.model_dir + opt.mfile + '.pz'
+        p_z = torch.load(pzfile)
+        model.p_z = p_z
+
 
 if opt.actions_subsample == -1:
     opt.context_dim = 0
 
 model.intype('gpu')
+model.cuda()
 
 
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(None, opt, opt.dataset, seed=opt.seed)
+model.train()
+model.estimate_uncertainty_stats(dataloader, n_batches=10, npred=opt.npred)
+model.eval()
+
 
 
 
@@ -111,7 +128,7 @@ dataloader = DataLoader(None, opt, opt.dataset)
 
 def compute_loss(targets, predictions, gamma=1.0, r=True):
     target_images, target_states, target_costs = targets
-    pred_images, pred_states, pred_costs, entropy = predictions
+    pred_images, pred_states, pred_costs, loss_p = predictions
     loss_i = F.mse_loss(pred_images, target_images, reduce=False).mean(4).mean(3).mean(2)
     loss_s = F.mse_loss(pred_states, target_states, reduce=False).mean(2)
     loss_c = F.mse_loss(pred_costs, target_costs, reduce=False).mean(2)
@@ -119,43 +136,37 @@ def compute_loss(targets, predictions, gamma=1.0, r=True):
         loss_i *= gamma_mask
         loss_s *= gamma_mask
         loss_c *= gamma_mask
-    return loss_i.mean(), loss_s.mean(), loss_c.mean(), entropy.mean()
+    return loss_i.mean(), loss_s.mean(), loss_c.mean(), loss_p.mean()
 
 def train(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
     model.train()
-    model.policy_net1.train()
-    model.policy_net2.train()
-    total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_entropy, n_updates = 0, 0, 0, 0, 0, 0
+    model.policy_net.train()
+    total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
-        optimizer1.zero_grad()
-        optimizer2.zero_grad()
+        optimizer.zero_grad()
         inputs, actions, targets = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        if opt.targetprop == 0:
-            pred, _ = model.train_policy_net(inputs, targets)
-            loss_i, loss_s, _, entropy = compute_loss(targets, pred)
-            proximity_cost = pred[2][:, :, 0]
-            lane_cost = pred[2][:, :, 1]
-            proximity_cost = proximity_cost * Variable(gamma_mask)
-            lane_cost = lane_cost * Variable(gamma_mask)
-            loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
-            loss_policy = loss_i + loss_s + opt.lambda_c*loss_c - opt.lambda_h*entropy
-        else:
-            loss_i, loss_s, loss_c, loss_policy = model.train_policy_net_targetprop(inputs, targets, opt)
-        if not math.isnan(loss_policy.data[0]):
+        pred, _ = model.train_policy_net(inputs, targets, dropout=opt.p_dropout)
+        loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
+        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
+        proximity_cost = proximity_cost * Variable(gamma_mask)
+        lane_cost = lane_cost * Variable(gamma_mask)
+        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
+        loss_policy = loss_i + loss_s + opt.lambda_c*loss_c + opt.lambda_h*loss_p
+        if opt.loss_c == 1:
+            loss_policy += loss_c_
+        if not math.isnan(loss_policy.item()):
             loss_policy.backward()
-            torch.nn.utils.clip_grad_norm(model.policy_net1.parameters(), opt.grad_clip)
-            torch.nn.utils.clip_grad_norm(model.policy_net2.parameters(), opt.grad_clip)
-            optimizer1.step()
-            optimizer2.step()
-            total_loss_i += loss_i.data[0]
-            total_loss_s += loss_s.data[0]
-            total_loss_c += loss_c.data[0]
-            total_entropy += entropy.data[0]
-            total_loss_policy += loss_policy.data[0]
+            torch.nn.utils.clip_grad_norm(model.policy_net.parameters(), opt.grad_clip)
+            optimizer.step()
+            total_loss_i += loss_i.item()
+            total_loss_s += loss_s.item()
+            total_loss_c += loss_c.item()
+            total_loss_p += loss_p.item()
+            total_loss_policy += loss_policy.item()
             n_updates += 1
         else:
             print('warning, NaN')
@@ -166,37 +177,63 @@ def train(nbatches, npred):
     total_loss_s /= n_updates
     total_loss_c /= n_updates
     total_loss_policy /= n_updates
-    total_entropy /= n_updates
-    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_entropy
+    total_loss_p /= n_updates
+    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p
 
 
 def test(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
     model.eval()
-    total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_entropy, n_updates = 0, 0, 0, 0, 0, 0
+    total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
-        inputs, actions, targets = dataloader.get_batch_fm('valid', npred)
+        inputs, actions, targets = dataloader.get_batch_fm('test', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, pred_actions = model.train_policy_net(inputs, targets, targetprop = opt.targetprop)
-        if i == 0 and False:  #TODO
-            movie_dir = f'{opt.model_file}.mov/npred{npred}/'
-            utils.test_actions(movie_dir, model, inputs, pred_actions, pred)
+        pred, pred_actions = model.train_policy_net(inputs, targets, targetprop = opt.targetprop, dropout=0.0)
+        '''
+        if i == 0: 
+            for b in range(opt.batch_size):
+                movie_dir = f'{opt.model_file}.mov/npred{npred}/mov{b}/'
+                utils.save_movie(movie_dir, pred[0][b].data, pred[1][b].data, pred[2][b].data, actions=pred_actions[b].data)
+            del pred
+
+            pred_true, _= model(inputs, actions, targets)
+            for b in range(opt.batch_size):
+                movie_dir = f'{opt.model_file}.mov/trueact_npred{npred}/mov{b}/'
+                utils.save_movie(movie_dir, pred_true[0][b].data, pred_true[1][b].data, pred_true[2][b].data, actions=actions[b].data)
+            del pred_true
+
+
+            actions_zero = Variable(actions.clone().data.zero_())
+            pred_zero, _ = model(inputs, actions_zero, targets)
+            for b in range(opt.batch_size):
+                movie_dir = f'{opt.model_file}.mov/zeroact_npred{npred}/mov{b}/'
+                utils.save_movie(movie_dir, pred_zero[0][b].data, pred_zero[1][b].data, pred_zero[2][b].data, actions=actions_zero[b].data)
+            del pred_zero
+                
+            actions_perm = actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()]
+            pred_perm, _= model(inputs, actions_perm, targets)
+            for b in range(opt.batch_size):
+                movie_dir = f'{opt.model_file}.mov/permact_npred{npred}/mov{b}/'
+                utils.save_movie(movie_dir, pred_perm[0][b].data, pred_perm[1][b].data, pred_perm[2][b].data, actions=actions_perm[b].data)
+            del pred_perm
+        '''
             
-        loss_i, loss_s, _, entropy = compute_loss(targets, pred)
-        proximity_cost = pred[2][:, :, 0]
-        lane_cost = pred[2][:, :, 1]
+        loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
+        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
         proximity_cost = proximity_cost * Variable(gamma_mask)
         lane_cost = lane_cost * Variable(gamma_mask)
         loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
-        loss_policy = loss_i + loss_s + opt.lambda_c*loss_c - opt.lambda_h*entropy
-        if not math.isnan(loss_policy.data[0]):
-            total_loss_i += loss_i.data[0]
-            total_loss_s += loss_s.data[0]
-            total_loss_c += loss_c.data[0]
-            total_entropy += entropy.data[0]
-            total_loss_policy += loss_policy.data[0]
+        loss_policy = loss_i + loss_s + opt.lambda_c*loss_c + opt.lambda_h*loss_p
+        if opt.loss_c == 1:
+            loss_policy += loss_c_
+        if not math.isnan(loss_policy.item()):
+            total_loss_i += loss_i.item()
+            total_loss_s += loss_s.item()
+            total_loss_c += loss_c.item()
+            total_loss_p += loss_p.item()
+            total_loss_policy += loss_policy.item()
             n_updates += 1
         del inputs, actions, targets, pred
 
@@ -204,8 +241,8 @@ def test(nbatches, npred):
     total_loss_s /= n_updates
     total_loss_c /= n_updates
     total_loss_policy /= n_updates
-    total_entropy /= n_updates
-    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_entropy
+    total_loss_p /= n_updates
+    return total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p
         
 
 # set by hand to fit on 12gb GPU
@@ -228,8 +265,7 @@ def get_batch_size(npred):
 
 if opt.test_only == 1:
     print('[testing]')
-    valid_losses = test(10, 50)
-
+    valid_losses = test(10, 200)
 else:
     print('[training]')
     utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
@@ -243,8 +279,7 @@ else:
         n_iter += opt.epoch_size
         model.intype('cpu')
         torch.save({'model': model, 
-                    'optimizer1': optimizer1.state_dict(),
-                    'optimizer2': optimizer2.state_dict(),
+                    'optimizer': optimizer.state_dict(),
                     'opt': opt, 
                     'npred': npred, 
                     'n_iter': n_iter}, 

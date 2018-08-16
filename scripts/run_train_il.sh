@@ -5,12 +5,12 @@ rm *.out
 
 for model in policy-cnn-mdn; do 
     for lrt in 0.0001; do 
-        for nhidden in 128; do 
-            for ncond in 10 20; do 
-                for npred in 1 10; do 
+        for nhidden in 256; do 
+            for ncond in 20; do 
+                for npred in 20 50 100; do 
                     for nz in 0; do 
                         for beta in 1; do 
-                            for nmix in 1 10; do 
+                            for nmix in 1 10 50; do 
                                 sbatch submit_train_il.slurm $model $lrt $nhidden $ncond $npred $beta $nz $nmix
                             done
                         done
