@@ -193,9 +193,9 @@ class RealTraffic(StatefulEnv):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self._time_slots = (
-            './data_i80/trajectories-0400-0415',
-            './data_i80/trajectories-0500-0515',
-            './data_i80/trajectories-0515-0530',
+            './traffic-data/xy-trajectories/i80/trajectories-0400-0415',
+            './traffic-data/xy-trajectories/i80/trajectories-0500-0515',
+            './traffic-data/xy-trajectories/i80/trajectories-0515-0530',
         )
         self._t_slot = None
         self._black_list = {
