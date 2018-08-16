@@ -1,5 +1,5 @@
-from traffic_gym import StatefulEnv, Car
-from traffic_gym_v1 import RealTraffic
+from traffic_gym import Simulator, Car
+from map_i80 import I80
 import pygame
 
 # Conversion LANE_W from real world to pixels
@@ -38,7 +38,7 @@ class PatchedCar(Car):
             return {5, 6}
 
 
-class MergingMap(StatefulEnv):
+class MergingMap(Simulator):
     # Environment's car class
     EnvCar = PatchedCar
 
@@ -46,8 +46,8 @@ class MergingMap(StatefulEnv):
     SCALE = SCALE
     LANE_W = LANE_W
 
-    # Import map from RealTraffic
-    _draw_lanes = RealTraffic._draw_lanes
+    # Import map from Simulator
+    _draw_lanes = I80._draw_lanes
 
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6

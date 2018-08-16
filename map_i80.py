@@ -1,13 +1,13 @@
 from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
-from traffic_gym import StatefulEnv, Car, colours
+from traffic_gym import Simulator, Car, colours
 import pygame
 import pandas as pd
 import numpy as np
 import pdb, random
 import bisect
-import pdb, pickle, os
+import pdb, pickle, os, re
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -18,7 +18,7 @@ X_OFFSET = 470  # horizontal offset (camera 2 leftmost view)
 MAX_SPEED = 130
 
 
-class RealCar(Car):
+class I80Car(Car):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
@@ -163,9 +163,9 @@ class RealCar(Car):
             print(f'Accident! Check vehicle {self}. Proximity of {self._states_image[-1][2]}.')
 
 
-class RealTraffic(StatefulEnv):
+class I80(Simulator):
     # Environment's car class
-    EnvCar = RealCar
+    EnvCar = I80Car
 
     # Global constants
     SCALE = SCALE

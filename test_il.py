@@ -42,7 +42,7 @@ kwargs = {
 
 register(
     id='Traffic-v0',
-    entry_point='traffic_gym:StatefulEnv',
+    entry_point='traffic_gym:Simulator',
     kwargs=kwargs,
 )
 

@@ -43,13 +43,13 @@ kwargs = {
 
 register(
     id='Traffic-v0',
-    entry_point='traffic_gym:StatefulEnv',
+    entry_point='traffic_gym:Simulator',
     kwargs=kwargs
 )
 
 register(
-    id='Traffic-v1',
-    entry_point='traffic_gym_v1:RealTraffic',
+    id='I-80-v0',
+    entry_point='map_i80:I80',
     kwargs=kwargs
 )
 
@@ -73,7 +73,7 @@ gym.envs.registration.register(
 
 env_names = {
     'ai': 'Traffic-v0',
-    'i80': 'Traffic-v1',
+    'i80': 'I-80-v0',
     'us101': 'US-101-v0',
     'lanker': 'Lankershim-v0',
     'peach': 'Peachtree-v0',

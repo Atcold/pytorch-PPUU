@@ -10,7 +10,7 @@ from gym.envs.registration import register
 import scipy.misc
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-v', type=int, default=1)
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-lanes', type=int, default=8)
@@ -38,19 +38,43 @@ kwargs = {
 
 register(
     id='Traffic-v0',
-    entry_point='traffic_gym:StatefulEnv',
-    tags=tags,
+    entry_point='traffic_gym:Simulator',
     kwargs=kwargs
 )
 
 register(
-    id='Traffic-v1',
-    entry_point='traffic_gym_v1:RealTraffic',
-    tags=tags,
+    id='I-80-v0',
+    entry_point='map_i80:I80',
     kwargs=kwargs
 )
 
-env = gym.make('Traffic-v' + str(opt.v))
+gym.envs.registration.register(
+    id='US-101-v0',
+    entry_point='map_us101:US101',
+    kwargs=kwargs,
+)
+
+gym.envs.registration.register(
+    id='Lankershim-v0',
+    entry_point='map_lanker:Lankershim',
+    kwargs=kwargs,
+)
+
+gym.envs.registration.register(
+    id='Peachtree-v0',
+    entry_point='map_peach:Peachtree',
+    kwargs=kwargs,
+)
+
+env_names = {
+    'ai': 'Traffic-v0',
+    'i80': 'I-80-v0',
+    'us101': 'US-101-v0',
+    'lanker': 'Lankershim-v0',
+    'peach': 'Peachtree-v0',
+}
+
+env = gym.make(env_names[opt.map])
 
 
 mdir = 'dataset_i80/'

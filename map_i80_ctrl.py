@@ -1,8 +1,8 @@
-from traffic_gym_v1 import RealTraffic, RealCar
+from map_i80 import I80, I80Car
 from traffic_gym_v2 import PatchedCar
 
 
-class ControlledCar(RealCar):
+class ControlledI80Car(I80Car):
 
     # Import get_lane_set from PatchedCar
     get_lane_set = PatchedCar.get_lane_set
@@ -50,10 +50,10 @@ class ControlledCar(RealCar):
         return self.is_controlled and len(self._states_image) > self.buffer_size
 
 
-class ControlledI80(RealTraffic):
+class ControlledI80(I80):
 
     # Environment's car class
-    EnvCar = ControlledCar
+    EnvCar = ControlledI80Car
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -2,8 +2,8 @@ from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
 from map_lanker import LankerCar
-from traffic_gym_v1 import RealTraffic, colours
-from traffic_gym import StatefulEnv
+from map_i80 import I80, colours
+from traffic_gym import Simulator
 import pygame
 import pandas as pd
 import numpy as np
@@ -29,7 +29,7 @@ class PeachCar(LankerCar):
     max_b = 0.05  # set a looser max turning limitation
 
 
-class Peachtree(RealTraffic):
+class Peachtree(I80):
     # Environment's car class
     EnvCar = PeachCar
 
@@ -42,7 +42,7 @@ class Peachtree(RealTraffic):
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 1
         kwargs['delta_t'] = 1/10
-        super(RealTraffic, self).__init__(**kwargs)
+        super(I80, self).__init__(**kwargs)
 
         w = (640, 624, 472, 688, 456, 472, 752, 280)
         self.screen_size = (sum(w[-8:]) - 270, 315)

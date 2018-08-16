@@ -1,8 +1,8 @@
 from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
-from traffic_gym_v1 import RealTraffic, RealCar, colours
-from traffic_gym import StatefulEnv
+from map_i80 import I80, I80Car, colours
+from traffic_gym import Simulator
 import pygame
 import pandas as pd
 import numpy as np
@@ -19,7 +19,7 @@ X_OFFSET = 615  # horizontal offset (camera 2 leftmost view)
 MAX_SPEED = 130
 
 
-class US101Car(RealCar):
+class US101Car(I80Car):
     # Global constants
     SCALE = SCALE
     LANE_W = LANE_W
@@ -31,7 +31,7 @@ class US101Car(RealCar):
         return min(self._lane_list[self._frame], 6) - 1
 
 
-class US101(RealTraffic):
+class US101(I80):
     # Environment's car class
     EnvCar = US101Car
 
@@ -44,7 +44,7 @@ class US101(RealTraffic):
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 5
         kwargs['delta_t'] = 1/10
-        super(RealTraffic, self).__init__(**kwargs)
+        super(I80, self).__init__(**kwargs)
 
         self.screen_size = (125 * self.LANE_W, self.nb_lanes * self.LANE_W + 4 * self.LANE_W)
         # self.photos = (

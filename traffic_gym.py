@@ -561,7 +561,7 @@ class Car:
 #        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 
 
-class StatefulEnv(core.Env):
+class Simulator(core.Env):
     # Environment's car class
     EnvCar = Car
 

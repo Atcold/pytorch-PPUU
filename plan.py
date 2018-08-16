@@ -13,7 +13,7 @@ from torch.autograd import Variable
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-v', type=str, default='3')
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
 parser.add_argument('-seed', type=int, default=333333)
 # planning params
 parser.add_argument('-batch_size', type=int, default=1)
@@ -72,19 +72,23 @@ def load_model():
         model.p_z = p_z
         model.knn_indx = graph.get('knn_indx')
         model.knn_dist = graph.get('knn_dist')
-        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
+        model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)
     return model, stats
 
 model, data_stats = load_model()
 
 gym.envs.registration.register(
-    id='Traffic-v3',
-    entry_point='traffic_gym_v3:ControlledI80',
+    id='I-80-v1',
+    entry_point='map_i80_ctrl:ControlledI80',
     kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0},
 )
 
 print('Building the environment (loading data, if any)')
-env = gym.make('Traffic-v' + opt.v)
+env_names = {
+    'i80': 'I-80-v1',
+}
+
+env = gym.make(env_names[opt.map])
 
 
 total_cost_test = 0
@@ -127,7 +131,7 @@ for j in range(n_batches):
                 a = a.cpu().view(1, 2).numpy()
                 cntr += 1
             else:
-                a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+                a, pred, pred_const, _ = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=True, optimize_z=opt.opt_z, optimize_a=opt.opt_a)
             cost_test = 0
             print('[executing action sequence]')
             t = 0
@@ -164,7 +168,7 @@ for j in range(n_batches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = utils.Variable(actions)
-        a, pred, pred_const, cost_test = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=use_env, optimize_z=opt.opt_z, optimize_a=opt.opt_a)        
+        a, pred, pred_const, cost_test = model.plan_actions_backprop(inputs, opt, verbose=True, normalize=use_env, optimize_z=opt.opt_z, optimize_a=opt.opt_a)
         for i in range(4):
             movie_id = j*opt.batch_size + i
             utils.save_movie('tmp_zopt/pred_a_opt/movie{}/'.format(movie_id), pred[0][i].data, pred[1][i].data, pred[2][i].data)

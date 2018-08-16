@@ -11,7 +11,7 @@ parser.add_argument('-nb_predictions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-display', type=int, default=1)
-parser.add_argument('-v', type=str, default='3', choices={'3'})
+parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
 
 opt = parser.parse_args()
 
@@ -26,13 +26,17 @@ kwargs = {
 }
 
 gym.envs.registration.register(
-    id='Traffic-v3',
-    entry_point='traffic_gym_v3:ControlledI80',
+    id='I-80-v1',
+    entry_point='map_i80_ctrl:ControlledI80',
     kwargs=kwargs,
 )
 
+env_names = {
+    'i80': 'I-80-v1',
+}
+
 print('Building the environment (loading data, if any)')
-env = gym.make('Traffic-v' + opt.v)
+env = gym.make(env_names[opt.map])
 
 for episode in range(1000):
     env.reset()
@@ -43,5 +47,7 @@ for episode in range(1000):
         observation, reward, done, info = env.step(numpy.zeros((2,)))
         # print(observation, reward, done, info)
         env.render()
+
+    print('Episode completed!')
 
 print('Done')
