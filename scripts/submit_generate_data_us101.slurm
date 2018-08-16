@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=datagen
+#SBATCH --job-name=us101-datagen
 #SBATCH --time=24:00:00
 #SBATCH --gres gpu:0
 #SBATCH --exclude="rose5,rose6,vine5,vine11,vine3"
