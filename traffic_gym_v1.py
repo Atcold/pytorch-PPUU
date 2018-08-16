@@ -253,7 +253,7 @@ class RealTraffic(StatefulEnv):
 
     def reset(self, frame=None, time_slot=None):
         super().reset(control=(frame is None))
-        self._t_slot = self._time_slots[time_slot] if time_slot is not None else choice(self._time_slots)
+        self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
         if frame is None:  # controlled
