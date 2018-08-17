@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=train_fm
+#SBATCH --job-name=train_fm_det
 #SBATCH --output=logs/train_fm_%j.out
 #SBATCH --error=logs/train_fm_%j.err
 #SBATCH --time=48:00:00
@@ -11,9 +11,9 @@
 #SBATCH --nodes=1
 #SBATCH --mem=50000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=mbh305@nyu.edu
+#SBATCH --mail-user=canziani@nyu.edu
 
-module load python-3.6
+# module load python-3.6
 cd ../
-srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -dataset $9 -z_dropout ${10} -n_mixture 1 -zeroact ${11} -layers ${12} -n_hidden ${13} -a_noise_penalty ${14} -batch_size ${15} -seed ${16} -dropout ${17} -zmult ${18}
+srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -z_dropout ${9} -n_mixture 1 -zeroact ${10} -layers ${11} -n_hidden ${12} -batch_size ${13} -seed ${14} -dropout ${15} -zmult ${16}
 

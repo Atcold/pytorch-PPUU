@@ -17,10 +17,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-model', type=str, default='fwd-cnn')
+parser.add_argument('-model', type=str, default='fwd-cnn3')
 parser.add_argument('-layers', type=int, default=3)
-parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
+parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=64)
@@ -74,7 +74,7 @@ if ('fwd-cnn-ten' in opt.model) and opt.beta > 0:
         opt.z_sphere = 1
         opt.model_file += f'-ploss=hinge'
         opt.model_file += f'-zsphere={opt.z_sphere}'
-        
+
 
 if opt.grad_clip != -1:
     opt.model_file += f'-gclip={opt.grad_clip}'
@@ -84,7 +84,7 @@ if opt.adv_loss > 0.0:
 
 if opt.action_indep_net == 1:
     opt.model_file += f'-aindep={opt.a_indep_lambda}'
-    
+
 opt.model_file += f'-warmstart={opt.warmstart}'
 opt.model_file += f'-seed={opt.seed}'
 print(f'[will save model as: {opt.model_file}]')
@@ -150,14 +150,14 @@ model.intype('gpu')
 
 if opt.adv_loss > 0:
     discriminator = nn.Sequential(
-        nn.Linear(opt.n_actions + opt.nz, opt.n_hidden), 
-        nn.ReLU(), 
-        nn.Linear(opt.n_hidden, 1), 
+        nn.Linear(opt.n_actions + opt.nz, opt.n_hidden),
+        nn.ReLU(),
+        nn.Linear(opt.n_hidden, 1),
         nn.Sigmoid()
         )
     discriminator.cuda()
     optimizer_d = optim.Adam(discriminator.parameters(), opt.lrt_d)
-    
+
 # training and testing functions. We will compute several losses:
 # loss_i: images
 # loss_s: states
@@ -202,7 +202,7 @@ def perturbation_loss(inputs, actions, targets, pred):
     pred_s_norm = pred_s.norm(2, 2)
     pred_n_i_norm = pred_n_i.norm(2, 2)
     pred_n_s_norm = pred_n_s.norm(2, 2)
-    loss_n = (1.0 - loss_i_n / (pred_i_norm + pred_n_i_norm)) 
+    loss_n = (1.0 - loss_i_n / (pred_i_norm + pred_n_i_norm))
     loss_n *= noise_norm
 #    loss_n = -(loss_i_n/(pred_n_i.norm()+pred_i.norm()))
     return loss_n.mean()
@@ -302,7 +302,7 @@ def test(nbatches):
     total_loss_p /= nbatches
     total_loss_p2 /= nbatches
     return total_loss_i, total_loss_s, total_loss_c, total_loss_p, total_loss_p2
-        
+
 
 print('[training]')
 for i in range(200):
@@ -311,8 +311,8 @@ for i in range(200):
     valid_losses = test(int(opt.epoch_size / 2))
     n_iter += opt.epoch_size
     model.intype('cpu')
-    torch.save({'model': model, 
-                'optimizer': optimizer.state_dict(), 
+    torch.save({'model': model,
+                'optimizer': optimizer.state_dict(),
                 'n_iter': n_iter}, opt.model_file + '.model')
     if (n_iter/opt.epoch_size) % 10 == 0:
         torch.save(model, opt.model_file + f'.step{n_iter}.model')
