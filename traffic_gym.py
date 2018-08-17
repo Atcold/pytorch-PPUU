@@ -632,7 +632,7 @@ class Simulator(core.Env):
     def set_policy(self, policy_network):
         self.policy_network = policy_network
 
-    def reset(self, control=True):
+    def reset(self, control=True, **kwargs):
         # Initialise environment state
         self.frame = 0
         self.vehicles = list()
@@ -814,9 +814,8 @@ class Simulator(core.Env):
 
         self.frame += 1
 
-        obs = []
-        cost = 0
-        return obs, cost, self.vehicles
+        # return observation, reward, done, info
+        return None, None, False, self.vehicles
 
     def _get_neighbours(self, current_lane_idx, d_lane, v):
         # Shallow copy the target lane
