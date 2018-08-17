@@ -17,9 +17,9 @@ class DataLoader():
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
             else:
-                data_files = ['trajectories-0400-0415/',
-                              'trajectories-0500-0515/',
-                              'trajectories-0515-0530/']
+                data_files = ['trajectories-0400-0415',
+                              'trajectories-0500-0515',
+                              'trajectories-0515-0530']
 
             self.images = []
             self.actions = []
@@ -27,7 +27,7 @@ class DataLoader():
             self.states = []
             self.ids = []
             for df in data_files:
-                combined_data_path = data_dir + '{}/all_data.pth'.format(df)
+                combined_data_path = f'{data_dir}/{df}/all_data.pth'
                 if os.path.isfile(combined_data_path):
                     print('[loading data shard: {}]'.format(combined_data_path))
                     data = torch.load(combined_data_path)
@@ -48,13 +48,14 @@ class DataLoader():
                         Ta = fd['actions'].size(0)
                         Tp = fd['pixel_proximity_cost'].size(0)
                         Tl = fd['lane_cost'].size(0)
-                        # assert Ta == Tp == Tl
-                        if not(Ta == Tp == Tl): pdb.set_trace()
+                        # assert Ta == Tp == Tl  # TODO Check why there are more costs than actions
+                        # if not(Ta == Tp == Tl): pdb.set_trace()
                         images.append(fd['images'])
                         actions.append(fd['actions'])
-                        costs.append(torch.cat((fd.get('pixel_proximity_cost')[:T].view(-1,1), fd.get('lane_cost')[:T].view(-1,1)), 1),)
+                        costs.append(torch.cat((fd.get('pixel_proximity_cost')[:Ta].view(-1,1), fd.get('lane_cost')[:Ta].view(-1,1)), 1),)
                         states.append(fd['states'])
 
+                    print(f'Saving {combined_data_path} to disk')
                     torch.save({
                         'images': images,
                         'actions': actions,
@@ -67,28 +68,29 @@ class DataLoader():
                     self.costs += costs
                     self.states += states
                     self.ids += ids
-        else
+        else:
             assert False, 'Data set not supported'
 
-            self.n_episodes = len(self.images)
-            self.n_train = int(math.floor(self.n_episodes * 0.9))
-            self.n_valid = int(math.floor(self.n_episodes * 0.05))
-            self.n_test = int(math.floor(self.n_episodes * 0.05))
-            splits_path = data_dir + '/splits.pth'
-            if os.path.exists(splits_path):
-                print('[loading data splits: {}]'.format(splits_path))
-                self.splits = torch.load(splits_path)
-                self.train_indx = self.splits.get('train_indx')
-                self.valid_indx = self.splits.get('valid_indx')
-                self.test_indx = self.splits.get('test_indx')
-            else:
-                print('[generating data splits]')
-                np.random.seed(0)
-                perm = numpy.random.permutation(self.n_episodes)
-                self.train_indx = perm[0:self.n_train]
-                self.valid_indx = perm[self.n_train+1:self.n_train+self.n_valid]
-                self.test_indx = perm[self.n_train+self.n_valid+1:self.n_train+self.n_valid+self.n_test]
-                torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
+        self.n_episodes = len(self.images)
+        print(f'Number of episodes: {self.n_episodes}')
+        self.n_train = int(math.floor(self.n_episodes * 0.9))
+        self.n_valid = int(math.floor(self.n_episodes * 0.05))
+        self.n_test = int(math.floor(self.n_episodes * 0.05))
+        splits_path = data_dir + '/splits.pth'
+        if os.path.exists(splits_path):
+            print('[loading data splits: {}]'.format(splits_path))
+            self.splits = torch.load(splits_path)
+            self.train_indx = self.splits.get('train_indx')
+            self.valid_indx = self.splits.get('valid_indx')
+            self.test_indx = self.splits.get('test_indx')
+        else:
+            print('[generating data splits]')
+            numpy.random.seed(0)
+            perm = numpy.random.permutation(self.n_episodes)
+            self.train_indx = perm[0:self.n_train]
+            self.valid_indx = perm[self.n_train+1:self.n_train+self.n_valid]
+            self.test_indx = perm[self.n_train+self.n_valid+1:self.n_train+self.n_valid+self.n_test]
+            torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
