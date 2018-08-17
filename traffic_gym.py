@@ -226,11 +226,17 @@ class Car:
                 pygame.draw.rect(surface, (0, 255, 0),
                                  (int(x - 10), int(y - 15), self._length + 10 + 10, 30), 2)
 
-            # Highlight colliding vehicle / debugging purpose
+            # # Highlight colliding vehicle / debugging purpose
             # if self.collisions_per_frame > 0:
             #     larger_rectangle = (*((x, y) - self._direction * 10), self._length + 10 + 10, self._width + 10 + 10,)
             #     draw_rect(surface, colours['g'], larger_rectangle, d, 2)
+            #     # # Remove collision, if reading it from file
+            #     # self.collisions_per_frame = 0
 
+            # # Pick one out
+            # if self.id == 738: self._colour = colours['r']
+
+            # # Green / red -> left-to-right / right-to-left
             # if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
             # if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
 
@@ -827,6 +833,11 @@ class Simulator(core.Env):
     def render(self, mode='human', width_height=None, scale=1.):
         if mode == 'human' and self.display:
 
+            # if self.frame % 1000 == 0:
+            #     pygame.image.save(self.screen, "Peachtree/ghosts.png")
+            #     self.screen.fill(colours['k'])
+            #     self._pause()
+
             # measure time elapsed, enforce it to be >= 1/fps
             fps = int(1 / self.clock.tick(self.fps) * 1e3)
             self.mean_fps = 0.9 * self.mean_fps + 0.1 * fps if self.mean_fps is not None else fps
@@ -938,7 +949,7 @@ class Simulator(core.Env):
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     sys.exit()
-                elif e.type == pygame.MOUSEBUTTONUP:
+                elif e.type == pygame.MOUSEBUTTONUP or e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:
                     pause = False
 
     def _get_vehicle(self, id_):
