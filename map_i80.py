@@ -271,6 +271,27 @@ class I80(Simulator):
         # with open('off_track.pkl', 'rb') as f:
         #     self.off_track = pickle.load(f)
         # self.off_track = set()
+        # accident_file = '/Volumes/MyBox/home/atcold/Traffic/scripts/log/peach-pass-1/peach_ts1.out'
+        # self.accident_file = open(accident_file)
+        # self.accident = self.get_next_accident()
+        # while self.accident['frame'] < frame: self.accident = self.get_next_accident()
+
+    # def get_next_accident(self):
+    #     file = self.accident_file
+    #     line = file.readline()
+    #     # Skip good frames
+    #     a = 'Accident!'
+    #     while not re.search(a, line or a): line = file.readline()
+    #     frame = int(re.search('t=(\d+)', line).group(1)) if line else -1
+    #     # Get all cars
+    #     cars = list()
+    #     while re.search(a, line):
+    #         cars.append(int(re.search('Car\.(\d+)', line).group(1)))
+    #         line = file.readline()
+    #     return {
+    #         'frame': frame,
+    #         'cars': cars,
+    #     }
 
     def step(self, policy_action=None):
 
@@ -354,6 +375,16 @@ class I80(Simulator):
             #         self.off_track.add(v.id)
             #         with open('off_track.pkl', 'wb') as f:
             #             pickle.dump(self.off_track, f)
+
+            # # Point out accidents (as in tracking bugs) in original trajectories
+            # if self.frame == self.accident['frame']:
+            #     if v.id in self.accident['cars']:
+            #         v.collisions_per_frame = 1
+            #         self.collision = True
+
+        # if self.frame == self.accident['frame']:
+        #     print('Colliding vehicles:', self.accident['cars'])
+        #     self.accident = self.get_next_accident()
 
         self.frame += 1
 
