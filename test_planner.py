@@ -1,23 +1,15 @@
 import argparse
-import random
-import torch
 import numpy
 import gym
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
 parser.add_argument('-nb_conditions', type=int, default=10)
-parser.add_argument('-nb_predictions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
-parser.add_argument('-models_dir', type=str, default='./models_il/')
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
 
 opt = parser.parse_args()
-
-random.seed(opt.seed)
-numpy.random.seed(opt.seed)
-torch.manual_seed(opt.seed)
 
 kwargs = {
     'fps': 50,
@@ -40,7 +32,6 @@ env = gym.make(env_names[opt.map])
 
 for episode in range(1000):
     env.reset()
-    # env.reset(frame=int(input('Frame: ')), time_slot=1)
 
     done = False
     while not done:
