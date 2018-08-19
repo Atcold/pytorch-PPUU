@@ -971,7 +971,7 @@ class FwdCNN_TEN3(nn.Module):
         return [Variable(z), z_indx]
 
     # estimate prediction uncertainty using dropout
-    def compute_uncertainty_batch(self, input_images, input_states, actions, targets, npred=200, n_models=10, Z=None, dirname=None, detach=True):
+    def compute_uncertainty_batch(self, input_images, input_states, actions, targets, npred=200, n_models=10, Z=None, dirname=None, detach=True, compute_total_loss = False):
         bsize = input_images.size(0)
         input_images = input_images.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         input_states = input_states.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 4)
@@ -979,6 +979,7 @@ class FwdCNN_TEN3(nn.Module):
         input_states = input_states.contiguous().view(bsize*n_models, self.opt.ncond, 4)
         actions = actions.unsqueeze(0).expand(n_models, bsize, npred, 2).contiguous().view(bsize*n_models, npred, 2)
             
+        self.train()
         if Z is None:
             Z = self.sample_z(bsize * npred, method='fp')[0]
             Z = Z.view(bsize, npred, -1)
@@ -1005,9 +1006,10 @@ class FwdCNN_TEN3(nn.Module):
         pred_images = pred_images.view(n_models, bsize, npred, -1)
         pred_states = pred_states.view(n_models, bsize, npred, -1)
         pred_costs = pred_costs.view(n_models, bsize, npred, -1)
-        pred_images_std = torch.std(pred_images, 0).mean(2)
-        pred_states_std = torch.std(pred_states, 0).mean(2)
-        pred_costs_std = torch.std(pred_costs, 0).mean(2)
+        # use variance rather than standard deviation, since it is not differentiable at 0 due to sqrt
+        pred_images_var = torch.var(pred_images, 0).mean(2)
+        pred_states_var = torch.var(pred_states, 0).mean(2)
+        pred_costs_var = torch.var(pred_costs, 0).mean(2)
         pred_costs_mean = torch.mean(pred_costs, 0)
         pred_images = pred_images.view(n_models*bsize, npred, 3, self.opt.height, self.opt.width)
         pred_states = pred_states.view(n_models*bsize, npred, 4)
@@ -1016,30 +1018,46 @@ class FwdCNN_TEN3(nn.Module):
         if detach:
             pred_v = Variable(pred_v.data)
         pred_v = pred_v.view(n_models, bsize)
-        pred_v_std = torch.std(pred_v, 0).mean()
-        pred_v_mean = torch.mean(pred_v, 0).mean()
-        return pred_images_std, pred_states_std, pred_costs_std, pred_v_std, pred_costs_mean, pred_v_mean
+        pred_v_var = torch.var(pred_v, 0).mean()
+        pred_v_mean = torch.mean(pred_v, 0)
+
+
+        if compute_total_loss:
+            u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - 0.5)
+            u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - 0.5)
+            u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - 0.5)
+            u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - 0.5)
+            total_u_loss = u_loss_costs + u_loss_states + u_loss_images + u_loss_values
+        else:
+            total_u_loss = None
+
+        return pred_images_var, pred_states_var, pred_costs_var, pred_v_var, pred_costs_mean, pred_v_mean, total_u_loss
 
     # compute uncertainty estimates for the ground truth actions in the training set. 
     # this will give us an idea of what normal ranges are using actions the forward model 
     # was trained on
     def estimate_uncertainty_stats(self, dataloader, n_batches=100, npred=200):
-        u_images, u_states, u_costs, u_values = [], [], [], []
+        u_images, u_states, u_costs, u_values, speeds = [], [], [], [], []
         data_bsize = dataloader.opt.batch_size
         dataloader.opt.batch_size = 8
         for i in range(n_batches):
             print('[estimating normal uncertainty ranges: {:2.1%}]'.format(float(i)/n_batches), end="\r")
             inputs, actions, targets = dataloader.get_batch_fm('train', npred)
-            pred_images_std, pred_states_std, pred_costs_std, pred_v_std, _, _ = self.compute_uncertainty_batch(inputs[0], inputs[1], actions, targets, npred=npred, n_models=10, detach=True)
-            u_images.append(pred_images_std)
-            u_states.append(pred_states_std)
-            u_costs.append(pred_costs_std)
-            u_values.append(pred_v_std)
+            pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = self.compute_uncertainty_batch(inputs[0], inputs[1], actions, targets, npred=npred, n_models=10, detach=True)
+            u_images.append(pred_images_var)
+            u_states.append(pred_states_var)
+            u_costs.append(pred_costs_var)
+            u_values.append(pred_v_var)
+            speeds.append(inputs[1][:, :, 2:].norm(2, 2))
+
+            
+            
             
         u_images = torch.stack(u_images).view(-1, npred)
         u_states = torch.stack(u_states).view(-1, npred)
         u_costs = torch.stack(u_costs).view(-1, npred)
         u_values = torch.stack(u_values)
+        speeds = torch.stack(speeds)
 
         self.u_images_mean = u_images.mean(0)
         self.u_states_mean = u_states.mean(0)
@@ -1157,10 +1175,10 @@ class FwdCNN_TEN3(nn.Module):
         self.actions_buffer = torch.zeros(npred, self.opt.n_actions).cuda()
         self.optimizer_a_stats = None
 
-    def plan_actions_backprop(self, input_images, input_states, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True):
+    def plan_actions_backprop(self, input_images, input_states, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1):
 
         if use_action_buffer:
-            actions = Variable(torch.cat((self.actions_buffer[1:, :], torch.zeros(1, self.opt.n_actions).cuda()), 0).cuda())
+            actions = Variable(torch.cat((self.actions_buffer[nexec:, :], torch.zeros(nexec, self.opt.n_actions).cuda()), 0).cuda())
         elif actions is None:
             actions = Variable(torch.zeros(npred, self.opt.n_actions).cuda())
 
@@ -1210,18 +1228,18 @@ class FwdCNN_TEN3(nn.Module):
 
             else:
                 self.train()
-                pred_images_std, pred_states_std, pred_costs_std, pred_values_std, pred_costs_mean, pred_values_mean = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False)
-                pred_costs_std = pred_costs_std.mean(0)
+                pred_images_var, pred_states_var, pred_costs_var, pred_values_var, pred_costs_mean, pred_values_mean, _ = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
+                pred_costs_var = pred_costs_var.mean(0)
                 pred_costs_mean = pred_costs_mean.mean(0)
                 cost_loss = torch.cat((pred_costs_mean[:, 0], pred_values_mean.view(1)), 0)* gamma_mask[0]
                 cost_loss = cost_loss.mean()
                 if cost_loss < 0.2:
                     break
 
-                u_loss_costs = F.relu((pred_costs_std - self.u_costs_mean) / (self.u_costs_std + 1e-6))
-                u_loss_states = F.relu((pred_states_std - self.u_states_mean) / (self.u_states_std + 1e-6))
-                u_loss_images = F.relu((pred_images_std - self.u_images_mean) / (self.u_images_std + 1e-6))
-                u_loss_values = F.relu((pred_values_std - self.u_values_mean) / (self.u_values_std + 1e-6))
+                u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / (self.u_costs_var + 1e-6))
+                u_loss_states = F.relu((pred_states_var - self.u_states_mean) / (self.u_states_var + 1e-6))
+                u_loss_images = F.relu((pred_images_var - self.u_images_mean) / (self.u_images_var + 1e-6))
+                u_loss_values = F.relu((pred_values_var - self.u_values_mean) / (self.u_values_var + 1e-6))
                 uncertainty_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() + u_loss_values
                 loss = cost_loss + u_reg * uncertainty_loss
                 loss.backward()
@@ -1234,11 +1252,12 @@ class FwdCNN_TEN3(nn.Module):
         if use_action_buffer:
             self.actions_buffer = actions.data.clone()
 
-        a = actions[0].data.view(1, 2)
+        a = actions.data.view(npred, 2)
+
         if normalize:
             a.clamp_(-3, 3)
-            a *= self.stats['a_std'].view(a.size()).cuda()
-            a += self.stats['a_mean'].view(a.size()).cuda()
+            a *= self.stats['a_std'].view(1, 2).expand(a.size()).cuda()
+            a += self.stats['a_mean'].view(1, 2).expand(a.size()).cuda()
         return a.cpu().numpy()
 
     def create_policy_net(self, opt):
@@ -1252,16 +1271,103 @@ class FwdCNN_TEN3(nn.Module):
     def create_prior_net(self, opt):
         self.prior_net = PriorGaussian(opt, opt.context_dim)
 
-    def train_policy_net(self, inputs, targets, targetprop=0, dropout=0.0, save_z=False):
+
+
+
+
+
+    def train_policy_net_svg(self, inputs, targets, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10):
+
+        input_images_orig, input_states_orig = inputs
+        target_images, target_states, target_costs = targets
+
+        input_images = input_images_orig.clone()
+        input_states = input_states_orig.clone()
+        bsize = input_images.size(0)
+        npred = target_images.size(1)
+        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
+        pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = None, None, None, None
+
+        total_ploss = Variable(torch.zeros(1).cuda())
+        Z = self.sample_z(npred * bsize, method=sampling_method)[0]
+        Z = Z.view(npred, bsize, self.opt.nz)
+        for t in range(npred):
+            actions, _, _, _ = self.policy_net(input_images, input_states)
+            pred_image, pred_state, pred_cost = self.forward_single_step(input_images, input_states, actions, Z[t])
+            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+            pred_images.append(pred_image)
+            pred_states.append(pred_state)
+            pred_costs.append(pred_cost)
+            pred_actions.append(actions)
+
+        pred_images = torch.cat(pred_images, 1)
+        pred_states = torch.stack(pred_states, 1)
+        pred_costs = torch.stack(pred_costs, 1)
+        pred_actions = torch.stack(pred_actions, 1)
+        
+        input_images = input_images_orig.clone()
+        input_states = input_states_orig.clone()
+        if n_updates_z > 0:
+            # optimize z vectors to be more difficult
+            pred_actions = Variable(pred_actions.data.clone())
+            Z.requires_grad = True
+            optimizer_z = optim.Adam([Z], lrt_z)
+            for k in range(n_updates_z):
+                optimizer_z.zero_grad()
+                pred, _ = self.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z, sampling='fixed')
+                pred_cost = pred[2][:, :, 0].mean()
+                _, _, _, _, _, _, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+                loss_z = -pred_cost + total_u_loss.mean()
+                loss_z.backward()
+                torch.nn.utils.clip_grad_norm_([Z], 1)
+                optimizer_z.step()
+                print(f'[z opt | iter: {k} | pred cost: {pred_cost.item()}]')
+
+            pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = [], [], [], []
+            for t in range(npred):
+                actions, _, _, _ = self.policy_net(input_images, input_states)
+                pred_image, pred_state, pred_cost = self.forward_single_step(input_images, input_states, actions, Z[t])
+                input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+                input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+                pred_images_adv.append(pred_image)
+                pred_states_adv.append(pred_state)
+                pred_costs_adv.append(pred_cost)
+                pred_actions_adv.append(actions)
+
+            pred_images_adv = torch.cat(pred_images_adv, 1)
+            pred_states_adv = torch.stack(pred_states_adv, 1)
+            pred_costs_adv = torch.stack(pred_costs_adv, 1)
+            pred_actions_adv = torch.stack(pred_actions_adv, 1)
+
+
+        _, _, _, _, pred_costs_mean, pred_values_mean, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+
+        gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
+
+        pred_costs_mean = pred_costs_mean[:, :, 0]
+        pred_costs = torch.cat((pred_costs_mean, pred_values_mean.view(-1, 1)), 1)
+        pred_costs *= gamma_mask.expand(pred_costs.size())
+        pred_costs = pred_costs.mean()
+        total_u_loss = total_u_loss.mean()
+
+        return [pred_images, pred_states, pred_costs, total_u_loss], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
+
+
+
+
+
+
+
+    def train_policy_net(self, inputs, targets, targetprop=0, dropout=0.0, n_models=10):
         input_images, input_states = inputs
         target_images, target_states, target_costs = targets
         bsize = input_images.size(0)
         npred = target_images.size(1)
         pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
-            
-        z, actions_context = None, None
+
+        z = None
         total_ploss = Variable(torch.zeros(1).cuda())
-        self.policy_net.cntr = 0
         self.train()
         z_list = []
         for t in range(npred):

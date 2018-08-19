@@ -119,6 +119,12 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
 
 
 def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, pytorch=True):
+    images = images.data if hasattr(images, 'data') else images
+    states = states.data if hasattr(states, 'data') else states
+    costs = costs.data if hasattr(costs, 'data') else costs
+    if actions is not None:
+        actions = actions.data if hasattr(actions, 'data') else actions
+
     os.system('mkdir -p ' + dirname)
     print('[saving movie to {}]'.format(dirname))
     if mu is not None:
@@ -138,6 +144,7 @@ def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, 
         if states is not None:
             text = 'x: [{:.2f}, {:.2f} \n'.format(states[t][0], states[t][1])
             text += 'dx: {:.2f}, {:.2f}]\n'.format(states[t][2], states[t][3])
+        if costs is not None:
             text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
         if actions is not None:
             text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
