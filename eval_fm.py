@@ -113,7 +113,7 @@ dataloader.random.seed(12345)
 
 for i in range(opt.n_batches):
     torch.cuda.empty_cache()    
-    inputs_, actions_, targets_ = dataloader.get_batch_fm('test', opt.npred)
+    inputs_, actions_, targets_, _, _ = dataloader.get_batch_fm('test', opt.npred)
 
     if i < 10 and opt.save_video:
         for b in range(opt.batch_size):

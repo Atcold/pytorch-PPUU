@@ -132,11 +132,12 @@ best_valid_loss = 1e6
 for i in range(100):
     train_loss = train(opt.epoch_size)
     valid_loss = test(opt.epoch_size)
-    if valid_loss < best_valid_loss:
-        best_valid_loss = valid_loss
-        model.intype('cpu')
-        torch.save(model, opt.model_file + '.model')
-        model.intype('gpu')
+    model.intype('cpu')
+    torch.save(model, opt.model_file + '.model')
+    model.intype('gpu')
+
+#    if valid_loss < best_valid_loss:
+#        best_valid_loss = valid_loss
 
     log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)

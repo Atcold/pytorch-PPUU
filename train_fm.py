@@ -235,7 +235,7 @@ def train(nbatches, npred):
     total_loss_i, total_loss_s, total_loss_c, total_loss_p, total_loss_p2 = 0, 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train', npred)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
@@ -275,7 +275,7 @@ def test(nbatches):
     model.eval()
     total_loss_i, total_loss_s, total_loss_c, total_loss_p, total_loss_p2 = 0, 0, 0, 0, 0
     for i in range(nbatches):
-        inputs, actions, targets = dataloader.get_batch_fm('valid')
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
