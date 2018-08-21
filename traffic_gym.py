@@ -32,7 +32,7 @@ colours = {
     'y': (255, 255, 000),
 }
 
-# Car coordinate system, origin under the centre of the read axis
+# Car coordinate system, origin under the centre of the rear axis
 #
 #      ^ y                       (x, y, x., y.)
 #      |
