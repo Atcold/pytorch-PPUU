@@ -19,8 +19,8 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     states = states.view(bsize*npred, 4)
 
     if unnormalize:
-        states *= (1e-8 + dataloader.s_std.view(1, 1, 4).expand(states.size())).cuda()
-        states += dataloader.s_mean.view(1, 1, 4).expand(states.size()).cuda()
+        states *= (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
+        states += s_mean.view(1, 4).expand(states.size()).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE #pixel/s
     width, length = car_size[:, 0], car_size[:, 1] # feet

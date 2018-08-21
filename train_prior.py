@@ -6,18 +6,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
 from sklearn import decomposition
-import models2 as models
+import models
 
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-batch_size', type=int, default=16)
 parser.add_argument('-ncond', type=int, default=20)
+parser.add_argument('-layers', type=int, default=3)
+parser.add_argument('-dropout', type=float, default=0.0)
 parser.add_argument('-nz', type=int, default=32)
-parser.add_argument('-npred', type=int, default=50)
+parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-nfeature', type=int, default=128)
 parser.add_argument('-n_hidden', type=int, default=256)
 parser.add_argument('-lrt', type=float, default=0.0001)
@@ -41,16 +43,17 @@ dataloader = DataLoader(None, opt, opt.dataset)
 
 prior = models.PriorMDN(opt).cuda()
 model = torch.load(opt.model_dir + opt.mfile)
+if type(model) is dict: model=model['model']
 model.intype('gpu')
 optimizer = optim.Adam(prior.parameters(), 0.001)
 
-mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature={opt.nfeature}-nhidden={opt.n_hidden}-lrt={opt.lrt}-nmixture={opt.n_mixture}.prior'
+mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}.prior'
 print(f'[will save prior model as: {mfile_prior}]')
 
 
 def train(nbatches):
     model.train()
-    total_loss = 0
+    total_loss, n_updates = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
@@ -63,26 +66,33 @@ def train(nbatches):
         torch.nn.utils.clip_grad_norm(prior.parameters(), 10)
         if not numpy.isnan(gnorm):
             optimizer.step()
-        total_loss += loss.data[0]
-    return total_loss / nbatches
+            total_loss += loss.item()
+            n_updates += 1
+    return total_loss / n_updates
 
 def test(nbatches):
     model.eval()
-    total_loss = 0
+    total_loss, n_updates = 0, 0
     for i in range(nbatches):
         inputs, actions, targets = dataloader.get_batch_fm('valid', opt.npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
         loss = prior.forward_thru_model(model, inputs, actions, targets)
-        total_loss += loss.data[0]
-    return total_loss / nbatches
+        gnorm=utils.grad_norm(prior)
+        if not numpy.isnan(gnorm):
+            total_loss += loss.item()
+            n_updates += 1
+    return total_loss / n_updates
+
+
+
     
 print('[training]')
 for i in range(500):
     loss_train = train(opt.epoch_size)
     loss_test = test(opt.epoch_size)
-    log_string = f'epoch {i} | train loss: {loss_train:.5f}, test loss: {loss_test:.5f}'
+    log_string = f'ste {(i+1)*opt.epoch_size} | train loss: {loss_train:.5f}, test loss: {loss_test:.5f}'
     print(log_string)
     utils.log(mfile_prior + '.log', log_string)
     prior.cpu()

@@ -1,4 +1,4 @@
-import torch, numpy, argparse, pdb, os, time, math
+import torch, numpy, argparse, pdb, os, time, math, random, re
 import utils
 from dataloader import DataLoader
 from torch.autograd import Variable
@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=16)
 parser.add_argument('-batch_size', type=int, default=8)
@@ -49,7 +49,7 @@ parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-anoise=0.0-zeroact=0-nz=32-beta=0.0-dropout=0.5-gclip=5.0-warmstart=1.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -75,7 +75,10 @@ torch.cuda.manual_seed(opt.seed)
 
 
 opt.model_file = f'{opt.model_dir}/policy_networks/'
+
 opt.model_file += f'mbil-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdac={opt.lambda_c}-gamma={opt.gamma}-seed={opt.seed}'
+opt.model_file += '-' + re.search('model=(.*)-layers', opt.mfile)[0][:-7]
+opt.model_file += '-' + re.search('zdropout=(\d+)\.(\d+)', opt.mfile)[0]
 
 print(f'[will save as: {opt.model_file}]')
 
@@ -90,12 +93,13 @@ if os.path.isfile(opt.model_file + '.model') and False:
         utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
 else:
     # load the model
-    model = torch.load(opt.model_dir + opt.mfile)['model']
+    model = torch.load(opt.model_dir + opt.mfile)
+    if type(model) is dict: model = model['model']
     model.create_policy_net(opt)
     model.opt.actions_subsample = opt.actions_subsample
     optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
     n_iter = 0
-    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
+    stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
     model.stats=stats
     if 'ten' in opt.mfile:
         pzfile = opt.model_dir + opt.mfile + '.pz'
@@ -111,10 +115,12 @@ model.cuda()
 
 
 
-dataloader = DataLoader(None, opt, opt.dataset, seed=opt.seed)
+dataloader = DataLoader(None, opt, opt.dataset)
+'''
 model.train()
 model.estimate_uncertainty_stats(dataloader, n_batches=10, npred=opt.npred)
 model.eval()
+'''
 
 
 

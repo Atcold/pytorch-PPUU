@@ -143,7 +143,7 @@ else:
         model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-vae-lp':
         model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
-    optimizer = optim.Adam(model.parameters(), opt.lrt)
+    optimizer = optim.Adam(model.parameters(), opt.lrt, epsilon=1e-3)
     n_iter = 0
 
 model.intype('gpu')

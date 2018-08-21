@@ -1,4 +1,4 @@
-import torch, numpy, argparse, pdb, os, math, time
+import torch, numpy, argparse, pdb, os, math, time, copy
 import utils
 import models
 from dataloader import DataLoader
@@ -35,6 +35,7 @@ parser.add_argument('-nz', type=int, default=2)
 parser.add_argument('-beta', type=float, default=0.1)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-epoch_size', type=int, default=1000)
+parser.add_argument('-nsync', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-grad_clip', type=float, default=10)
 parser.add_argument('-debug', type=int, default=0)
@@ -55,19 +56,16 @@ os.system('mkdir -p ' + opt.model_dir)
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
-opt.model_file = f'{opt.model_dir}/model=value-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-gclip={opt.grad_clip}-dropout={opt.dropout}-gamma={opt.gamma}'
+opt.model_file = f'{opt.model_dir}/model=value-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-gclip={opt.grad_clip}-dropout={opt.dropout}-gamma={opt.gamma}-nsync={opt.nsync}'
 
 print(f'[will save model as: {opt.model_file}]')
 
 
 model = models.ValueFunction(opt)
 model.intype('gpu')
+model_ = copy.deepcopy(model)
 
 optimizer = optim.Adam(model.parameters(), opt.lrt)
-
-def last_state(targets):
-    images = targets[0]
-    states = targets[1]
 
 
 gamma_mask = Variable(torch.from_numpy(numpy.array([opt.gamma**t for t in range(opt.npred + 1)])).float().cuda()).unsqueeze(0).expand(opt.batch_size, opt.npred + 1)
@@ -82,11 +80,10 @@ def train(nbatches):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        t0=time.time()
         v = model(inputs[0], inputs[1])
-        v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
+        v_ = model_(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
         images, states, _ = targets
-        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes)
+        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes, unnormalize=True, s_mean=dataloader.s_mean, s_std=dataloader.s_std)
 #        cost = targets[2][:, :, 0]
         v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
         loss = F.mse_loss(v, Variable(v_target.data))
@@ -112,9 +109,9 @@ def test(nbatches):
         targets = utils.make_variables(targets)
         actions = Variable(actions)
         v = model(inputs[0], inputs[1])
-        v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
+        v_ = model_(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
         images, states, _ = targets
-        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes)
+        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes, unnormalize=True, s_mean=dataloader.s_mean, s_std=dataloader.s_std)
 #        cost = targets[2][:, :, 0]
         v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
         loss = F.mse_loss(v, Variable(v_target.data))
@@ -144,3 +141,7 @@ for i in range(100):
     log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
+    if i % opt.nsync == 0:
+        print('[updating target network]')
+        utils.log(opt.model_file + '.log', '[updating target network]')
+        model_ = copy.deepcopy(model)

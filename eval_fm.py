@@ -29,8 +29,8 @@ parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-noise', type=float, default=0.0)
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
@@ -49,12 +49,14 @@ opt.eval_dir = opt.model_dir + f'/eval/'
 
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
-model = torch.load(opt.model_dir + opt.mfile)['model']
+model = torch.load(opt.model_dir + opt.mfile)
+if type(model) is dict: model = model['model']
 model.eval()
 if opt.cuda == 1:
     model.intype('gpu')
 
-
+dataloader = DataLoader(None, opt, opt.dataset)
+model.opt.npred = opt.npred
 
 
 dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
@@ -67,30 +69,7 @@ if '-ten' in opt.mfile:
         mfile_prior = f'{opt.model_dir}/{opt.mfile}-nfeature=128-lrt=0.0001-nmixture={opt.n_mixture}.prior'
         print(f'[loading prior model: {mfile_prior}]')
         model.prior = torch.load(mfile_prior).cuda()
-dirname += '.eval'
-os.system('mkdir -p ' + dirname)
-
-
-dataloader = DataLoader(None, opt, opt.dataset)
-
-def compute_pz(nbatches):
-    model.p_z = []
-    for j in range(nbatches):
-        print('[estimating z distribution: {:2.1%}]'.format(float(j)/nbatches), end="\r")
-        inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = utils.Variable(actions)
-        if opt.zeroact == 1:
-            actions.data.zero_()
-        pred, loss_kl = model(inputs, actions, targets, save_z = True, sampling=None)
-        del inputs, actions, targets
-
-
-model.opt.npred = opt.npred
-
-
-if '-ten' in opt.mfile:
+    # load z vectors. Extract them if they are not already saved.
     pzfile = opt.model_dir + opt.mfile + '.pz'
     if os.path.isfile(pzfile):
         p_z = torch.load(pzfile)
@@ -100,11 +79,15 @@ if '-ten' in opt.mfile:
         model.knn_dist = graph.get('knn_dist')
         model.opt.topz_sample = int(model.p_z.size(0)*opt.graph_density)            
     else:
-        compute_pz(250)
+        model.compute_pz(dataloader, opt, 250)
         torch.save(model.p_z, pzfile)
         model.compute_z_graph()
         torch.save({'knn_dist': model.knn_dist, 'knn_indx': model.knn_indx}, pzfile + '.graph')
     print('[done]')
+
+dirname += '.eval'
+os.system('mkdir -p ' + dirname)
+
 
 if opt.cuda == 1:
     model.intype('gpu')
@@ -147,7 +130,7 @@ for i in range(opt.n_batches):
         if opt.zeroact == 1:
             actions.data.zero_()
 
-        pred_, _= model(inputs, actions, targets, sampling=opt.sampling, noise=opt.noise)
+        pred_, _= model(inputs, actions, targets, sampling=opt.sampling)
         loss_i_s, loss_s_s, loss_c_s = compute_loss(targets, pred_, r=False)
         loss_i[i, :, s] += loss_i_s.mean(2).mean(2).mean(2).data.cpu()
         loss_s[i, :, s] += loss_s_s.mean(2).data.cpu()
@@ -166,7 +149,7 @@ for i in range(opt.n_batches):
         actions_perm = actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()]
 
         # also generate videos with different action sequences
-        pred_perm, _= model(inputs, actions_perm, targets, sampling=opt.sampling, noise=opt.noise)
+        pred_perm, _= model(inputs, actions_perm, targets, sampling=opt.sampling)
         if i < 10 and s < 20 and opt.save_video:
             for b in range(opt.batch_size):
                 dirname_movie = '{}/videos/sampled_z/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
@@ -176,13 +159,13 @@ for i in range(opt.n_batches):
 
         # also generate videos with true z vectors
         if s == 0:
-            pred_true_z, _= model(inputs, actions, targets, noise=opt.noise)
+            pred_true_z, _= model(inputs, actions, targets)
             for b in range(opt.batch_size):
                 dirname_movie = '{}/videos/true_z/true_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
                 utils.save_movie(dirname_movie, pred_true_z[0][b].data, pred_true_z[1][b].data, pred_true_z[2][b].data)
 
-            pred_true_z_perm, _= model(inputs, actions_perm, targets, noise=opt.noise)
+            pred_true_z_perm, _= model(inputs, actions_perm, targets)
             for b in range(opt.batch_size):
                 dirname_movie = '{}/videos/true_z/perm_actions/x{:d}/z{:d}/'.format(dirname, i*opt.batch_size + b, s)
                 print('[saving video: {}]'.format(dirname_movie), end="\r")

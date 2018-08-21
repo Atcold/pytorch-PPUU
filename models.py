@@ -476,7 +476,7 @@ class PriorMDN(nn.Module):
         super(PriorMDN, self).__init__()
         self.opt = opt
         self.n_inputs = opt.ncond
-        self.encoder = encoder(opt, opt.n_actions, opt.ncond)
+        self.encoder = encoder(opt, 0, opt.ncond)
 
         self.network = nn.Sequential(
             nn.Linear(self.opt.hidden_size, opt.n_hidden),
@@ -492,9 +492,9 @@ class PriorMDN(nn.Module):
         self.sigma_net = nn.Linear(opt.n_hidden, opt.n_mixture*opt.nz)
 
 
-    def forward(self, input_images, input_states, input_actions):
+    def forward(self, input_images, input_states):
         bsize = input_images.size(0)
-        h = self.encoder(input_images, input_states, input_actions).view(bsize, -1)
+        h = self.encoder(input_images, input_states).view(bsize, -1)
         h = self.network(h)
         pi = F.softmax(self.pi_net(h), dim=1)
         mu = self.mu_net(h).view(bsize, self.opt.n_mixture, self.opt.nz)
@@ -503,27 +503,34 @@ class PriorMDN(nn.Module):
         return pi, mu, sigma
 
 
-    # first extract z vectors by passing inputs, actions and targets through an external model, and uses these as targets. 
-    # Useful for training the prior network to predict the z vectors inferred by a previously trained forward model. 
+   # first extract z vectors by passing inputs, actions and targets through an external model, and uses these as targets. Useful for training the prior network to predict the z vectors inferred by a previously trained forward model. 
     def forward_thru_model(self, model, inputs, actions, targets):
         input_images, input_states = inputs
         bsize = input_images.size(0)
-        actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
         ploss = Variable(torch.zeros(1).cuda())
     
         for t in range(npred):
-            h_x = model.encoder(input_images, input_states, actions[:, t])
+            h_x = model.encoder(input_images, input_states)
             target_images, target_states, target_costs = targets
-            h_y = model.y_encoder(torch.cat((input_images, target_images[:, t].unsqueeze(1).contiguous()), 1), input_states, actions[:, t])
+            h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
             z = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1))
-            pi, mu, sigma = self(input_images, input_states, actions[:, t])
+            pi, mu, sigma = self(input_images, input_states)
             # prior loss
-            ploss = utils.mdn_loss_fn(pi, sigma, mu, z)
+            ploss += utils.mdn_loss_fn(pi, sigma, mu, z)
             z_exp = model.z_expander(z).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
             h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
-            h = utils.combine(h_x, z_exp.squeeze(), model.opt.combine)
+            a_emb = model.a_encoder(actions[:, t]).view(h_x.size())
+            if model.opt.zmult == 0:
+                h = utils.combine(h_x, z_exp, model.opt.combine)
+                h = utils.combine(h, a_emb, model.opt.combine)
+            elif model.opt.zmult == 1:
+                a_emb = torch.sigmoid(a_emb)
+                z_exp = torch.sigmoid(z_exp)
+                h = h_x + a_emb + (1-a_emb) * z_exp                
+            h = h + model.u_network(h)
             pred_image, pred_state, pred_cost = model.decoder(h)
+
             pred_image.detach()
             pred_state.detach()
             pred_cost.detach()
@@ -533,7 +540,7 @@ class PriorMDN(nn.Module):
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
 
-        return ploss
+        return ploss / npred
 
 
 # takes as input a sequence of frames, states and actions, and outputs the parameters of a 
@@ -896,7 +903,7 @@ class FwdCNN_TEN3(nn.Module):
         else:
             self.p_z = torch.cat((self.p_z, z.data.cpu()), 0)
 
-    def compute_pz(self, dataloader, nbatches):
+    def compute_pz(self, dataloader, opt, nbatches):
         self.p_z = []
         for j in range(nbatches):
             print('[estimating z distribution: {:2.1%}]'.format(float(j)/nbatches), end="\r")
@@ -1276,7 +1283,7 @@ class FwdCNN_TEN3(nn.Module):
 
 
 
-    def train_policy_net_svg(self, inputs, targets, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10):
+    def train_policy_net_svg(self, inputs, targets, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10, car_sizes=None):
 
         input_images_orig, input_states_orig = inputs
         target_images, target_states, target_costs = targets
@@ -1305,6 +1312,8 @@ class FwdCNN_TEN3(nn.Module):
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
         pred_actions = torch.stack(pred_actions, 1)
+
+        pdb.set_trace()
         
         input_images = input_images_orig.clone()
         input_states = input_states_orig.clone()
@@ -1407,21 +1416,6 @@ class FwdCNN_TEN3(nn.Module):
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
         pred_actions = torch.stack(pred_actions, 1)
-
-
-        # TODO: figure out why this gives NaNs
-        '''
-        Z=torch.stack(z_list).permute(1, 0, 2).contiguous()
-        u_images, u_states, u_costs, _ =self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, npred=npred, n_models=10, detach=False, Z=Z)
-        u_loss_costs = F.relu((u_costs - self.u_costs_mean) / self.u_costs_std)
-        u_loss_states = F.relu((u_states - self.u_states_mean) / self.u_states_std)
-        u_loss_images = F.relu((u_images - self.u_images_mean) / self.u_images_std)
-        u_loss_costs = u_costs
-        u_loss_states = u_states
-        u_loss_images = u_images
-        total_ploss = u_loss_costs + u_loss_states + u_loss_images
-        '''
-
 
         return [pred_images, pred_states, pred_costs, total_ploss], pred_actions
 
