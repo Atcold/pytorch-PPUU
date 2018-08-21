@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-layers', type=int, default=3)
@@ -36,7 +36,7 @@ parser.add_argument('-lambda_a', type=float, default=0.1)
 parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=1)
 parser.add_argument('-gamma', type=float, default=0.99)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=200-lrt=0.0001-nhidden=256-nfeature=256-gclip=10-dropout=0.1-gamma=0.99.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -78,7 +78,8 @@ if os.path.isfile(opt.model_file + '.model') and False:
         utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
 else:
     # load the model
-    model = torch.load(opt.model_dir + opt.mfile)['model']
+    model = torch.load(opt.model_dir + opt.mfile)
+    if type(model) is dict: model = model['model']
     model.create_policy_net(opt)
     value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
     model.value_function = value_function
@@ -111,10 +112,10 @@ def train(nbatches, npred):
     total_loss_c, total_loss_u, total_loss_a, n_updates = 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train', npred)
+        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
+        pred, actions, pred_adv = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates, car_sizes=sizes)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()
@@ -151,10 +152,10 @@ def test(nbatches, npred):
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_a, n_updates = 0, 0, 0, 0
     for i in range(nbatches):
-        inputs, actions, targets = dataloader.get_batch_fm('valid', npred)
+        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, _ = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=1.0, n_updates_z = 0)
+        pred, actions, _ = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=1.0, n_updates_z = 0, car_sizes=sizes)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()

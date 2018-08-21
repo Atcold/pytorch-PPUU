@@ -1,4 +1,4 @@
-import torch, numpy, argparse, pdb, os, math
+import torch, numpy, argparse, pdb, os, math, time
 import utils
 import models
 from dataloader import DataLoader
@@ -19,7 +19,7 @@ parser.add_argument('-model', type=str, default='policy-cnn-mdn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/value_functions/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/value_functions/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=20)
@@ -78,13 +78,16 @@ def train(nbatches):
     total_loss, nb = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train')
+        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('train')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
+        t0=time.time()
         v = model(inputs[0], inputs[1])
         v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
-        cost = targets[2][:, :, 0]
+        images, states, _ = targets
+        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes)
+#        cost = targets[2][:, :, 0]
         v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
         loss = F.mse_loss(v, Variable(v_target.data))
         if not math.isnan(loss.item()):
@@ -104,13 +107,15 @@ def test(nbatches):
     total_loss, nb = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('valid')
+        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('valid')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
         v = model(inputs[0], inputs[1])
         v_ = model(targets[0][:, -opt.ncond:], targets[1][:, -opt.ncond:])
-        cost = targets[2][:, :, 0]
+        images, states, _ = targets
+        cost, _ = utils.proximity_cost(targets[0], targets[1], sizes)
+#        cost = targets[2][:, :, 0]
         v_target = torch.sum(torch.cat((cost, v_), 1) * gamma_mask, 1).view(-1, 1)
         loss = F.mse_loss(v, Variable(v_target.data))
         if not math.isnan(loss.item()):

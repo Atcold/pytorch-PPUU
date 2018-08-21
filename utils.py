@@ -40,7 +40,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
-    min_y = np.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
+    min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = torch.tensor(min_y)
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
 

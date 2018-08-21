@@ -15,11 +15,11 @@ parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-v', type=int, default=4)
-parser.add_argument('-model', type=str, default='policy-cnn-mdn')
+parser.add_argument('-model', type=str, default='policy-il-mdn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/policy_networks_il_local/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/policy_networks/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=10)
@@ -36,7 +36,7 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
-parser.add_argument('-grad_clip', type=float, default=10)
+parser.add_argument('-grad_clip', type=float, default=50)
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
@@ -68,7 +68,7 @@ if opt.warmstart == 0:
 policy = models.PolicyMDN(opt, npred=opt.npred)
 policy.intype('gpu')
 
-optimizer = optim.Adam(policy.parameters(), opt.lrt)
+optimizer = optim.Adam(policy.parameters(), opt.lrt, eps=1e-3)
 
 def train(nbatches):
     policy.train()
@@ -83,7 +83,7 @@ def train(nbatches):
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
             loss.backward()
-#            print(utils.grad_norm(policy).item())
+            print(utils.grad_norm(policy).item())
             if opt.grad_clip != -1:
                 torch.nn.utils.clip_grad_norm_(policy.parameters(), opt.grad_clip)
             optimizer.step()
