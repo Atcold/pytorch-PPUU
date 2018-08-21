@@ -1,4 +1,4 @@
-import numpy, random, pdb, math, pickle, glob, time, os
+import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
 from torch.autograd import Variable
 
@@ -11,8 +11,10 @@ class DataLoader():
         self.random.seed(12345) # use this so that the same batches will always be picked
 
         if dataset == 'i80':
-            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v{}/'.format(opt.v)
-            data_dir = './traffic-data/state-action-cost/data_i80_v0'
+#            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v{}/'.format(opt.v)
+#            data_dir = './traffic-data/state-action-cost/data_i80_v0'
+#            data_dir = '/misc/vlgscratch4/LecunGroup/atcold/traffic-data/state-action-cost/data_i80_v0'
+            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0'
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
@@ -35,6 +37,7 @@ class DataLoader():
                     self.actions += data.get('actions')
                     self.costs += data.get('costs')
                     self.states += data.get('states')
+                    self.ids += data.get('ids')
                 else:
                     print(data_dir)
                     images = []
@@ -119,6 +122,11 @@ class DataLoader():
                         'a_std': self.a_std,
                         's_mean': self.s_mean,
                         's_std': self.s_std}, stats_path)
+        
+        car_sizes_path = data_dir + '/car_sizes.pth'
+        print('[loading car sizes: {}]'.format(car_sizes_path))
+        self.car_sizes = torch.load(car_sizes_path)
+        
 
     # get batch to use for forward modeling
     # a sequence of ncond given states, a sequence of npred actions,
@@ -145,7 +153,7 @@ class DataLoader():
         if npred == -1:
             npred = self.opt.npred
 
-        images, states, actions, costs = [], [], [], []
+        images, states, actions, costs, ids, sizes = [], [], [], [], [], []
         nb = 0
         while nb < self.opt.batch_size:
             if self.opt.debug == 1:
@@ -159,20 +167,22 @@ class DataLoader():
                 actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
                 states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].cuda())
+                ids.append(self.ids[s])
+                splits = self.ids[s].split('/')
+                timeslot = splits[4]
+                car_id = int(re.findall('car(\d+).pkl', splits[5])[0])
+                size = self.car_sizes[timeslot][car_id]
+                sizes.append([size[0], size[1]])
                 nb += 1
 
         images = torch.stack(images).float()
         images.div_(255.0)
 
-        try:
-            states = torch.stack(states)
-        except:
-            pdb.set_trace()
-
-#        states = states.contiguous()
+        states = torch.stack(states)
         states = states[:, :, 0].contiguous()
 
         actions = torch.stack(actions)
+        sizes = torch.tensor(sizes)
 
         if self.opt.debug == 0:
             actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).cuda()
@@ -181,10 +191,6 @@ class DataLoader():
             states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).cuda()
 
         costs = torch.stack(costs)
-        '''
-        costs -= self.c_mean.view(1, 1, 2).expand(costs.size()).cuda()
-        costs /= (1e-8 + self.c_std.view(1, 1, 2).expand(costs.size())).cuda()
-        '''
 
         actions = actions[:, (self.opt.ncond-1):(self.opt.ncond+npred-1)].float().contiguous()
         input_images = images[:, :self.opt.ncond].float().contiguous()
@@ -200,5 +206,5 @@ class DataLoader():
             actions = actions.cpu()
             target_images = target_images.cpu()
 
-        return [input_images, input_states], actions, [target_images, target_states, target_costs]
+        return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
 

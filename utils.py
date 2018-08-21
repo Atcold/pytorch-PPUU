@@ -23,40 +23,42 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
         states += dataloader.s_mean.view(1, 1, 4).expand(states.size()).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE #pixel/s
-    width, length = car_size # feet
+    width, length = car_size[:, 0], car_size[:, 1] # feet
     width *= SCALE * (0.3048*24/3.7) # pixels
     length *= SCALE * (0.3048*24/3.7) # pixels
 
     safe_distance = torch.abs(speed) * safe_factor + (1*24/3.7) * SCALE  # plus one metre (TODO change)
-    
 
     # Compute x/y minimum distance to other vehicles (pixel version)
     # Account for 1 metre overlap (low data accuracy)
     alpha = 1 * SCALE * (24/3.7)  # 1 m overlap collision
     # Create separable proximity mask
 
-
-    max_x = np.ceil((crop_h - max(length - alpha, 0)) / 2)
-    max_y = np.ceil((crop_w - max(width - alpha, 0)) / 2)
+    max_x = torch.ceil((crop_h - torch.clamp(length - alpha, min=0)) / 2)
+    max_y = torch.ceil((crop_w - torch.clamp(width - alpha, min=0)) / 2)
+    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
+    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
     min_y = np.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = torch.tensor(min_y)
+    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-    x_filter = torch.clamp(x_filter, max=max_x)
-    x_filter = x_filter.view(1, crop_h).expand(bsize*npred, crop_h)
+    x_filter = x_filter.unsqueeze(0).expand(bsize*npred, crop_h).cuda()
+    x_filter = torch.min(x_filter, max_x.view(bsize*npred, 1).expand(x_filter.size()))
     x_filter = torch.max(x_filter, min_x.view(bsize*npred, 1))
-    max_x = torch.tensor([max_x])
-    max_y = torch.tensor([max_y])
 
     x_filter = (x_filter - min_x.view(bsize*npred, 1)) / (max_x - min_x).view(bsize*npred, 1)
     y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
-    y_filter = torch.clamp(y_filter, min=min_y.item(), max=max_y.item())
-    y_filter = (y_filter - min_y) / (max_y - min_y)
+    y_filter = y_filter.view(1, crop_w).expand(bsize*npred, crop_w).cuda()
+    y_filter = torch.min(y_filter, max_y.view(bsize*npred, 1))
+    y_filter = torch.max(y_filter, min_y.view(bsize*npred, 1))
+    y_filter = (y_filter - min_y.view(bsize*npred, 1)) / (max_y.view(bsize*npred, 1) - min_y.view(bsize*npred, 1))
     x_filter = x_filter.cuda()
     y_filter = y_filter.cuda()
-    proximity_mask = (torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(1, crop_w).expand(bsize*npred, 1, crop_w))).view(bsize, npred, crop_h, crop_w)
+    proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
+    proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
     return costs, proximity_mask
