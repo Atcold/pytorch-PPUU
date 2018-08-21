@@ -20,12 +20,16 @@ opt = parser.parse_args()
 
 
 
-def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, normalize=False):
+def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(3), images.size(4)
     images = images.view(bsize*npred, nchannels, crop_h, crop_w)
     states = states.view(bsize*npred, 4)
+
+    if unnormalize:
+        states *= (1e-8 + dataloader.s_std.view(1, 1, 4).expand(states.size())).cuda()
+        states += dataloader.s_mean.view(1, 1, 4).expand(states.size()).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE #pixel/s
     width, length = car_size # feet
@@ -63,11 +67,8 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, normal
     y_filter = y_filter.cuda()
     proximity_mask = (torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(1, crop_w).expand(bsize*npred, 1, crop_w))).view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    pdb.set_trace()
-    loss = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
-    if normalize:
-        loss /= 255.0
-    return loss, proximity_mask
+    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
+    return costs, proximity_mask
 
 
 
