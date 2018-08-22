@@ -65,9 +65,9 @@ class US101(I80):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self._time_slots = (
-            './traffic-data/xy-trajectories/us101/trajectories-0750am-0805am',
-            './traffic-data/xy-trajectories/us101/trajectories-0805am-0820am',
-            './traffic-data/xy-trajectories/us101/trajectories-0820am-0835am',
+            'us101/trajectories-0750am-0805am',
+            'us101/trajectories-0805am-0820am',
+            'us101/trajectories-0820am-0835am',
         )
         self._t_slot = None
         self._black_list = {

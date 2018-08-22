@@ -67,8 +67,8 @@ class Lankershim(I80):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self._time_slots = (
-            './traffic-data/xy-trajectories/lanker/trajectories-0830am-0845am',
-            './traffic-data/xy-trajectories/lanker/trajectories-0845am-0900am',
+            'lanker/trajectories-0830am-0845am',
+            'lanker/trajectories-0845am-0900am',
         )
         self._t_slot = None
         self._black_list = {
@@ -99,7 +99,7 @@ class Lankershim(I80):
 
     @staticmethod
     def _get_data_frame(time_slot, x_max, x_offset):
-        file_name = time_slot + '.txt'
+        file_name = f'traffic-data/xy-trajectories/{time_slot}.txt'
         print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
