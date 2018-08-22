@@ -221,6 +221,8 @@ def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, 
 def grad_norm(net):
     total_norm = 0
     for p in net.parameters():
+        if p.grad is None:
+            pdb.set_trace()
         param_norm = p.grad.data.norm(2)
         total_norm += param_norm ** 2
     total_norm = total_norm ** (1. / 2)
