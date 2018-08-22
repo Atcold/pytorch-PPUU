@@ -9,15 +9,18 @@ parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us10
 parser.add_argument('-state_image', type=int, default=0)
 parser.add_argument('-store', type=int, default=0)
 parser.add_argument('-nb_episodes', type=int, default=1)
+parser.add_argument('-fps', type=int, default=1e3)
+parser.add_argument('-delta_t', type=float, default=0.1)
 
 opt = parser.parse_args()
 
 kwargs = {
-    'fps': 50,
+    'fps': opt.fps,
     'nb_states': opt.nb_conditions,
     'display': opt.display,
     'state_image': opt.state_image,
     'store': opt.store,
+    'delta_t': opt.delta_t,
 }
 
 gym.envs.registration.register(
