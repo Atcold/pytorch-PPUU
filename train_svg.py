@@ -32,12 +32,12 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=50.0)
 parser.add_argument('-epoch_size', type=int, default=500)
 parser.add_argument('-lambda_u', type=float, default=0.1)
-parser.add_argument('-lambda_a', type=float, default=0.1)
+parser.add_argument('-lambda_a', type=float, default=0.0)
 parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=1)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=200-lrt=0.0001-nhidden=256-nfeature=256-gclip=10-dropout=0.1-gamma=0.99.model')
+parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -64,6 +64,8 @@ torch.cuda.manual_seed(opt.seed)
 
 opt.model_file = f'{opt.model_dir}/policy_networks/'
 opt.model_file += f'svg-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdau={opt.lambda_u}-lambdaa={opt.lambda_a}-gamma={opt.gamma}-lrtz={opt.lrt_z}-updatez={opt.z_updates}-seed={opt.seed}'
+if opt.value_model == '':
+    opt.model_file += 'novalue'
 
 print(f'[will save as: {opt.model_file}]')
 
@@ -81,8 +83,9 @@ else:
     model = torch.load(opt.model_dir + opt.mfile)
     if type(model) is dict: model = model['model']
     model.create_policy_net(opt)
-    value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
-    model.value_function = value_function
+    if opt.value_model != '':
+        value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
+        model.value_function = value_function
     optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt, eps=1e-3)
     n_iter = 0
     stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
@@ -112,10 +115,10 @@ def train(nbatches, npred):
     total_loss_c, total_loss_u, total_loss_a, n_updates = 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('train', npred)
+        inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates, car_sizes=sizes)
+        pred, actions, pred_adv = model.train_policy_net_svg(inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()
@@ -132,7 +135,7 @@ def train(nbatches, npred):
             print('warning, NaN')
             pdb.set_trace()
 
-        if i == 0:
+        if i == 0: 
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
@@ -152,10 +155,10 @@ def test(nbatches, npred):
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_a, n_updates = 0, 0, 0, 0
     for i in range(nbatches):
-        inputs, actions, targets, ids, sizes = dataloader.get_batch_fm('valid', npred)
+        inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, _ = model.train_policy_net_svg(inputs, targets, n_models=10, lrt_z=1.0, n_updates_z = 0, car_sizes=sizes)
+        pred, actions, _ = model.train_policy_net_svg(inputs, targets, car_sizes, n_models=10, lrt_z=1.0, n_updates_z = 0)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()

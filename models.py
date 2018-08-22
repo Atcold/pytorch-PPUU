@@ -978,7 +978,7 @@ class FwdCNN_TEN3(nn.Module):
         return [Variable(z), z_indx]
 
     # estimate prediction uncertainty using dropout
-    def compute_uncertainty_batch(self, input_images, input_states, actions, targets, npred=200, n_models=10, Z=None, dirname=None, detach=True, compute_total_loss = False):
+    def compute_uncertainty_batch(self, input_images, input_states, actions, targets, car_sizes, npred=200, n_models=10, Z=None, dirname=None, detach=True, compute_total_loss = False):
         bsize = input_images.size(0)
         input_images = input_images.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
         input_states = input_states.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 4)
@@ -993,6 +993,7 @@ class FwdCNN_TEN3(nn.Module):
         Z_rep = Z.unsqueeze(0).expand(n_models, bsize, npred, -1).contiguous()
         Z_rep = Z_rep.view(n_models*bsize, npred, -1)
 
+        t0 = time.time()
         pred_images, pred_states, pred_costs = [], [], []
         for t in range(npred):
             z = Z_rep[:, t]
@@ -1009,7 +1010,10 @@ class FwdCNN_TEN3(nn.Module):
 
         pred_images = torch.stack(pred_images, 1).squeeze()
         pred_states = torch.stack(pred_states, 1).squeeze()
-        pred_costs = torch.stack(pred_costs, 1).squeeze()
+        
+        pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=self.stats['s_mean'], s_std=self.stats['s_std'])
+
+#        pred_costs = torch.stack(pred_costs, 1).squeeze()
         pred_images = pred_images.view(n_models, bsize, npred, -1)
         pred_states = pred_states.view(n_models, bsize, npred, -1)
         pred_costs = pred_costs.view(n_models, bsize, npred, -1)
@@ -1021,12 +1025,16 @@ class FwdCNN_TEN3(nn.Module):
         pred_images = pred_images.view(n_models*bsize, npred, 3, self.opt.height, self.opt.width)
         pred_states = pred_states.view(n_models*bsize, npred, 4)
 
-        pred_v = self.value_function(pred_images[:, -self.value_function.opt.ncond:], pred_states[:, -self.value_function.opt.ncond:])
-        if detach:
-            pred_v = Variable(pred_v.data)
-        pred_v = pred_v.view(n_models, bsize)
-        pred_v_var = torch.var(pred_v, 0).mean()
-        pred_v_mean = torch.mean(pred_v, 0)
+        if hasattr(self, 'value_function'):
+            pred_v = self.value_function(pred_images[:, -self.value_function.opt.ncond:], pred_states[:, -self.value_function.opt.ncond:])
+            if detach:
+                pred_v = Variable(pred_v.data)
+            pred_v = pred_v.view(n_models, bsize)
+            pred_v_var = torch.var(pred_v, 0).mean()
+            pred_v_mean = torch.mean(pred_v, 0)
+        else:
+            pred_v_mean = Variable(torch.zeros(bsize).cuda())
+            pred_v_var = Variable(torch.zeros(bsize).cuda())
 
 
         if compute_total_loss:
@@ -1034,7 +1042,9 @@ class FwdCNN_TEN3(nn.Module):
             u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - 0.5)
             u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - 0.5)
             u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - 0.5)
-            total_u_loss = u_loss_costs + u_loss_states + u_loss_images + u_loss_values
+            total_u_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() 
+            if hasattr(self, 'value_function'):
+                total_u_loss += u_loss_values.mean()
         else:
             total_u_loss = None
 
@@ -1049,8 +1059,8 @@ class FwdCNN_TEN3(nn.Module):
         dataloader.opt.batch_size = 8
         for i in range(n_batches):
             print('[estimating normal uncertainty ranges: {:2.1%}]'.format(float(i)/n_batches), end="\r")
-            inputs, actions, targets = dataloader.get_batch_fm('train', npred)
-            pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = self.compute_uncertainty_batch(inputs[0], inputs[1], actions, targets, npred=npred, n_models=10, detach=True)
+            inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
+            pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = self.compute_uncertainty_batch(inputs[0], inputs[1], actions, targets, car_sizes, npred=npred, n_models=10, detach=True)
             u_images.append(pred_images_var)
             u_states.append(pred_states_var)
             u_costs.append(pred_costs_var)
@@ -1283,7 +1293,7 @@ class FwdCNN_TEN3(nn.Module):
 
 
 
-    def train_policy_net_svg(self, inputs, targets, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10, car_sizes=None):
+    def train_policy_net_svg(self, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10):
 
         input_images_orig, input_states_orig = inputs
         target_images, target_states, target_costs = targets
@@ -1312,8 +1322,6 @@ class FwdCNN_TEN3(nn.Module):
         pred_states = torch.stack(pred_states, 1)
         pred_costs = torch.stack(pred_costs, 1)
         pred_actions = torch.stack(pred_actions, 1)
-
-        pdb.set_trace()
         
         input_images = input_images_orig.clone()
         input_states = input_states_orig.clone()
@@ -1350,7 +1358,7 @@ class FwdCNN_TEN3(nn.Module):
             pred_actions_adv = torch.stack(pred_actions_adv, 1)
 
 
-        _, _, _, _, pred_costs_mean, pred_values_mean, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+        _, _, _, _, pred_costs_mean, pred_values_mean, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
 
         gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
 

@@ -15,5 +15,5 @@
 
 module load python-3.6
 cd ../
-srun python train_value_function.py -npred $1 -dropout $2 -gamma $3 -nsync $4
+srun python train_value_function.py -npred $1 -dropout $2 -gamma $3 -nsync $4 -nfeature $5 -n_hidden $5
 
