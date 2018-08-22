@@ -564,7 +564,6 @@ class Car:
     def __repr__(self) -> str:
         cls = self.__class__
         return f'{cls.__module__}.{cls.__name__}.{self.id}'
-#        return f'{cls.__module__}.{cls.__name__}.{self.id}'
 
 
 class Simulator(core.Env):

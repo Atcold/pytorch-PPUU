@@ -26,33 +26,33 @@ class I80Car(Car):
     max_a = 40
     max_b = 0.01
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0):
-        self._k = kernel  # running window size
-        self._max_t = len(df) - kernel - 2
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0, dt=1/10):
+        k = kernel  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
         self.id = df.at[df.index[0], 'Vehicle ID']  # extract scalar <'Vehicle ID'> <at> <index[0]>
 
         # X and Y are swapped in the I-80 data set...
-        x = df['Local Y'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE - self.X_OFFSET - self._length
-        y = df['Local X'].rolling(window=self._k).mean().shift(1 - self._k).values * FOOT * SCALE + y_offset
-        # for t in range(len(y) - 1):
-        #     delta_x = x[t + 1] - x[t]
-        #     delta_y = y[t + 1] - y[t]
-        #     if abs(delta_y) > abs(delta_x) * 0.1:
-        #         y[t + 1] = y[t] + np.sign(delta_y) * abs(delta_x) * 0.1
+        x = df['Local Y'].rolling(window=k).mean().shift(1 - k).values * FOOT * SCALE - self.X_OFFSET - self._length
+        y = df['Local X'].rolling(window=k).mean().shift(1 - k).values * FOOT * SCALE + y_offset
+        if dt > 1 / 10:
+            s = int(dt * 10)
+            end = len(x) - len(x) % s
+            x = x[:end].reshape(-1, s).mean(axis=1)
+            y = y[:end].reshape(-1, s).mean(axis=1)
+        self._max_t = len(x) - np.count_nonzero(np.isnan(x)) - 2  # 2 for computing the acceleration
 
         self._trajectory = np.column_stack((x, y))
         self._position = self._trajectory[0]
         self._df = df
         self._frame = 0
-        self._dt = 1 / 10
+        self._dt = dt
         # self._direction = np.array((1, 0), np.float)  # assumes horizontal if initially unknown
         self._direction = self._get('init_direction', 0)
         self._speed = self._get('speed', 0)
         self._colour = colours['c']
         self._braked = False
-        self.off_screen = len(df) <= self._k + 1
+        self.off_screen = self._max_t <= 0
         self._states = list()
         self._states_image = list()
         self._actions = list()
@@ -175,7 +175,11 @@ class I80(Simulator):
 
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 6
-        kwargs['delta_t'] = 1/10
+
+        delta_t = kwargs['delta_t']
+        assert delta_t >= 1 / 10, f'Minimum delta t is 0.1s > {delta_t:.2f}s you tried to set'
+        assert (delta_t * 10).is_integer(), f'dt: {delta_t:.2f}s must be a multiple of 0.1s'
+
         super().__init__(**kwargs)
 
         self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
@@ -193,9 +197,9 @@ class I80(Simulator):
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
         # self.delta_t = 1 / 10  # simulation timing interval
         self._time_slots = (
-            './traffic-data/xy-trajectories/i80/trajectories-0400-0415',
-            './traffic-data/xy-trajectories/i80/trajectories-0500-0515',
-            './traffic-data/xy-trajectories/i80/trajectories-0515-0530',
+            'i80/trajectories-0400-0415',
+            'i80/trajectories-0500-0515',
+            'i80/trajectories-0515-0530',
         )
         self._t_slot = None
         self._black_list = {
@@ -222,7 +226,7 @@ class I80(Simulator):
 
     @staticmethod
     def _get_data_frame(time_slot, x_max, x_offset):
-        file_name = time_slot  + '.txt'
+        file_name = f'traffic-data/xy-trajectories/{time_slot}.txt'
         print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
             'Vehicle ID',
@@ -306,7 +310,8 @@ class I80(Simulator):
                 car_df = df[this_vehicle & now_and_on]
                 if len(car_df) < self.smoothing_window + 1: continue
                 f = self.font[20] if self.display else None
-                car = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f, self.smoothing_window)
+                car = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f, self.smoothing_window,
+                                  dt=self.delta_t)
                 self.vehicles.append(car)
                 if self.controlled_car and \
                         not self.controlled_car['locked'] and \
@@ -386,7 +391,7 @@ class I80(Simulator):
         #     print('Colliding vehicles:', self.accident['cars'])
         #     self.accident = self.get_next_accident()
 
-        self.frame += 1
+        self.frame += int(self.delta_t * 10)
 
         # Run out of frames?
         done = self.frame >= self.max_frame

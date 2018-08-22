@@ -8,13 +8,17 @@ parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-fps', type=int, default=1e3)
+parser.add_argument('-delta_t', type=float, default=0.1)
+parser.add_argument('-nb_episodes', type=int, default=10)
 
 opt = parser.parse_args()
 
 kwargs = {
-    'fps': 50,
+    'fps': opt.fps,
     'nb_states': opt.nb_conditions,
-    'display': opt.display
+    'display': opt.display,
+    'delta_t': opt.delta_t,
 }
 
 gym.envs.registration.register(
@@ -30,7 +34,7 @@ env_names = {
 print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
-for episode in range(1000):
+for episode in range(opt.nb_episodes):
     env.reset()
 
     done = False
