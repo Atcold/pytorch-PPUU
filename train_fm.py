@@ -20,7 +20,7 @@ parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn3')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-batch_size', type=int, default=64)
@@ -143,7 +143,7 @@ else:
         model = models.FwdCNN_VAE_FP(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-vae-lp':
         model = models.FwdCNN_VAE_LP(opt, mfile=prev_model)
-    optimizer = optim.Adam(model.parameters(), opt.lrt, epsilon=1e-3)
+    optimizer = optim.Adam(model.parameters(), opt.lrt)
     n_iter = 0
 
 model.intype('gpu')
@@ -245,15 +245,12 @@ def train(nbatches, npred):
         loss_i, loss_s, loss_c = compute_loss(targets, pred)
         loss = loss_i + loss_s + loss_c + opt.beta*loss_p[0]
 
+        # VAEs get NaN loss sometimes, so check for it
         if not math.isnan(loss.item()):
             loss.backward(retain_graph=False)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
-            optimizer.step()
-
-        if opt.adv_loss > 0.0:
-            z = pred[3]
-            z.detach()
-            loss_d, acc = train_discriminator(actions, z)
+            if not math.isnan(utils.grad_norm(model).item()):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
+                optimizer.step()
 
         total_loss_i += loss_i.item()
         total_loss_s += loss_s.item()
