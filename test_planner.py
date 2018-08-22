@@ -35,7 +35,7 @@ print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
-    env.reset()
+    env.reset(time_slot=None, vehicle_id=None)  # if None => picked at random
 
     done = False
     while not done:
