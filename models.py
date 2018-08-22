@@ -1750,6 +1750,7 @@ class FwdCNN_VAE3(nn.Module):
                         mu_logvar_prior = self.z_network_prior(h_x.view(bsize, -1)).view(bsize, 2, self.opt.nz)
                         mu_prior = mu_logvar_prior[:, 0]
                         logvar_prior = mu_logvar_prior[:, 1]
+                        logvar_prior = torch.clamp(logvar_prior, max = 4) # this can go to inf when taking exp(), so clamp it
                         kld = utils.kl_criterion(mu, logvar, mu_prior, logvar_prior)
                     ploss += kld
             else:
