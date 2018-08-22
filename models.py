@@ -191,7 +191,7 @@ class u_network(nn.Module):
         h2 = self.fc(h1.view(-1, self.hidden_size))
         h2 = h2.view(h1.size())
         h3 = self.decoder(h2)
-        return h
+        return h3
 
 
 # decodes a hidden state into a predicted frame, a predicted state and a predicted cost vector
@@ -1768,10 +1768,7 @@ class FwdCNN_VAE3(nn.Module):
                 pred_image.detach()
                 pred_state.detach()
                 pred_cost.detach()
-            if self.opt.sigmoid_out == 1:
-                pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-            else:
-                pred_image = torch.clamp(pred_image + input_images[:, -1].unsqueeze(1), min=0, max=1)
+            pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
             # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
             pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
