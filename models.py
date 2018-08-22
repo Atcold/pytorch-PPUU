@@ -848,6 +848,17 @@ class FwdCNN_TEN3(nn.Module):
         if mfile == '':
             self.encoder = encoder(opt, 0, opt.ncond)
             self.decoder = decoder(opt)
+            self.a_encoder = nn.Sequential(
+                nn.Linear(self.opt.n_actions, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.hidden_size)
+            )
+            self.u_network = u_network(opt)
+
         else:
             print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
@@ -860,18 +871,6 @@ class FwdCNN_TEN3(nn.Module):
             self.decoder.n_out = 1
 
         self.y_encoder = encoder(opt, 0, 1, states=False)
-
-        self.a_encoder = nn.Sequential(
-            nn.Linear(self.opt.n_actions, self.opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.opt.nfeature, self.opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.opt.nfeature, self.opt.hidden_size)
-        )
-
-        self.u_network = u_network(opt)
 
         self.z_network = nn.Sequential(
             nn.Linear(opt.hidden_size, opt.nfeature),
@@ -1646,6 +1645,16 @@ class FwdCNN_VAE3(nn.Module):
         if mfile == '':
             self.encoder = encoder(opt, 0, opt.ncond)
             self.decoder = decoder(opt)
+            self.a_encoder = nn.Sequential(
+                nn.Linear(self.opt.n_actions, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.hidden_size)
+            )
+            self.u_network = u_network(opt)
         else:
             print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
@@ -1658,18 +1667,6 @@ class FwdCNN_VAE3(nn.Module):
             self.decoder.n_out = 1
 
         self.y_encoder = encoder(opt, 0, 1, states=False)
-
-        self.a_encoder = nn.Sequential(
-            nn.Linear(self.opt.n_actions, self.opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.opt.nfeature, self.opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.opt.nfeature, self.opt.hidden_size)
-        )
-
-        self.u_network = u_network(opt)
 
         self.z_network = nn.Sequential(
             nn.Linear(opt.hidden_size, opt.nfeature),
@@ -1691,7 +1688,6 @@ class FwdCNN_VAE3(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, 2*opt.nz)
             )
-
 
         self.z_zero = Variable(torch.zeros(self.opt.batch_size, self.opt.nz))
         self.z_expander = nn.Linear(opt.nz, opt.hidden_size)
