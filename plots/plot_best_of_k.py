@@ -6,7 +6,7 @@ import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-metric', type=str, default='l2')
-parser.add_argument('-path', type=str, default='/home/mbhenaff/scratch/models/eval/')
+parser.add_argument('-path', type=str, default='/home/mbhenaff/projects/pytorch-Traffic-Simulator/scratch/models_v8/eval/')
 opt = parser.parse_args()
 
 
@@ -50,93 +50,48 @@ nsample = 200
 
 if plot == 0:
 
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=pdf-nmixture=20.eval/loss.pth')
+    x = torch.load(f'{opt.path}/model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model-nbatches=25-npred=200-nsample=200.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
     plot_mean_and_CI(mean, low, hi, color_mean='b-', color_shading='b')
 
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.005.eval/loss.pth')
+    x = torch.load(f'{opt.path}/model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=1e-05-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model-nbatches=25-npred=200-nsample=200.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
     plot_mean_and_CI(mean, low, hi, color_mean='magenta', color_shading='magenta')
 
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=fp.eval/loss.pth')
+
+    x = torch.load(f'{opt.path}/model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model-nbatches=25-npred=200-nsample=200-sampling=fp.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='g', color_shading='g')
+    plot_mean_and_CI(mean, low, hi, color_mean='red', color_shading='red')
 
 
     '''
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=pdf-nmixture=1.eval/loss.pth')
+    x = torch.load(f'{opt.path}/model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0001-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model-nbatches=25-npred=200-nsample=200.eval/loss.pth')
     x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
     x=-10*numpy.log(x) / numpy.log(10)
     best = best_of_k(x)
     mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='g--', color_shading='green')
+    plot_mean_and_CI(mean, low, hi, color_mean='cyan', color_shading='cyan')
     '''
 
 
 
-    '''
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.0001.eval/loss.pth')
-    x = x['loss_i'].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='b--', color_shading='b')
-
-
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.0005.eval/loss.pth')
-    x = x['loss_i'].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='r', color_shading='r')
-
-
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.001.eval/loss.pth')
-    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='g', color_shading='g')
-
-    x = torch.load(f'{opt.path}/model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model-nbatches=100-npred=50-nsample=200-sampling=knn-density=0.002.eval/loss.pth')
-    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='g--', color_shading='g')
-
-    '''
-
-    x = torch.load(f'{opt.path}/model=fwd-cnn-vae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1.0-nz=32-beta=0.0001-warmstart=1.model-nbatches=100-npred=10-nsample=200.eval/loss.pth')
-    x = x[loss_type].view(100*4, nsample, -1)[:, :, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = best_of_k(x)
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='r', color_shading='r')
-
-    x = torch.load(f'{opt.path}/model=fwd-cnn-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-nz=32-beta=0.0-warmstart=0.model-nbatches=100-npred=50-nsample=1.eval/loss.pth')
-    x = x[loss_type].view(100*4, -1)[:, :npred].numpy()
-    x=-10*numpy.log(x) / numpy.log(10)
-    best = x
-    mean, hi, low = mean_confidence_interval(best)
-    plot_mean_and_CI(mean, low, hi, color_mean='black', color_shading='black')
 
 
 
 
-title = 'comparison_all_i80.pdf'
+title = 'comparison_vae.pdf'
 plt.ylabel('Average PSNR', fontsize=18)
 plt.xlabel('Time Step', fontsize=18)
 plt.xticks([i+1 for i in range(npred)], fontsize=12)
-plt.legend(['TENet-MDN', 'TENet-KNN', 'TENet-Unif', 'cVAE', 'Deterministic'], fontsize=16)
+plt.legend(['VAE, beta=1e-06', 'VAE, beta=1e-05', 'TEN'], fontsize=16)
 plt.savefig(title)
 
