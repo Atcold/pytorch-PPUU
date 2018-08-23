@@ -25,7 +25,6 @@ parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-nexec', type=int, default=1)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-rollout_length', type=int, default=1)
-parser.add_argument('-action_noise', type=float, default=0.0)
 parser.add_argument('-bprop_niter', type=int, default=5)
 parser.add_argument('-bprop_lrt', type=float, default=1.0)
 parser.add_argument('-bprop_buffer', type=int, default=1)
@@ -37,12 +36,11 @@ parser.add_argument('-u_reg', type=float, default=0.0)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
-parser.add_argument('-save_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/planning_results_v8/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
 parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=200-lrt=0.0001-nhidden=256-nfeature=256-gclip=10-dropout=0.1-gamma=0.99.model')
-parser.add_argument('-policy_model_il', type=str, default='model=policy-cnn-mdn-bsize=64-ncond=20-npred=20-lrt=0.0001-nhidden=256-nfeature=256-nmixture=50-gclip=10.model')
-parser.add_argument('-policy_model_tm', type=str, default='mbil-policy-gauss-nfeature=256-npred=100-lambdac=0.0-gamma=0.99-seed=1.model')
+parser.add_argument('-policy_model_il', type=str, default='model=policy-il-mdn-bsize=64-ncond=20-npred=1-lrt=0.0001-nhidden=256-nfeature=256-nmixture=1-gclip=50.model')
+parser.add_argument('-policy_model_tm', type=str, default='mbil-policy-gauss-nfeature=256-npred=1-lambdac=0.0-gamma=0.99-seed=1-model=fwd-cnn-ten3-zdropout=0.5.model')
 #parser.add_argument('-mfile', type=str, default='model=policy-cnn-mdn-bsize=64-ncond=20-npred=1-lrt=0.0001-nhidden=256-nfeature=256-nmixture=1-gclip=10.model')
 
 opt = parser.parse_args()
@@ -51,7 +49,7 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
-opt.save_dir += '/'
+opt.save_dir = opt.model_dir + '/planning_results/'
 opt.height = 117
 opt.width = 24
 opt.h_height = 14
@@ -60,19 +58,24 @@ opt.opt_z = (opt.opt_z == 1)
 opt.opt_a = (opt.opt_a == 1)
 
 def load_models():
-    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
+    stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
     forward_model = torch.load(opt.model_dir + opt.mfile)['model']
-    value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
-    policy_network_il = torch.load(opt.model_dir + f'/policy_networks_il/{opt.policy_model_il}').cuda()
-    policy_network_il.stats = stats
-    policy_network_mbil = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_tm}')['model']
-    policy_network_mbil.stats = stats
-    forward_model.policy_net = policy_network_mbil
-    forward_model.value_function = value_function
+    value_function, policy_network_il, policy_network_mbil = None, None, None
+    if opt.value_model != '':
+        value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
+        forward_model.value_function = value_function
+    if opt.policy_model_il != '':
+        policy_network_il = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_il}').cuda()
+        policy_network_il.stats = stats
+    if opt.policy_model_tm != '':
+        policy_network_mbil = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_tm}')['model']
+        policy_network_mbil.stats = stats
+        forward_model.policy_net = policy_network_mbil.policy_net
+        forward_model.policy_net.stats = stats
     
     forward_model.intype('gpu')
     forward_model.stats=stats
-    if 'ten' in opt.mfile:
+    if 'ten' in opt.mfile and False:
         forward_model.p_z = torch.load(opt.model_dir + opt.mfile + '.pz')
     return forward_model, value_function, policy_network_il, policy_network_mbil, stats
 
@@ -86,21 +89,10 @@ if opt.u_reg > 0.0:
 
 
 
-'''
-gym.envs.registration.register(
-    id='Traffic-v3',
-    entry_point='traffic_gym_v3:ControlledI80',
-    kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0},
-)
-
-print('Building the environment (loading data, if any)')
-env = gym.make('Traffic-v' + opt.v)
-'''
-
 gym.envs.registration.register(
     id='I-80-v1',
     entry_point='map_i80_ctrl:ControlledI80',
-    kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0},
+    kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0, 'delta_t': 0.1},
 )
 
 print('Building the environment (loading data, if any)')
@@ -110,7 +102,8 @@ env_names = {
 
 env = gym.make(env_names[opt.map])
 
-
+dataloader = DataLoader(None, opt, 'i80')
+splits = torch.load('/home/mbhenaff/scratch/traffic-data-atcold/data_i80_v0/splits.pth')
 
 plan_file = opt.method
 plan_file += f'-nbatches={opt.n_batches}-nexec={opt.nexec}'
@@ -120,10 +113,13 @@ if 'bprop' in opt.method:
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
 
 times_to_collision = []
-for j in range(opt.n_batches):
+n_test = len(splits['test_indx'])
+for j in range(n_test):
     movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
     print('[new episode, will save to: {}]'.format(movie_dir))
-    env.reset()
+    car_path = dataloader.ids[splits['test_indx'][j]]
+    timeslot, car_id = utils.parse_car_path(car_path)
+    env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     inputs, done, mu, std = None, None, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
@@ -141,9 +137,9 @@ for j in range(opt.n_batches):
             a = forward_model.plan_actions_backprop(input_images, input_states, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec)
         elif opt.method == 'policy-il':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
-            a = a.squeeze().cpu()[0].view(1, 2).numpy()
+            a = a.squeeze().cpu().view(1, 2).numpy()
         elif opt.method == 'policy-tm':
-            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, context=None, sample=True, normalize_inputs=True, normalize_outputs=True)
+            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'bprop+policy-il':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=False)
@@ -165,7 +161,7 @@ for j in range(opt.n_batches):
 
             images.append(input_images[-1])
             states.append(input_states[-1])
-            costs.append([cost[0][-1], cost[1][-1]])
+            costs.append([cost[0][-1].item(), cost[1][-1].item()])
             if opt.mfile == 'no-action':
                 actions.append(a[t])
                 mu_list.append(mu)
@@ -181,17 +177,24 @@ for j in range(opt.n_batches):
             done = True
 
     times_to_collision.append(len(images))
-    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep {}, time {}'.format(j, len(images)))
+    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep: {} | time: {} | mean perf: {}'.format(j, len(images), torch.Tensor(times_to_collision).mean()))
+    images = torch.stack(images)
+    states = torch.stack(states)
+    costs = torch.tensor(costs)
+    actions = torch.stack(actions)
+    '''
     images = numpy.stack(images).transpose(0, 2, 3, 1)
     states = numpy.stack(states)
     costs = numpy.stack(costs)
     actions = numpy.stack(actions)
+    '''
+
     if mu is not None:
         mu_list = numpy.stack(mu_list)
         std_list = numpy.stack(std_list)
     else:
         mu_list, std_list = None, None
-    utils.save_movie('{}/real/'.format(movie_dir), images, states, costs, actions=actions, mu=mu_list, std=std_list, pytorch=False)
+    utils.save_movie('{}/real/'.format(movie_dir), images.float() / 255.0, states, costs, actions=actions, mu=mu_list, std=std_list, pytorch=True)
     '''
     if 'ten' in opt.mfile and ('mbil' not in opt.mfile):
         for i in range(opt.n_rollouts):

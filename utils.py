@@ -1,5 +1,5 @@
 import torch
-import os, json, pdb, math, numpy, random
+import os, json, pdb, math, numpy, random, re
 from datetime import datetime
 import scipy
 from sklearn import decomposition
@@ -64,6 +64,15 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     return costs, proximity_mask
 
 
+def parse_car_path(path):
+    splits = path.split('/')
+    timeslot = splits[4]
+    car_id = int(re.findall('car(\d+).pkl', splits[5])[0])
+    data_files = {'trajectories-0400-0415': 0, 
+                  'trajectories-0500-0515': 1, 
+                  'trajectories-0515-0530': 2}
+    timeslot = data_files[timeslot]
+    return timeslot, car_id
 
 
 def plot_mean_and_CI(mean, lb, ub, color_mean=None, color_shading=None):
