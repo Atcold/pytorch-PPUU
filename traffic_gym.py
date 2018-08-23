@@ -437,7 +437,7 @@ class Car:
         x = (surf_w - width_height[0]) // 2
         y = (surf_h - width_height[1]) // 2
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
-        sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # B channel not used
+        sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
         sub_rot_array_scaled = scipy.misc.imresize(sub_rot_array, scale)  # is deprecated, need to be replaced
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
@@ -498,6 +498,7 @@ class Car:
 
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
+        # return state_image, lane_cost, proximity_cost, frame
         return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
 
     def store(self, object_name, object_):
@@ -509,13 +510,15 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
 
     def get_last(self, n, done):
-        if len(self._states_image) < n: return None
+        if len(self._states_image) < n: return None  # no enough samples
+        # n × (state_image, lane_cost, proximity_cost, frame) ->
+        # -> (n × state_image, n × lane_cost, n × proximity_cost, n × frame)
         transpose = list(zip(*self._states_image))
-        im = transpose[0]
-        im = torch.stack(im).permute(0, 3, 1, 2)
-        zip_ = list(zip(*self._states))  # n x (obs, mask, cost) -> (n x obs, n x mask, n x cost)
+        state_images = transpose[0]
+        state_images = torch.stack(state_images).permute(0, 3, 1, 2)
+        zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
         states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
-        observation = (im[-n:], states[-n:])
+        observation = (state_images[-n:], states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
         pixel_proximity_cost = torch.Tensor(transpose[2][-n:])
@@ -564,6 +567,10 @@ class Car:
     def __repr__(self) -> str:
         cls = self.__class__
         return f'{cls.__module__}.{cls.__name__}.{self.id}'
+
+    @property
+    def shape(self):
+        return self._length, self._width
 
 
 class Simulator(core.Env):
