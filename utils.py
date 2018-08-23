@@ -13,10 +13,9 @@ import torch.nn.functional as F
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
-        3), images.size(4)
-    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
-    states = states.view(bsize * npred, 4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(3), images.size(4)
+    images = images.view(bsize*npred, nchannels, crop_h, crop_w)
+    states = states.view(bsize*npred, 4).clone()
 
     if unnormalize:
         states *= (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
@@ -60,7 +59,13 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
+<<<<<<< HEAD
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+=======
+    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
+
+#    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
+>>>>>>> utils
     return costs, proximity_mask
 
 
@@ -199,7 +204,7 @@ def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, 
     else:
         mu = actions
     if pytorch:
-        images = images.squeeze().permute(0, 2, 3, 1).cpu().numpy() * 255
+        images = images.permute(0, 2, 3, 1).cpu().numpy() * 255
     for t in range(images.shape[0]):
         img = images[t]
         img = numpy.concatenate((img, numpy.zeros((24, 24, 3)).astype('float')), axis=0)
