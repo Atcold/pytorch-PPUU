@@ -1,7 +1,8 @@
 #!/bin/bash
 
-model_dir=/home/mbhenaff/projects/pytorch-Traffic-Simulator/scratch/models_v7/policy_networks/
+model_dir=/home/mbhenaff/projects/pytorch-Traffic-Simulator/scratch/models_v8/
 
-for mfile in ${model_dir}/*.model; do 
-    sbatch submit_plan.slurm $(basename $mfile) $model_dir 1 1 0 0 policy-tm
+for policy_model in ${model_dir}/policy_networks/mbil*.model; do 
+    echo $(basename $policy_model)
+    sbatch submit_plan_policy_tm.slurm $model_dir $(basename $policy_model)
 done

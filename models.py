@@ -1001,6 +1001,7 @@ class FwdCNN_TEN3(nn.Module):
                 pred_image = Variable(pred_image.data)
                 pred_state = Variable(pred_state.data)
                 pred_cost = Variable(pred_cost.data)
+
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
             pred_images.append(pred_image)
@@ -1025,7 +1026,7 @@ class FwdCNN_TEN3(nn.Module):
         pred_states = pred_states.view(n_models*bsize, npred, 4)
 
         if hasattr(self, 'value_function'):
-            pred_v = self.value_function(pred_images[:, -self.value_function.opt.ncond:], pred_states[:, -self.value_function.opt.ncond:])
+            pred_v = self.value_function(pred_images[:, -self.value_function.opt.ncond:], Variable(pred_states[:, -self.value_function.opt.ncond:].data))
             if detach:
                 pred_v = Variable(pred_v.data)
             pred_v = pred_v.view(n_models, bsize)
@@ -1034,7 +1035,6 @@ class FwdCNN_TEN3(nn.Module):
         else:
             pred_v_mean = Variable(torch.zeros(bsize).cuda())
             pred_v_var = Variable(torch.zeros(bsize).cuda())
-
 
         if compute_total_loss:
             u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - 0.5)
@@ -1067,8 +1067,7 @@ class FwdCNN_TEN3(nn.Module):
             speeds.append(inputs[1][:, :, 2:].norm(2, 2))
 
             
-            
-            
+        
         u_images = torch.stack(u_images).view(-1, npred)
         u_states = torch.stack(u_states).view(-1, npred)
         u_costs = torch.stack(u_costs).view(-1, npred)
@@ -1103,7 +1102,9 @@ class FwdCNN_TEN3(nn.Module):
             z_exp = torch.sigmoid(z_exp)
             h = h_x + a_emb + (1-a_emb) * z_exp
 
-        h = h + self.u_network(h)
+        if not self.disable_unet:
+            h = h + self.u_network(h)
+
         pred_image, pred_state, pred_cost = self.decoder(h)
         pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
         pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
@@ -1134,7 +1135,11 @@ class FwdCNN_TEN3(nn.Module):
                 # encode the targets into z
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
                 if random.random() < z_dropout:
-                    z = self.z_zero
+                    if self.z_zero.size(0) == bsize:
+                        z = self.z_zero
+                    else:
+                        self.z_zero = Variable(torch.zeros(bsize, self.opt.nz).cuda())
+                        z = self.z_zero
                 else:
                     z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
                     if save_z:
@@ -1165,7 +1170,8 @@ class FwdCNN_TEN3(nn.Module):
                 z_exp = torch.sigmoid(z_exp)
                 h = h_x + a_emb + (1-a_emb) * z_exp
                 
-            h = h + self.u_network(h)
+            if not self.disable_unet:
+                h = h + self.u_network(h)
 
             pred_image, pred_state, pred_cost = self.decoder(h)
             if sampling is not None:
@@ -1191,7 +1197,7 @@ class FwdCNN_TEN3(nn.Module):
         self.actions_buffer = torch.zeros(npred, self.opt.n_actions).cuda()
         self.optimizer_a_stats = None
 
-    def plan_actions_backprop(self, input_images, input_states, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1):
+    def plan_actions_backprop(self, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1):
 
         if use_action_buffer:
             actions = Variable(torch.cat((self.actions_buffer[nexec:, :], torch.zeros(nexec, self.opt.n_actions).cuda()), 0).cuda())
@@ -1235,7 +1241,10 @@ class FwdCNN_TEN3(nn.Module):
                 cost = pred[2]
                 proximity_cost = cost[:, :, 0]
                 lane_cost = cost[:, :, 1]
-                v = self.value_function(pred[0][:, -self.value_function.opt.ncond:].contiguous(), pred[1][:, -self.value_function.opt.ncond:].contiguous())
+                if hasattr(self, 'value_function'):
+                    v = self.value_function(pred[0][:, -self.value_function.opt.ncond:].contiguous(), pred[1][:, -self.value_function.opt.ncond:].contiguous())
+                else:
+                    v = Variable(torch.zeros(n_futures, 1).cuda())
                 loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
                 if loss.item() < 0.2:
                     break
@@ -1244,7 +1253,7 @@ class FwdCNN_TEN3(nn.Module):
 
             else:
                 self.train()
-                pred_images_var, pred_states_var, pred_costs_var, pred_values_var, pred_costs_mean, pred_values_mean, _ = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
+                pred_images_var, pred_states_var, pred_costs_var, pred_values_var, pred_costs_mean, pred_values_mean, _ = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
                 pred_costs_var = pred_costs_var.mean(0)
                 pred_costs_mean = pred_costs_mean.mean(0)
                 cost_loss = torch.cat((pred_costs_mean[:, 0], pred_values_mean.view(1)), 0)* gamma_mask[0]
@@ -1333,7 +1342,7 @@ class FwdCNN_TEN3(nn.Module):
                 optimizer_z.zero_grad()
                 pred, _ = self.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z, sampling='fixed')
                 pred_cost = pred[2][:, :, 0].mean()
-                _, _, _, _, _, _, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+                _, _, _, _, _, _, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
                 loss_z = -pred_cost + total_u_loss.mean()
                 loss_z.backward()
                 torch.nn.utils.clip_grad_norm_([Z], 1)
@@ -1405,8 +1414,8 @@ class FwdCNN_TEN3(nn.Module):
                 a_emb = torch.sigmoid(a_emb)
                 z_exp = torch.sigmoid(z_exp)
                 h = h_x + a_emb + (1-a_emb) * z_exp
-
-            h = h + self.u_network(h)
+            if not self.disable_unet:
+                h = h + self.u_network(h)
             pred_image, pred_state, pred_cost = self.decoder(h)
             pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
             # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
@@ -1762,7 +1771,8 @@ class FwdCNN_VAE3(nn.Module):
             h = utils.combine(h_x, z_exp, self.opt.combine)
             a_emb = self.a_encoder(actions[:, t]).view(h.size())
             h = utils.combine(h, a_emb, self.opt.combine)
-            h = h + self.u_network(h)
+            if not self.disable_unet:
+                h = h + self.u_network(h)
 
             pred_image, pred_state, pred_cost = self.decoder(h)
             if sampling is not None:

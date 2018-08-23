@@ -1,4 +1,4 @@
-import argparse
+import argparse, pdb
 import numpy
 import gym
 
@@ -35,14 +35,20 @@ print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
+    images, states = [], []
     env.reset(time_slot=None, vehicle_id=None)  # if None => picked at random
 
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))
+        if observation is not None:
+            input_images, input_states = observation[0].contiguous(), observation[1].contiguous()
+            images.append(input_images)
+            states.append(input_states)
         # print(observation, reward, done, info)
         env.render()
 
     print('Episode completed!')
+    pdb.set_trace()
 
 print('Done')
