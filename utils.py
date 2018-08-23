@@ -10,74 +10,74 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 
-
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(3), images.size(4)
-    images = images.view(bsize*npred, nchannels, crop_h, crop_w)
-    states = states.view(bsize*npred, 4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
+        3), images.size(4)
+    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
+    states = states.view(bsize * npred, 4)
 
     if unnormalize:
         states *= (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
         states += s_mean.view(1, 4).expand(states.size()).cuda()
 
-    speed = states[:, 2:].norm(2, 1) * SCALE #pixel/s
-    width, length = car_size[:, 0], car_size[:, 1] # feet
-    width *= SCALE * (0.3048*24/3.7) # pixels
-    length *= SCALE * (0.3048*24/3.7) # pixels
+    speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
+    width, length = car_size[:, 0], car_size[:, 1]  # feet
+    width *= SCALE * (0.3048 * 24 / 3.7)  # pixels
+    length *= SCALE * (0.3048 * 24 / 3.7)  # pixels
 
-    safe_distance = torch.abs(speed) * safe_factor + (1*24/3.7) * SCALE  # plus one metre (TODO change)
+    safe_distance = torch.abs(speed) * safe_factor + (1 * 24 / 3.7) * SCALE  # plus one metre (TODO change)
 
     # Compute x/y minimum distance to other vehicles (pixel version)
     # Account for 1 metre overlap (low data accuracy)
-    alpha = 1 * SCALE * (24/3.7)  # 1 m overlap collision
+    alpha = 1 * SCALE * (24 / 3.7)  # 1 m overlap collision
     # Create separable proximity mask
 
     max_x = torch.ceil((crop_h - torch.clamp(length - alpha, min=0)) / 2)
     max_y = torch.ceil((crop_w - torch.clamp(width - alpha, min=0)) / 2)
-    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
-    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
+    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
+    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
     min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = torch.tensor(min_y)
-    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize*npred).cuda()
+    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-    x_filter = x_filter.unsqueeze(0).expand(bsize*npred, crop_h).cuda()
-    x_filter = torch.min(x_filter, max_x.view(bsize*npred, 1).expand(x_filter.size()))
-    x_filter = torch.max(x_filter, min_x.view(bsize*npred, 1))
+    x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
+    x_filter = torch.min(x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size()))
+    x_filter = torch.max(x_filter, min_x.view(bsize * npred, 1))
 
-    x_filter = (x_filter - min_x.view(bsize*npred, 1)) / (max_x - min_x).view(bsize*npred, 1)
+    x_filter = (x_filter - min_x.view(bsize * npred, 1)) / (max_x - min_x).view(bsize * npred, 1)
     y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
-    y_filter = y_filter.view(1, crop_w).expand(bsize*npred, crop_w).cuda()
-    y_filter = torch.min(y_filter, max_y.view(bsize*npred, 1))
-    y_filter = torch.max(y_filter, min_y.view(bsize*npred, 1))
-    y_filter = (y_filter - min_y.view(bsize*npred, 1)) / (max_y.view(bsize*npred, 1) - min_y.view(bsize*npred, 1))
+    y_filter = y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
+    y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
+    y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
+    y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (max_y.view(bsize * npred, 1) - min_y.view(bsize * npred, 1))
     x_filter = x_filter.cuda()
     y_filter = y_filter.cuda()
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
+    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
 
 
 def parse_car_path(path):
     splits = path.split('/')
-    timeslot = splits[4]
+    time_slot = splits[4]
     car_id = int(re.findall('car(\d+).pkl', splits[5])[0])
-    data_files = {'trajectories-0400-0415': 0, 
-                  'trajectories-0500-0515': 1, 
+    data_files = {'trajectories-0400-0415': 0,
+                  'trajectories-0500-0515': 1,
                   'trajectories-0515-0530': 2}
-    timeslot = data_files[timeslot]
-    return timeslot, car_id
+    time_slot = data_files[time_slot]
+    return time_slot, car_id
 
 
 def plot_mean_and_CI(mean, lb, ub, color_mean=None, color_shading=None):
     # plot the shaded range of the confidence intervals                                                                                                                                                   
-    time_steps = [i+3 for i in range(len(mean))]
+    time_steps = [i + 3 for i in range(len(mean))]
     plt.fill_between(time_steps, ub, lb,
                      color=color_shading, alpha=0.2)
     # plot the mean on top                                                                                                                                                                                
@@ -88,18 +88,18 @@ def mean_confidence_interval(data, confidence=0.95):
     n = data.shape[0]
     m, se = numpy.mean(data, 0), scipy.stats.sem(data, 0)
     h = numpy.std(data, 0)
-#    h = se * scipy.stats.t._ppf((1+confidence)/2., n-1)
-    return m, m-h, m+h
-
+    #    h = se * scipy.stats.t._ppf((1+confidence)/2., n-1)
+    return m, m - h, m + h
 
 
 # Logging function
 def log(fname, s):
     if not os.path.isdir(os.path.dirname(fname)):
-            os.system("mkdir -p " + os.path.dirname(fname))
+        os.system(f'mkdir -p {os.path.dirname(fname)}')
     f = open(fname, 'a')
-    f.write(str(datetime.now()) + ': ' + s + '\n')
+    f.write(f'{str(datetime.now())}: {s}\n')
     f.close()
+
 
 def make_variables(x):
     y = []
@@ -114,6 +114,7 @@ def combine(x, y, method):
     elif method == 'mult':
         return x * y
 
+
 def format_losses(loss_i, loss_s, loss_c, loss_p=None, loss_p2=None, split='train'):
     log_string = ' '
     log_string += '{} loss ['.format(split)
@@ -126,6 +127,7 @@ def format_losses(loss_i, loss_s, loss_c, loss_p=None, loss_p2=None, split='trai
         log_string += ', p2: {:.5f}'.format(loss_p2)
     log_string += ']'
     return log_string
+
 
 def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     targets = [targets_[i] for i in range(0, 3)]
@@ -212,17 +214,17 @@ def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, 
             text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
         if actions is not None:
             text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
-            x = int(images[t].shape[1]*5/2 - mu[t][1] * 30) 
-            y = int(images[t].shape[0]*5/2 - mu[t][0] * 30) 
+            x = int(images[t].shape[1] * 5 / 2 - mu[t][1] * 30)
+            y = int(images[t].shape[0] * 5 / 2 - mu[t][0] * 30)
 
             if std is not None:
                 ex = max(3, int(std[t][1] * 100))
                 ey = max(3, int(std[t][0] * 100))
             else:
                 ex, ey = 3, 3
-            bbox =  (x - ex, y - ey, x + ex, y + ey)
+            bbox = (x - ex, y - ey, x + ex, y + ey)
             draw.ellipse(bbox, fill=(200, 200, 200))
-        draw.text((10, 130*5-10), text, (255,255,255))
+        draw.text((10, 130 * 5 - 10), text, (255, 255, 255))
         img = numpy.asarray(pil)
         scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)
 
@@ -237,31 +239,34 @@ def grad_norm(net):
     total_norm = total_norm ** (1. / 2)
     return total_norm
 
+
 def read_config(file_path):
     """Read JSON config."""
     json_object = json.load(open(file_path, 'r'))
     return json_object
 
+
 def log_pdf(z, mu, sigma):
-    a = 0.5*torch.sum(((z-mu)/sigma)**2, 1)
-    b = torch.log(2*math.pi*torch.prod(sigma, 1))
+    a = 0.5 * torch.sum(((z - mu) / sigma) ** 2, 1)
+    b = torch.log(2 * math.pi * torch.prod(sigma, 1))
     loss = a.squeeze() + b.squeeze()
     return loss
 
 
-
 def log_gaussian_distribution(y, mu, sigma):
-    Z = 1.0 / ((2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians (!!can be numerically unstable)
+    Z = 1.0 / ((2.0 * numpy.pi) ** (
+                mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
-    result += torch.log(2*math.pi*torch.prod(sigma, 2))
-#    result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
-#    result *= oneDivSqrtTwoPI
+    result += torch.log(2 * math.pi * torch.prod(sigma, 2))
+    #    result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
+    #    result *= oneDivSqrtTwoPI
     return result
 
 
 def gaussian_distribution(y, mu, sigma):
-    oneDivSqrtTwoPI = 1.0 / ((2.0*numpy.pi)**(mu.size(2)/2)) # normalization factor for Gaussians (!!can be numerically unstable)
+    oneDivSqrtTwoPI = 1.0 / ((2.0 * numpy.pi) ** (
+                mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = -0.5 * torch.sum(result * result, 2)
     result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
@@ -269,21 +274,19 @@ def gaussian_distribution(y, mu, sigma):
     return result
 
 
-
-
-
 def hinge_loss(u, z):
     bsize = z.size(0)
     nz = z.size(1)
     uexp = u.view(bsize, 1, nz).expand(bsize, bsize, nz).contiguous()
     zexp = z.view(1, bsize, nz).expand(bsize, bsize, nz).contiguous()
-    uexp = uexp.view(bsize*bsize, nz)
-    zexp = zexp.view(bsize*bsize, nz)
+    uexp = uexp.view(bsize * bsize, nz)
+    zexp = zexp.view(bsize * bsize, nz)
     sim = torch.sum(uexp * zexp, 1).view(bsize, bsize)
     loss = sim - torch.diag(sim).view(-1, 1)
     loss = F.relu(loss)
     loss = torch.mean(loss)
     return loss
+
 
 # second represents the prior
 def kl_criterion(mu1, logvar1, mu2, logvar2):
@@ -291,10 +294,10 @@ def kl_criterion(mu1, logvar1, mu2, logvar2):
     #   log( sqrt(
     # 
     bsize = mu1.size(0)
-    sigma1 = logvar1.mul(0.5).exp() 
-    sigma2 = logvar2.mul(0.5).exp() 
-    kld = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
-    return kld.sum()/bsize
+    sigma1 = logvar1.mul(0.5).exp()
+    sigma2 = logvar2.mul(0.5).exp()
+    kld = torch.log(sigma2 / sigma1) + (torch.exp(logvar1) + (mu1 - mu2) ** 2) / (2 * torch.exp(logvar2)) - 1 / 2
+    return kld.sum() / bsize
 
 
 def log_sum_exp(value, dim=None, keepdim=False):
@@ -318,7 +321,6 @@ def log_sum_exp(value, dim=None, keepdim=False):
             return m + torch.log(sum_exp)
 
 
-
 # inputs are:
 # pi: categorical distribution over mixture components
 # mu: means of mixture components
@@ -326,12 +328,12 @@ def log_sum_exp(value, dim=None, keepdim=False):
 # y: points to evaluate the negative-log-likelihood of, under the model determined by these parameters
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     minsigma = sigma.min().item()
-    assert(minsigma >= 0, '{} < 0'.format(minsigma))
+    assert (minsigma >= 0, '{} < 0'.format(minsigma))
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
     result -= torch.log(pi)
-    result += 0.5*c*math.log(2*math.pi)
+    result += 0.5 * c * math.log(2 * math.pi)
     result += torch.sum(torch.log(sigma), 2)
     result = -result
     result = -log_sum_exp(result, dim=1)
@@ -340,35 +342,32 @@ def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     return result
 
 
-
 # embed Z distribution as well as some special z's (ztop) using PCA and tSNE.
 # Useful for visualizing predicted z vectors.
 def embed(Z, ztop, ndim=3):
     bsize = ztop.shape[0]
     nsamples = ztop.shape[1]
     dim = ztop.shape[2]
-    ztop = ztop.reshape(bsize*nsamples, dim)
-    Z_all=numpy.concatenate((ztop, Z), axis=0)
+    ztop = ztop.reshape(bsize * nsamples, dim)
+    Z_all = numpy.concatenate((ztop, Z), axis=0)
 
     # PCA
     Z_all_pca = decomposition.PCA(n_components=ndim).fit_transform(Z_all)
-    ztop_pca = Z_all_pca[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
-    Z_pca = Z_all_pca[bsize*nsamples:]
+    ztop_pca = Z_all_pca[0:bsize * nsamples].reshape(bsize, nsamples, ndim)
+    Z_pca = Z_all_pca[bsize * nsamples:]
     ztop_only_pca = decomposition.PCA(n_components=3).fit_transform(ztop)
 
     # Spectral
     Z_all_laplacian = manifold.SpectralEmbedding(n_components=ndim).fit_transform(Z_all)
-    ztop_laplacian = Z_all_laplacian[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
-    Z_laplacian = Z_all_laplacian[bsize*nsamples:]
+    ztop_laplacian = Z_all_laplacian[0:bsize * nsamples].reshape(bsize, nsamples, ndim)
+    Z_laplacian = Z_all_laplacian[bsize * nsamples:]
     ztop_only_laplacian = manifold.SpectralEmbedding(n_components=3).fit_transform(ztop)
 
     # Isomap
     Z_all_isomap = manifold.Isomap(n_components=ndim).fit_transform(Z_all)
-    ztop_isomap = Z_all_isomap[0:bsize*nsamples].reshape(bsize, nsamples, ndim)
-    Z_isomap = Z_all_isomap[bsize*nsamples:]
+    ztop_isomap = Z_all_isomap[0:bsize * nsamples].reshape(bsize, nsamples, ndim)
+    Z_isomap = Z_all_isomap[bsize * nsamples:]
     ztop_only_isomap = manifold.Isomap(n_components=3).fit_transform(ztop)
-
-
 
     # TSNE
     '''
@@ -376,7 +375,7 @@ def embed(Z, ztop, ndim=3):
     ztop_tsne = Z_all_tsne[0:bsize*nsamples].reshape(bsize, nsamples, 2)
     Z_tsne = Z_all_tsne[bsize*nsamples:]
     '''
-#    Z_tsne, ztop_tsne = None, None
+    #    Z_tsne, ztop_tsne = None, None
     return {'Z_pca': Z_pca, 'ztop_pca': ztop_pca,
             'Z_laplacian': Z_laplacian, 'ztop_laplacian': ztop_laplacian,
             'Z_isomap': Z_isomap, 'ztop_isomap': ztop_isomap,
