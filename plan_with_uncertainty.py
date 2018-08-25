@@ -37,7 +37,7 @@ parser.add_argument('-u_hinge', type=float, default=1.0)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-policy_model_il', type=str, default='')
@@ -63,7 +63,7 @@ def load_models():
     stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
     forward_model = torch.load(opt.model_dir + opt.mfile)
     if type(forward_model) is dict: forward_model = forward_model['model']
-    forward_model.disable_unet=True
+    forward_model.disable_unet=False
     value_function, policy_network_il, policy_network_mbil = None, None, None
     if opt.value_model != '':
         value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
@@ -208,7 +208,7 @@ for j in range(n_test):
             done = True
 
     times_to_collision.append(len(images))
-    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep: {} | time: {} | mean perf: {}'.format(j, len(images), torch.Tensor(times_to_collision).mean()))
+    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep: {} | time: {} | mean perf: {} | median perf: {}'.format(j, len(images), torch.Tensor(times_to_collision).mean(), torch.Tensor(times_to_collision).median()))
     images = torch.stack(images)
     states = torch.stack(states)
     costs = torch.tensor(costs)

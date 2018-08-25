@@ -85,7 +85,7 @@ else:
     # load the model
     model = torch.load(opt.model_dir + opt.mfile)
     if type(model) is dict: model = model['model']
-    model.disable_unet=True
+    model.disable_unet=False
     model.create_policy_net(opt)
     if opt.value_model != '':
         value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()

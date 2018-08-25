@@ -906,7 +906,7 @@ class FwdCNN_TEN3(nn.Module):
         self.p_z = []
         for j in range(nbatches):
             print('[estimating z distribution: {:2.1%}]'.format(float(j)/nbatches), end="\r")
-            inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
+            inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', opt.npred)
             inputs = utils.make_variables(inputs)
             targets = utils.make_variables(targets)
             actions = utils.Variable(actions)

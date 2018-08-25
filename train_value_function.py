@@ -60,7 +60,7 @@ print(f'[will save model as: {opt.model_file}]')
 
 forward_model = torch.load(opt.model_dir + opt.mfile)
 if type(forward_model) is dict: forward_model = forward_model['model']
-forward_model.disable_unet=True
+forward_model.disable_unet=False
 forward_model.intype('gpu')
 # keep dropout
 forward_model.train()

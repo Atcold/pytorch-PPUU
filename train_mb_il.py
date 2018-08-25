@@ -48,7 +48,7 @@ parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.05-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -111,6 +111,7 @@ if opt.actions_subsample == -1:
 
 model.intype('gpu')
 model.cuda()
+model.disable_unet=False
 
 
 
@@ -142,7 +143,7 @@ def train(nbatches, npred):
     total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train', npred)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
@@ -183,7 +184,7 @@ def test(nbatches, npred):
     model.eval()
     total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
-        inputs, actions, targets = dataloader.get_batch_fm('test', npred)
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('test', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
