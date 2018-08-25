@@ -1040,10 +1040,12 @@ class FwdCNN_TEN3(nn.Module):
             u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - self.opt.u_hinge)
             u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - self.opt.u_hinge)
             u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - self.opt.u_hinge)
-            u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - self.opt.u_hinge)
             total_u_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() 
+            '''
             if hasattr(self, 'value_function'):
+                u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - self.opt.u_hinge)
                 total_u_loss += u_loss_values.mean()
+            '''
         else:
             total_u_loss = None
 
@@ -1220,7 +1222,6 @@ class FwdCNN_TEN3(nn.Module):
         Z = Z.view(npred, n_futures, -1)
         Z0 = Z.clone()
 
-
         actions.requires_grad = True
         optimizer_a = optim.Adam([actions], bprop_lrt)
         actions_rep = actions.unsqueeze(0).expand(n_futures, npred, self.opt.n_actions)
@@ -1254,8 +1255,6 @@ class FwdCNN_TEN3(nn.Module):
                 v = Variable(torch.zeros(n_futures, 1).cuda())
             proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
             loss = proximity_loss
-
-            
 
             if u_reg > 0.0:
                 self.train()

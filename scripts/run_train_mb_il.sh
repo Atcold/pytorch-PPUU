@@ -2,7 +2,7 @@
 
 for targetprop in 0; do 
     for size in 256; do 
-        for npred in 1 3 5 10 20 50 100; do 
+        for npred in 1 3 5 20; do 
             for lambda_c in 0.0; do 
                 for gamma in 0.99; do 
                     for seed in 1; do 

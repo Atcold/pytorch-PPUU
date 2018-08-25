@@ -68,7 +68,7 @@ model2.intype('gpu')
 
 forward_model = torch.load(opt.model_dir + opt.fwd_mfile)
 if type(forward_model) is dict: forward_model = forward_model['model']
-forward_model.disable_unet=True
+forward_model.disable_unet=False
 pzfile = opt.model_dir + opt.fwd_mfile + '.pz'
 p_z = torch.load(pzfile)
 forward_model.p_z = p_z

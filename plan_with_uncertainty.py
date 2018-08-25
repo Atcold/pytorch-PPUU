@@ -25,8 +25,8 @@ parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-nexec', type=int, default=1)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-rollout_length', type=int, default=1)
-parser.add_argument('-bprop_niter', type=int, default=10)
-parser.add_argument('-bprop_lrt', type=float, default=1.0)
+parser.add_argument('-bprop_niter', type=int, default=5)
+parser.add_argument('-bprop_lrt', type=float, default=0.1)
 parser.add_argument('-bprop_buffer', type=int, default=1)
 parser.add_argument('-bprop_save_opt_stats', type=int, default=1)
 parser.add_argument('-n_dropout_models', type=int, default=10)
@@ -39,7 +39,7 @@ parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='')
+parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
 parser.add_argument('-policy_model_il', type=str, default='')
 parser.add_argument('-policy_model_svg', type=str, default='svg-policy-gauss-nfeature=256-npred=40-lambdau=1.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-seed=1novalue.model')
 parser.add_argument('-policy_model_tm', type=str, default='mbil-policy-gauss-nfeature=256-npred=1-lambdac=0.0-gamma=0.99-seed=1-model=fwd-cnn-ten3-zdropout=0.5.model')
@@ -102,6 +102,8 @@ if opt.u_reg > 0.0:
         forward_model.value_function.train()
     forward_model.estimate_uncertainty_stats(dataloader, n_batches=50, npred=opt.npred)
 
+    
+
 
 
 gym.envs.registration.register(
@@ -129,12 +131,15 @@ if 'bprop' in opt.method:
     plan_file += f'-n_dropout={opt.n_dropout_models}'
     plan_file += f'-abuffer={opt.bprop_buffer}'
     plan_file += f'-saveoptstats={opt.bprop_save_opt_stats}'
+    if opt.value_model != '':
+        plan_file += f'-vmodel'
 
 if 'policy-tm' in opt.method:
     plan_file += f'-{opt.policy_model_tm}'
 
 if 'policy-il' in opt.method:
     plan_file += f'-{opt.policy_model_il}'
+
 
 
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
