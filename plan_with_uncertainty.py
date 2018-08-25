@@ -25,7 +25,7 @@ parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-nexec', type=int, default=1)
 parser.add_argument('-n_rollouts', type=int, default=10)
 parser.add_argument('-rollout_length', type=int, default=1)
-parser.add_argument('-bprop_niter', type=int, default=5)
+parser.add_argument('-bprop_niter', type=int, default=10)
 parser.add_argument('-bprop_lrt', type=float, default=1.0)
 parser.add_argument('-bprop_buffer', type=int, default=1)
 parser.add_argument('-bprop_save_opt_stats', type=int, default=1)
@@ -33,6 +33,7 @@ parser.add_argument('-n_dropout_models', type=int, default=10)
 parser.add_argument('-opt_z', type=int, default=0)
 parser.add_argument('-opt_a', type=int, default=1)
 parser.add_argument('-u_reg', type=float, default=0.0)
+parser.add_argument('-u_hinge', type=float, default=1.0)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
@@ -90,11 +91,15 @@ def load_models():
 
 forward_model, value_function, policy_network_il, policy_network_mbil, data_stats = load_models()
 
+dataloader = DataLoader(None, opt, 'i80')
+splits = torch.load('/home/mbhenaff/scratch/traffic-data-atcold/data_i80_v0/splits.pth')
+
+
 if opt.u_reg > 0.0:
     forward_model.train()
+    forward_model.opt.u_hinge = opt.u_hinge
     if hasattr(forward_model, 'value_function'):
         forward_model.value_function.train()
-    dataloader = DataLoader(None, opt, opt.map)
     forward_model.estimate_uncertainty_stats(dataloader, n_batches=50, npred=opt.npred)
 
 
@@ -112,13 +117,18 @@ env_names = {
 
 env = gym.make(env_names[opt.map])
 
-dataloader = DataLoader(None, opt, 'i80')
-splits = torch.load('/home/mbhenaff/scratch/traffic-data-atcold/data_i80_v0/splits.pth')
-
 plan_file = opt.method
 
 if 'bprop' in opt.method:
-    plan_file += f'-rollouts={opt.n_rollouts}-rollout_length={opt.npred}-lrt={opt.bprop_lrt}-niter={opt.bprop_niter}-ureg={opt.u_reg}-n_dropout={opt.n_dropout_models}=abuffer={opt.bprop_buffer}-saveoptstats={opt.bprop_save_opt_stats}'
+    plan_file += f'-rollouts={opt.n_rollouts}'
+    plan_file += f'-rollout_length={opt.npred}'
+    plan_file += f'-lrt={opt.bprop_lrt}'
+    plan_file += f'-niter={opt.bprop_niter}'
+    plan_file += f'-ureg={opt.u_reg}'
+    plan_file += f'-uhinge={opt.u_hinge}'
+    plan_file += f'-n_dropout={opt.n_dropout_models}'
+    plan_file += f'-abuffer={opt.bprop_buffer}'
+    plan_file += f'-saveoptstats={opt.bprop_save_opt_stats}'
 
 if 'policy-tm' in opt.method:
     plan_file += f'-{opt.policy_model_tm}'
@@ -147,12 +157,12 @@ for j in range(n_test):
             while inputs is None:
                 inputs, cost, done, info = env.step(numpy.zeros((2,)))
             print('[done]')
-        pdb.set_trace()
         input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
+        car_size = torch.Tensor([info._width / (0.3048 * 24 / 3.7), info._length / (0.3048 * 24 / 3.7)]).view(1, 2).cuda()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
         elif opt.method == 'bprop':
-            a = forward_model.plan_actions_backprop(input_images, input_states, car_sizes, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec)
+            a = forward_model.plan_actions_backprop(input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec)
         elif opt.method == 'policy-il':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
             a = a.squeeze().cpu().view(1, 2).numpy()

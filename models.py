@@ -985,7 +985,7 @@ class FwdCNN_TEN3(nn.Module):
         input_states = input_states.contiguous().view(bsize*n_models, self.opt.ncond, 4)
         actions = actions.unsqueeze(0).expand(n_models, bsize, npred, 2).contiguous().view(bsize*n_models, npred, 2)
             
-        self.train()
+        self.train() 
         if Z is None:
             Z = self.sample_z(bsize * npred, method='fp')[0]
             Z = Z.view(bsize, npred, -1)
@@ -1037,10 +1037,10 @@ class FwdCNN_TEN3(nn.Module):
             pred_v_var = Variable(torch.zeros(bsize).cuda())
 
         if compute_total_loss:
-            u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - 0.5)
-            u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - 0.5)
-            u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - 0.5)
-            u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - 0.5)
+            u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - self.opt.u_hinge)
+            u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - self.opt.u_hinge)
+            u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - self.opt.u_hinge)
+            u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - self.opt.u_hinge)
             total_u_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() 
             if hasattr(self, 'value_function'):
                 total_u_loss += u_loss_values.mean()
@@ -1222,7 +1222,7 @@ class FwdCNN_TEN3(nn.Module):
 
 
         actions.requires_grad = True
-        optimizer_a = optim.Adam([actions], bprop_lrt, eps=1e-3)
+        optimizer_a = optim.Adam([actions], bprop_lrt)
         actions_rep = actions.unsqueeze(0).expand(n_futures, npred, self.opt.n_actions)
         
         if (self.optimizer_a_stats is not None) and save_opt_stats:
@@ -1235,41 +1235,38 @@ class FwdCNN_TEN3(nn.Module):
         for i in range(bprop_niter):
             optimizer_a.zero_grad()
             self.zero_grad()
+            
+            # first calculate proximity cost. Don't use dropout for this, it makes optimization difficult.
+            self.eval()
+            pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
+            pred_images, pred_states = pred[0], pred[1]
+            proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.expand(n_futures, 2), unnormalize=True, s_mean=self.stats['s_mean'], s_std=self.stats['s_std'])
 
-            if u_reg == 0.0:
-                pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
-                cost = pred[2]
-                proximity_cost = cost[:, :, 0]
-                lane_cost = cost[:, :, 1]
-                if hasattr(self, 'value_function'):
-                    v = self.value_function(pred[0][:, -self.value_function.opt.ncond:].contiguous(), pred[1][:, -self.value_function.opt.ncond:].contiguous())
-                else:
-                    v = Variable(torch.zeros(n_futures, 1).cuda())
-                loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
-                if loss.item() < 0.2:
-                    break
-                loss.backward()
-                print('[iter {} | mean pred cost = {:.4f}], grad = {}'.format(i, loss.item(), actions.grad.data.norm()))
+            '''
+            cost = pred[2]
+            proximity_cost = cost[:, :, 0]
+            lane_cost = cost[:, :, 1]
+            '''
 
+            if hasattr(self, 'value_function'):
+                v = self.value_function(pred[0][:, -self.value_function.opt.ncond:].contiguous(), Variable(pred[1][:, -self.value_function.opt.ncond:].contiguous().data))
             else:
+                v = Variable(torch.zeros(n_futures, 1).cuda())
+            proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
+            loss = proximity_loss
+
+            
+
+            if u_reg > 0.0:
                 self.train()
-                pred_images_var, pred_states_var, pred_costs_var, pred_values_var, pred_costs_mean, pred_values_mean, _ = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
-                pred_costs_var = pred_costs_var.mean(0)
-                pred_costs_mean = pred_costs_mean.mean(0)
-                cost_loss = torch.cat((pred_costs_mean[:, 0], pred_values_mean.view(1)), 0)* gamma_mask[0]
-                cost_loss = cost_loss.mean()
-                if cost_loss < 0.2:
-                    break
-
-                u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / (self.u_costs_var + 1e-6))
-                u_loss_states = F.relu((pred_states_var - self.u_states_mean) / (self.u_states_var + 1e-6))
-                u_loss_images = F.relu((pred_images_var - self.u_images_mean) / (self.u_images_var + 1e-6))
-                u_loss_values = F.relu((pred_values_var - self.u_values_mean) / (self.u_values_var + 1e-6))
-                uncertainty_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() + u_loss_values
-                loss = cost_loss + u_reg * uncertainty_loss
-                loss.backward()
-                print('[iter {} | mean pred cost = {:.4f}, uncertainty = ({:.4f}, {:.4f}, {:.4f}, {:.4})], grad = {}'.format(i, cost_loss.item(), u_loss_costs.mean().item(), u_loss_states.mean().item(), u_loss_images.mean().item(), u_loss_values.item(), actions.grad.data.norm()))
-
+                _, _, _, _, _, _, uncertainty_loss = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
+                loss = loss + u_reg * uncertainty_loss
+            else:
+                uncertainty_loss = Variable(torch.zeros(1))
+                
+#            pred_images.register_hook(lambda x: print(f'pred images, gradnorm={x.norm()}'))
+            loss.backward()
+            print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())) 
             torch.nn.utils.clip_grad_norm([actions], 1)
             optimizer_a.step()
 

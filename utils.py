@@ -10,6 +10,41 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 
+def printnorm(x):
+    print(x.norm())
+
+
+
+def printgradnorm(self, grad_input, grad_output):
+    print('Inside ' + self.__class__.__name__ + ' backward')
+    print('Inside class:' + self.__class__.__name__)
+    print('')
+    print('grad_input: ', type(grad_input))
+    print('grad_input[0]: ', type(grad_input[0]))
+    print('grad_output: ', type(grad_output))
+    print('grad_output[0]: ', type(grad_output[0]))
+    print('')
+    print('grad_input size:', grad_input[0].size())
+    print('grad_output size:', grad_output[0].size())
+    print('grad_input norm:', grad_input[0].norm())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
@@ -18,13 +53,13 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     states = states.view(bsize*npred, 4).clone()
 
     if unnormalize:
-        states *= (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
-        states += s_mean.view(1, 4).expand(states.size()).cuda()
+        states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
+        states = states + s_mean.view(1, 4).expand(states.size()).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
-    width *= SCALE * (0.3048 * 24 / 3.7)  # pixels
-    length *= SCALE * (0.3048 * 24 / 3.7)  # pixels
+    width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
+    length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels 
 
     safe_distance = torch.abs(speed) * safe_factor + (1 * 24 / 3.7) * SCALE  # plus one metre (TODO change)
 
@@ -59,13 +94,10 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-<<<<<<< HEAD
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-=======
-    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
+#    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
 
 #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
->>>>>>> utils
     return costs, proximity_mask
 
 

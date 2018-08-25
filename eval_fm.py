@@ -57,6 +57,7 @@ if opt.cuda == 1:
 
 dataloader = DataLoader(None, opt, opt.dataset)
 model.opt.npred = opt.npred
+model.disable_unet=False
 
 
 dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'

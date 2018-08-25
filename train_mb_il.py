@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=16)
 parser.add_argument('-batch_size', type=int, default=8)
@@ -48,7 +48,6 @@ parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-anoise=0.0-zeroact=0-nz=32-beta=0.0-dropout=0.5-gclip=5.0-warmstart=1.model')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.0-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -116,14 +115,6 @@ model.cuda()
 
 
 dataloader = DataLoader(None, opt, opt.dataset)
-'''
-model.train()
-model.estimate_uncertainty_stats(dataloader, n_batches=10, npred=opt.npred)
-model.eval()
-'''
-
-
-
 
 
 # training and testing functions. We will compute several losses:
@@ -196,36 +187,7 @@ def test(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, pred_actions = model.train_policy_net(inputs, targets, targetprop = opt.targetprop, dropout=0.0)
-        '''
-        if i == 0: 
-            for b in range(opt.batch_size):
-                movie_dir = f'{opt.model_file}.mov/npred{npred}/mov{b}/'
-                utils.save_movie(movie_dir, pred[0][b].data, pred[1][b].data, pred[2][b].data, actions=pred_actions[b].data)
-            del pred
-
-            pred_true, _= model(inputs, actions, targets)
-            for b in range(opt.batch_size):
-                movie_dir = f'{opt.model_file}.mov/trueact_npred{npred}/mov{b}/'
-                utils.save_movie(movie_dir, pred_true[0][b].data, pred_true[1][b].data, pred_true[2][b].data, actions=actions[b].data)
-            del pred_true
-
-
-            actions_zero = Variable(actions.clone().data.zero_())
-            pred_zero, _ = model(inputs, actions_zero, targets)
-            for b in range(opt.batch_size):
-                movie_dir = f'{opt.model_file}.mov/zeroact_npred{npred}/mov{b}/'
-                utils.save_movie(movie_dir, pred_zero[0][b].data, pred_zero[1][b].data, pred_zero[2][b].data, actions=actions_zero[b].data)
-            del pred_zero
-                
-            actions_perm = actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()]
-            pred_perm, _= model(inputs, actions_perm, targets)
-            for b in range(opt.batch_size):
-                movie_dir = f'{opt.model_file}.mov/permact_npred{npred}/mov{b}/'
-                utils.save_movie(movie_dir, pred_perm[0][b].data, pred_perm[1][b].data, pred_perm[2][b].data, actions=actions_perm[b].data)
-            del pred_perm
-        '''
-            
+        pred, pred_actions = model.train_policy_net(inputs, targets, targetprop = opt.targetprop, dropout=0.0)            
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
         proximity_cost = proximity_cost * Variable(gamma_mask)
