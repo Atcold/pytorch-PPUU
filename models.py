@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.legacy.nn as lnn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision
+#import torchvision
 from torch.autograd import Variable
 import random, pdb, copy, os, math, numpy, copy, time
 import utils

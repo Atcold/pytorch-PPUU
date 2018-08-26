@@ -10,6 +10,7 @@ import scipy.misc
 from dataloader import DataLoader
 import utils
 import matplotlib.pyplot as plt
+import planning
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
@@ -31,8 +32,8 @@ parser.add_argument('-noise', type=float, default=0.0)
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-n_models', type=int, default=10)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v7/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
 opt = parser.parse_args()
@@ -51,7 +52,13 @@ opt.eval_dir = opt.model_dir + f'/eval/'
 
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
-model = torch.load(opt.model_dir + opt.mfile)['model']
+model = torch.load(opt.model_dir + opt.mfile)
+if type(model) is dict: model=model['model']
+model.disable_unet=False
+stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
+model.stats = stats
+
+
 model.eval()
 if opt.cuda == 1:
     model.intype('gpu')
@@ -117,43 +124,59 @@ dataloader.random.seed(12345)
 
 
 model.train()
-u1_mean, u2_mean = [], []
-u1_std, u2_std = [], []
+ui_truth, ui_perm, ui_turn = [], [], []
+us_truth, us_perm, us_turn = [], [], []
 
 for i in range(opt.n_batches):
     print(i)
     torch.cuda.empty_cache()    
-    inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred)
-    actions_zero = actions.clone()
-    actions_zero.data.zero_()
-    u1 = compute_uncertainty(inputs, actions, targets, 'tmp/zero')
+    inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', opt.npred)
+    inputs = utils.make_variables(inputs)
+    targets = utils.make_variables(targets)
+    actions = Variable(actions)
+    input_images, input_states = inputs[0], inputs[1]
+
+    u_i, u_s, u_c, _, _, _, _ = planning.compute_uncertainty_batch(model, input_images, input_states, actions, targets, car_sizes)
+    pred, loss_p = model(inputs, actions, targets, z_dropout=0)
+    ui_truth.append(u_i)
+    us_truth.append(u_s)
+
+
+    actions_perm = actions[torch.randperm(4)]
+    u_i, u_s, u_c, _, _, _, _ = planning.compute_uncertainty_batch(model, input_images, input_states, actions_perm, targets, car_sizes)
+    pred, loss_p = model(inputs, actions_perm, targets, z_dropout=0)
+    ui_perm.append(u_i)
+    us_perm.append(u_s)
 
     actions_turn = actions.clone()
     actions_turn.data[:, :, 0].fill_(1)
-    actions_turn.data[:, :, 1].fill_(1.5)
-    u2 = compute_uncertainty(inputs, actions_turn, targets, 'tmp/turn')
-    u1_std.append(u1[2])
-    u2_std.append(u2[2])
-    u1_mean.append(u1[3])
-    u2_mean.append(u2[3])
+    actions_turn.data[:, :, 1].fill_(2)
+    u_i, u_s, u_c, _, _, _, _ = planning.compute_uncertainty_batch(model, input_images, input_states, actions_turn, targets, car_sizes)
+    pred, loss_p = model(inputs, actions_turn, targets, z_dropout=0)
+    ui_turn.append(u_i)
+    us_turn.append(u_s)
 
-u1_std = torch.stack(u1_std).view(-1, opt.npred).cpu().numpy()
-u2_std = torch.stack(u2_std).view(-1, opt.npred).cpu().numpy()
-u1_mean = torch.stack(u1_mean).view(-1, opt.npred).cpu().numpy()
-u2_mean = torch.stack(u2_mean).view(-1, opt.npred).cpu().numpy()
 
-mean,low,hi=utils.mean_confidence_interval(u1_std)
+ui_truth = torch.stack(ui_truth)
+ui_turn = torch.stack(ui_turn)
+ui_perm = torch.stack(ui_perm)
+ui_truth = ui_truth.view(-1, opt.npred).cpu().numpy()
+ui_turn = ui_turn.view(-1, opt.npred).cpu().numpy()
+ui_perm = ui_perm.view(-1, opt.npred).cpu().numpy()
+us_truth = torch.stack(us_truth)
+us_turn = torch.stack(us_turn)
+us_perm = torch.stack(us_perm)
+us_truth = us_truth.view(-1, opt.npred).cpu().numpy()
+us_turn = us_turn.view(-1, opt.npred).cpu().numpy()
+us_perm = us_perm.view(-1, opt.npred).cpu().numpy()
+
+
+mean,low,hi=utils.mean_confidence_interval(ui_truth)
 utils.plot_mean_and_CI(mean, low, hi, color_mean='magenta', color_shading='magenta')
-mean,low,hi=utils.mean_confidence_interval(u2_std)
-utils.plot_mean_and_CI(mean, low, hi, color_mean='cyan', color_shading='cyan')
-
-
-'''
-mean,low,hi=utils.mean_confidence_interval(u1_mean)
-utils.plot_mean_and_CI(mean, low, hi, color_mean='red', color_shading='red')
-mean,low,hi=utils.mean_confidence_interval(u2_mean)
+#mean,low,hi=utils.mean_confidence_interval(us_perm)
+#utils.plot_mean_and_CI(mean, low, hi, color_mean='cyan', color_shading='cyan')
+mean,low,hi=utils.mean_confidence_interval(ui_turn)
 utils.plot_mean_and_CI(mean, low, hi, color_mean='blue', color_shading='blue')
-'''
 
 
 

@@ -45,7 +45,7 @@ parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-test_only', type=int, default=0)
-parser.add_argument('-save_movies', type=int, default=1)
+parser.add_argument('-save_movies', type=int, default=0)
 opt = parser.parse_args()
 
 opt.n_inputs = 4
