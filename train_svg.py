@@ -147,7 +147,7 @@ def train(nbatches, npred):
             print('warning, NaN')
             pdb.set_trace()
 
-        if i == 0 and False:  # TODO
+        if i == 0:  
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
