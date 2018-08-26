@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=plan
+#SBATCH --job-name=plan_mbil
 #SBATCH --output=logs/plan_%j.out
 #SBATCH --error=logs/plan_%j.err
 #SBATCH --time=48:00:00
@@ -14,5 +14,5 @@
 #SBATCH --mail-user=mbh305@nyu.edu
 
 cd ../
-srun python plan_with_uncertainty.py -method $1 -bprop_niter $2 -bprop_lrt $3 -u_reg $4 -u_hinge $5 -bprop_buffer $6
+srun python plan_with_uncertainty.py -method policy-tm -model_dir $1 -policy_model_tm $2
 

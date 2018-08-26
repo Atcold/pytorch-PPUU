@@ -976,116 +976,6 @@ class FwdCNN_TEN3(nn.Module):
         if self.use_cuda: z = z.cuda()
         return [Variable(z), z_indx]
 
-    # estimate prediction uncertainty using dropout
-    def compute_uncertainty_batch(self, input_images, input_states, actions, targets, car_sizes, npred=200, n_models=10, Z=None, dirname=None, detach=True, compute_total_loss = False):
-        bsize = input_images.size(0)
-        input_images = input_images.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        input_states = input_states.unsqueeze(0).expand(n_models, bsize, self.opt.ncond, 4)
-        input_images = input_images.contiguous().view(bsize*n_models, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        input_states = input_states.contiguous().view(bsize*n_models, self.opt.ncond, 4)
-        actions = actions.unsqueeze(0).expand(n_models, bsize, npred, 2).contiguous().view(bsize*n_models, npred, 2)
-            
-        self.train() 
-        if Z is None:
-            Z = self.sample_z(bsize * npred, method='fp')[0]
-            Z = Z.view(bsize, npred, -1)
-        Z_rep = Z.unsqueeze(0).expand(n_models, bsize, npred, -1).contiguous()
-        Z_rep = Z_rep.view(n_models*bsize, npred, -1)
-
-        t0 = time.time()
-        pred_images, pred_states, pred_costs = [], [], []
-        for t in range(npred):
-            z = Z_rep[:, t]
-            pred_image, pred_state, pred_cost = self.forward_single_step(input_images, input_states, actions[:, t], z)
-            if detach:
-                pred_image = Variable(pred_image.data)
-                pred_state = Variable(pred_state.data)
-                pred_cost = Variable(pred_cost.data)
-
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images.append(pred_image)
-            pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
-
-        pred_images = torch.stack(pred_images, 1).squeeze()
-        pred_states = torch.stack(pred_states, 1).squeeze()
-        
-        pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=self.stats['s_mean'], s_std=self.stats['s_std'])
-
-#        pred_costs = torch.stack(pred_costs, 1).squeeze()
-        pred_images = pred_images.view(n_models, bsize, npred, -1)
-        pred_states = pred_states.view(n_models, bsize, npred, -1)
-        pred_costs = pred_costs.view(n_models, bsize, npred, -1)
-        # use variance rather than standard deviation, since it is not differentiable at 0 due to sqrt
-        pred_images_var = torch.var(pred_images, 0).mean(2)
-        pred_states_var = torch.var(pred_states, 0).mean(2)
-        pred_costs_var = torch.var(pred_costs, 0).mean(2)
-        pred_costs_mean = torch.mean(pred_costs, 0)
-        pred_images = pred_images.view(n_models*bsize, npred, 3, self.opt.height, self.opt.width)
-        pred_states = pred_states.view(n_models*bsize, npred, 4)
-
-        if hasattr(self, 'value_function'):
-            pred_v = self.value_function(pred_images[:, -self.value_function.opt.ncond:], Variable(pred_states[:, -self.value_function.opt.ncond:].data))
-            if detach:
-                pred_v = Variable(pred_v.data)
-            pred_v = pred_v.view(n_models, bsize)
-            pred_v_var = torch.var(pred_v, 0).mean()
-            pred_v_mean = torch.mean(pred_v, 0)
-        else:
-            pred_v_mean = Variable(torch.zeros(bsize).cuda())
-            pred_v_var = Variable(torch.zeros(bsize).cuda())
-
-        if compute_total_loss:
-            u_loss_costs = F.relu((pred_costs_var - self.u_costs_mean) / self.u_costs_std - self.opt.u_hinge)
-            u_loss_states = F.relu((pred_states_var - self.u_states_mean) / self.u_states_std - self.opt.u_hinge)
-            u_loss_images = F.relu((pred_images_var - self.u_images_mean) / self.u_images_std - self.opt.u_hinge)
-            total_u_loss = u_loss_costs.mean() + u_loss_states.mean() + u_loss_images.mean() 
-            '''
-            if hasattr(self, 'value_function'):
-                u_loss_values = F.relu((pred_v_var - self.u_values_mean) / self.u_values_std - self.opt.u_hinge)
-                total_u_loss += u_loss_values.mean()
-            '''
-        else:
-            total_u_loss = None
-
-        return pred_images_var, pred_states_var, pred_costs_var, pred_v_var, pred_costs_mean, pred_v_mean, total_u_loss
-
-    # compute uncertainty estimates for the ground truth actions in the training set. 
-    # this will give us an idea of what normal ranges are using actions the forward model 
-    # was trained on
-    def estimate_uncertainty_stats(self, dataloader, n_batches=100, npred=200):
-        u_images, u_states, u_costs, u_values, speeds = [], [], [], [], []
-        data_bsize = dataloader.opt.batch_size
-        dataloader.opt.batch_size = 8
-        for i in range(n_batches):
-            print('[estimating normal uncertainty ranges: {:2.1%}]'.format(float(i)/n_batches), end="\r")
-            inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
-            pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = self.compute_uncertainty_batch(inputs[0], inputs[1], actions, targets, car_sizes, npred=npred, n_models=10, detach=True)
-            u_images.append(pred_images_var)
-            u_states.append(pred_states_var)
-            u_costs.append(pred_costs_var)
-            u_values.append(pred_v_var)
-            speeds.append(inputs[1][:, :, 2:].norm(2, 2))
-
-            
-        
-        u_images = torch.stack(u_images).view(-1, npred)
-        u_states = torch.stack(u_states).view(-1, npred)
-        u_costs = torch.stack(u_costs).view(-1, npred)
-        u_values = torch.stack(u_values)
-        speeds = torch.stack(speeds)
-
-        self.u_images_mean = u_images.mean(0)
-        self.u_states_mean = u_states.mean(0)
-        self.u_costs_mean = u_costs.mean(0)
-        self.u_values_mean = u_values.mean()
-
-        self.u_images_std = u_images.std(0)
-        self.u_states_std = u_states.std(0)
-        self.u_costs_std = u_costs.std(0)
-        self.u_values_std = u_values.std()
-        dataloader.opt.batch_size = data_bsize
 
 
     def forward_single_step(self, input_images, input_states, action, z):
@@ -1199,87 +1089,6 @@ class FwdCNN_TEN3(nn.Module):
         self.actions_buffer = torch.zeros(npred, self.opt.n_actions).cuda()
         self.optimizer_a_stats = None
 
-    def plan_actions_backprop(self, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1):
-
-        if use_action_buffer:
-            actions = Variable(torch.cat((self.actions_buffer[nexec:, :], torch.zeros(nexec, self.opt.n_actions).cuda()), 0).cuda())
-        elif actions is None:
-            actions = Variable(torch.zeros(npred, self.opt.n_actions).cuda())
-
-        if normalize:
-            input_images = input_images.clone().float().div_(255.0)
-            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
-            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
-            input_images = Variable(input_images.cuda()).unsqueeze(0)
-            input_states = Variable(input_states.cuda()).unsqueeze(0)
-        
-        input_images = input_images.expand(n_futures, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        input_states = input_states.expand(n_futures, self.opt.ncond, 4)
-        input_images = input_images.contiguous().view(n_futures, self.opt.ncond, 3, self.opt.height, self.opt.width)
-        input_states = input_states.contiguous().view(n_futures, self.opt.ncond, 4)
-            
-        Z = self.sample_z(n_futures * npred, method='fp')[0]
-        Z = Z.view(npred, n_futures, -1)
-        Z0 = Z.clone()
-
-        actions.requires_grad = True
-        optimizer_a = optim.Adam([actions], bprop_lrt)
-        actions_rep = actions.unsqueeze(0).expand(n_futures, npred, self.opt.n_actions)
-        
-        if (self.optimizer_a_stats is not None) and save_opt_stats:
-            print('loading opt stats')
-            optimizer_a.load_state_dict(self.optimizer_a_stats)
-
-        gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred + 1)])).float().cuda()).unsqueeze(0).expand(n_futures, npred + 1)
-
-        #HERE
-        for i in range(bprop_niter):
-            optimizer_a.zero_grad()
-            self.zero_grad()
-            
-            # first calculate proximity cost. Don't use dropout for this, it makes optimization difficult.
-            self.eval()
-            pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
-            pred_images, pred_states = pred[0], pred[1]
-            proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.expand(n_futures, 2), unnormalize=True, s_mean=self.stats['s_mean'], s_std=self.stats['s_std'])
-
-            '''
-            cost = pred[2]
-            proximity_cost = cost[:, :, 0]
-            lane_cost = cost[:, :, 1]
-            '''
-
-            if hasattr(self, 'value_function'):
-                v = self.value_function(pred[0][:, -self.value_function.opt.ncond:].contiguous(), Variable(pred[1][:, -self.value_function.opt.ncond:].contiguous().data))
-            else:
-                v = Variable(torch.zeros(n_futures, 1).cuda())
-            proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
-            loss = proximity_loss
-
-            if u_reg > 0.0:
-                self.train()
-                _, _, _, _, _, _, uncertainty_loss = self.compute_uncertainty_batch(input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
-                loss = loss + u_reg * uncertainty_loss
-            else:
-                uncertainty_loss = Variable(torch.zeros(1))
-                
-#            pred_images.register_hook(lambda x: print(f'pred images, gradnorm={x.norm()}'))
-            loss.backward()
-            print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())) 
-            torch.nn.utils.clip_grad_norm([actions], 1)
-            optimizer_a.step()
-
-        self.optimizer_a_stats = optimizer_a.state_dict()
-        if use_action_buffer:
-            self.actions_buffer = actions.data.clone()
-
-        a = actions.data.view(npred, 2)
-
-        if normalize:
-            a.clamp_(-3, 3)
-            a *= self.stats['a_std'].view(1, 2).expand(a.size()).cuda()
-            a += self.stats['a_mean'].view(1, 2).expand(a.size()).cuda()
-        return a.cpu().numpy()
 
     def create_policy_net(self, opt):
         if opt.policy == 'policy-gauss':
@@ -1297,81 +1106,6 @@ class FwdCNN_TEN3(nn.Module):
 
 
 
-    def train_policy_net_svg(self, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10):
-
-        input_images_orig, input_states_orig = inputs
-        target_images, target_states, target_costs = targets
-
-        input_images = input_images_orig.clone()
-        input_states = input_states_orig.clone()
-        bsize = input_images.size(0)
-        npred = target_images.size(1)
-        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
-        pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = None, None, None, None
-
-        total_ploss = Variable(torch.zeros(1).cuda())
-        Z = self.sample_z(npred * bsize, method=sampling_method)[0]
-        Z = Z.view(npred, bsize, self.opt.nz)
-        for t in range(npred):
-            actions, _, _, _ = self.policy_net(input_images, input_states)
-            pred_image, pred_state, pred_cost = self.forward_single_step(input_images, input_states, actions, Z[t])
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images.append(pred_image)
-            pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
-            pred_actions.append(actions)
-
-        pred_images = torch.cat(pred_images, 1)
-        pred_states = torch.stack(pred_states, 1)
-        pred_costs = torch.stack(pred_costs, 1)
-        pred_actions = torch.stack(pred_actions, 1)
-        
-        input_images = input_images_orig.clone()
-        input_states = input_states_orig.clone()
-        if n_updates_z > 0:
-            # optimize z vectors to be more difficult
-            pred_actions = Variable(pred_actions.data.clone())
-            Z.requires_grad = True
-            optimizer_z = optim.Adam([Z], lrt_z)
-            for k in range(n_updates_z):
-                optimizer_z.zero_grad()
-                pred, _ = self.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z, sampling='fixed')
-                pred_cost = pred[2][:, :, 0].mean()
-                _, _, _, _, _, _, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
-                loss_z = -pred_cost + total_u_loss.mean()
-                loss_z.backward()
-                torch.nn.utils.clip_grad_norm_([Z], 1)
-                optimizer_z.step()
-                print(f'[z opt | iter: {k} | pred cost: {pred_cost.item()}]')
-
-            pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = [], [], [], []
-            for t in range(npred):
-                actions, _, _, _ = self.policy_net(input_images, input_states)
-                pred_image, pred_state, pred_cost = self.forward_single_step(input_images, input_states, actions, Z[t])
-                input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-                input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-                pred_images_adv.append(pred_image)
-                pred_states_adv.append(pred_state)
-                pred_costs_adv.append(pred_cost)
-                pred_actions_adv.append(actions)
-
-            pred_images_adv = torch.cat(pred_images_adv, 1)
-            pred_states_adv = torch.stack(pred_states_adv, 1)
-            pred_costs_adv = torch.stack(pred_costs_adv, 1)
-            pred_actions_adv = torch.stack(pred_actions_adv, 1)
-
-
-        _, _, _, _, pred_costs_mean, pred_values_mean, total_u_loss = self.compute_uncertainty_batch(input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
-
-        gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
-        pred_costs_mean = pred_costs_mean[:, :, 0]
-        pred_costs = torch.cat((pred_costs_mean, pred_values_mean.view(-1, 1)), 1)
-        pred_costs *= gamma_mask.expand(pred_costs.size())
-        pred_costs = pred_costs.mean()
-        total_u_loss = total_u_loss.mean()
-
-        return [pred_images, pred_states, pred_costs, total_u_loss], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
 
@@ -1705,8 +1439,7 @@ class FwdCNN_VAE3(nn.Module):
         else:
             return mu
 
-    def sample_z(self, h_x):
-        bsize = h_x.size(0)
+    def sample_z(self, bsize, method=None, h_x=None):
         if self.opt.model == 'fwd-cnn-vae3-fp':
             z = Variable(torch.randn(bsize, self.opt.nz).cuda())
         elif self.opt.model == 'fwd-cnn-vae3-lp':
@@ -1715,6 +1448,30 @@ class FwdCNN_VAE3(nn.Module):
             logvar_prior = mu_logvar_prior[:, 1]
             z = self.reparameterize(mu_prior, logvar_prior, True)
         return z
+
+    def forward_single_step(self, input_images, input_states, action, z):
+        # encode the inputs (without the action)
+        bsize = input_images.size(0)
+        h_x = self.encoder(input_images, input_states)
+        z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+        h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+        a_emb = self.a_encoder(action).view(h_x.size())
+
+        if self.opt.zmult == 0:
+            h = utils.combine(h_x, z_exp, self.opt.combine)
+            h = utils.combine(h, a_emb, self.opt.combine)
+        elif self.opt.zmult == 1:
+            a_emb = torch.sigmoid(a_emb)
+            z_exp = torch.sigmoid(z_exp)
+            h = h_x + a_emb + (1-a_emb) * z_exp
+
+        if not self.disable_unet:
+            h = h + self.u_network(h)
+
+        pred_image, pred_state, pred_cost = self.decoder(h)
+        pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+        pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+        return pred_image, pred_state, pred_cost
             
 
     def forward(self, inputs, actions, targets, save_z = False, sampling=None, z_dropout=0.0, z_seq=None, noise=None):
@@ -1741,7 +1498,7 @@ class FwdCNN_VAE3(nn.Module):
                 # encode the targets into z
                 h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
                 if random.random() < z_dropout:
-                    z = Variable(self.sample_z(h_x).data)
+                    z = Variable(self.sample_z(bsize, method=None, h_x=h_x).data)
                 else:
                     mu_logvar = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1)).view(bsize, 2, self.opt.nz)
                     mu = mu_logvar[:, 0]
@@ -1759,7 +1516,7 @@ class FwdCNN_VAE3(nn.Module):
                         kld = utils.kl_criterion(mu, logvar, mu_prior, logvar_prior)
                     ploss += kld
             else:
-                z = self.sample_z(h_x)
+                z = self.sample_z(bsize, method=None, h_x=h_x)
 
             z_list.append(z)
             z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -1790,79 +1547,9 @@ class FwdCNN_VAE3(nn.Module):
         z_list = torch.stack(z_list, 1)
         return [pred_images, pred_states, pred_costs, z_list], [ploss, ploss2]
 
-
-    def plan_actions_backprop(self, observation, args, verbose=True, normalize=True, optimize_z=False, optimize_a=True, gamma=0.99):
-        input_images, input_states = observation
-        input_images = input_images.float().clone()
-        input_states = input_states.clone()
-        if normalize:
-            input_images.div_(255.0)
-            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
-            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
-            input_images = Variable(input_images.cuda()).unsqueeze(0)
-            input_states = Variable(input_states.cuda()).unsqueeze(0)
-        bsize = input_images.size(0)
-        # repeat for multiple rollouts
-        input_images = input_images.unsqueeze(1).expand(bsize, args.n_rollouts, args.ncond, 3, args.height, args.width)
-        input_states = input_states.unsqueeze(1).expand(bsize, args.n_rollouts, args.ncond, 4)
-        input_images = input_images.contiguous().view(bsize * args.n_rollouts, args.ncond, 3, args.height, args.width)
-        input_states = input_states.contiguous().view(bsize * args.n_rollouts, args.ncond, 4)
-        actions = Variable(torch.randn(bsize, args.npred, self.opt.n_actions).cuda().mul_(0.0))
-        if optimize_a:
-            actions.requires_grad = True
-            optimizer_a = optim.Adam([actions], args.lrt)
-
-        Z = self.sample_z(bsize * args.n_rollouts * args.npred, method='fp')[0]
-        Z = Z.view(args.npred, bsize * args.n_rollouts, -1)
-        Z0 = Z.clone()
-        gamma_mask = Variable(torch.from_numpy(numpy.array([[gamma**t, gamma**t] for t in range(args.npred)])).float().cuda()).unsqueeze(0)
-        if optimize_z:
-            Z.requires_grad = True
-            optimizer_z = optim.Adam([Z], args.lrt)
-        pred = None
-        for i in range(0, args.n_iter):
-            optimizer_a.zero_grad()
-            self.zero_grad()
-            actions_rep = actions.unsqueeze(1).expand(bsize, args.n_rollouts, args.npred, 2).contiguous().view(bsize * args.n_rollouts, args.npred, 2)
-            pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
-            costs = pred[2]
-            weighted_costs = costs * gamma_mask
-            loss = weighted_costs[:, :, 0].mean() + 0.5*weighted_costs[:, :, 1].mean()
-            loss.backward()
-            if verbose:
-                print('[iter {} | mean pred cost = ({:.4f}, {:.4f})], grad = {}'.format(i, costs.data[:, :, 0].mean(), costs.data[:, :, 1].mean(), actions.grad.data.norm()))
-            if optimize_a:
-                torch.nn.utils.clip_grad_norm([actions], 1)
-                optimizer_a.step()
-                actions.data.clamp_(min=-2, max=2)
-                actions.data[:, :, 1].clamp_(min=-1, max=1)
-
-            if optimize_z:
-                torch.nn.utils.clip_grad_norm([Z], 1)
-                Z.grad *= -1
-                optimizer_z.step()
-
-
-        # evaluate on new futures
-        Z_test = self.sample_z(bsize * args.n_rollouts * args.npred, method='fp')[0]
-        Z_test = Z_test.view(args.npred, bsize * args.n_rollouts, -1)
-        actions_rep = actions.unsqueeze(1).expand(bsize, args.n_rollouts, args.npred, 2).contiguous().view(bsize * args.n_rollouts, args.npred, 2)
-        pred, _ = self.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z_test)
-        costs = pred[2]
-        loss_test = costs[:, :, 0].mean() + 0.5*costs[:, :, 1].mean()
-        print('\n[pred test cost = {}]\n'.format(loss_test.data[0]))
-        
-        '''
-        # also get predictions using zero actions
-        pred_const, _ = self.forward([input_images, input_states], actions.clone().zero_(), None, sampling='fp', z_seq=Z0)
-        '''
-        pred_const = None
-        actions = actions.data.cpu()
-        if normalize:
-            actions *= self.stats['a_std'].view(1, 1, 2).expand(actions.size())
-            actions += self.stats['a_mean'].view(1, 1, 2).expand(actions.size())
-        return actions.squeeze().numpy(), pred, pred_const, loss_test.data[0]
-
+    def reset_action_buffer(self, npred):
+        self.actions_buffer = torch.zeros(npred, self.opt.n_actions).cuda()
+        self.optimizer_a_stats = None
 
     def create_policy_net(self, opt):
         if opt.policy == 'policy-ten':
@@ -1872,129 +1559,6 @@ class FwdCNN_VAE3(nn.Module):
 
     def create_prior_net(self, opt):
         self.prior_net = PriorGaussian(opt, opt.context_dim)
-
-        
-
-    def train_policy_net(self, inputs, targets, targetprop=0, dropout=0.0, save_z=False):
-        input_images, input_states = inputs
-        target_images, target_states, target_costs = targets
-        bsize = input_images.size(0)
-        npred = target_images.size(1)
-        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
-            
-        z, actions_context = None, None
-        total_ploss = Variable(torch.zeros(1).cuda())
-        self.policy_net.cntr = 0
-        for t in range(npred):
-            if self.opt.actions_subsample != -1:
-                next_images = target_images[:, t:t+self.opt.actions_subsample]
-                next_states = target_states[:, t:t+self.opt.actions_subsample]
-            else:
-                next_images, next_states = None, None
-            actions, ploss, _, _, u = self.policy_net(input_images, input_states, next_images, next_states, sample=False, dropout=dropout, save_z=save_z)
-            total_ploss += ploss
-            # encode the inputs
-            h_x = self.encoder(input_images, input_states)
-            # encode the targets into z
-            h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
-            z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
-            z_ = z
-            z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
-            a_emb = self.a_encoder(actions).view(h.size())
-            h = utils.combine(h, a_emb, self.opt.combine)
-            h = h + self.u_network(h)
-            pred_image, pred_state, pred_cost = self.decoder(h)
-            if self.opt.sigmoid_out == 1:
-                pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-            else:
-                pred_image = torch.clamp(pred_image + input_images[:, -1].unsqueeze(1), min=0, max=1)
-            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
-            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images.append(pred_image)
-            pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
-            pred_actions.append(actions)
-
-        pred_images = torch.cat(pred_images, 1)
-        pred_states = torch.stack(pred_states, 1)
-        pred_costs = torch.stack(pred_costs, 1)
-        pred_actions = torch.stack(pred_actions, 1)
-        return [pred_images, pred_states, pred_costs, ploss], pred_actions
-
-
-
-    def train_prior_net(self, inputs, targets):
-        input_images, input_states = inputs
-        target_images, target_states, target_costs = targets
-        bsize = input_images.size(0)
-        npred = target_images.size(1)
-        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
-            
-        self.policy_net.cntr = 0
-        actions, _, _, _, u = self.policy_net(input_images, input_states, target_images, target_states)
-        mu, sigma, _ = self.prior_net(input_images, input_states)
-        loss = utils.log_pdf(u, mu, sigma)
-        return loss.mean()
-
-
-
-
-    # assuming this is for a single input sample
-    def compute_action_policy_net(self, inputs, opt, npred=50, n_actions=10, n_futures=5, normalize=True):
-        input_images, input_states = inputs
-        pred_images, pred_states, pred_costs = [], [], []
-
-        if normalize:
-            input_images = input_images.clone().float().div_(255.0)
-            input_states -= self.stats['s_mean'].view(1, 4).expand(input_states.size())
-            input_states /= self.stats['s_std'].view(1, 4).expand(input_states.size())
-            input_images = Variable(input_images.cuda()).unsqueeze(0)
-            input_states = Variable(input_states.cuda()).unsqueeze(0)
-
-
-        # repeat for multiple rollouts
-        bsize = n_futures * n_actions
-        input_images = input_images.expand(bsize, opt.ncond, 3, opt.height, opt.width)
-        input_states = input_states.expand(bsize, opt.ncond, 4)
-        input_images = input_images.contiguous().view(bsize, opt.ncond, 3, opt.height, opt.width)
-        input_states = input_states.contiguous().view(bsize, opt.ncond, 4)
-            
-        Z = self.sample_z(n_futures * npred, method='fp')[0]
-        Z = Z.view(npred, 1, n_futures, -1)
-        Z = Z.expand(npred, n_actions, n_futures, -1)
-        Z0 = Z.clone()
-
-        # sample initial actions: we will choose to execute one of these at the end
-        actions_init = self.policy_net(input_images[0].unsqueeze(0), input_states[0].unsqueeze(0), sample=True, normalize=False, n_samples=n_actions)
-        actions = actions.clone().unsqueeze(0).expand(n_futures, n_actions, 2)
-        for t in range(npred):
-            # encode the inputs
-            actions = self.policy_net(input_images, input_states)
-            h_x = self.encoder(input_images, input_states, actions)
-            z_ = Z[t]
-            z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h = utils.combine(h_x, z_exp.squeeze(), self.opt.combine)
-            pred_image, pred_state, pred_cost = self.decoder(h)
-            pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
-            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images.append(pred_image)
-            pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
-
-        pred_images = torch.cat(pred_images, 1)
-        pred_states = torch.stack(pred_states, 1)
-        pred_costs = torch.stack(pred_costs, 1)
-        return [pred_images, pred_states, pred_costs], None
-
-
         
     def intype(self, t):
         if t == 'gpu':

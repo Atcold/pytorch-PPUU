@@ -4,7 +4,7 @@ from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
-import models
+import models, planning
 import importlib
 
 
@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-layers', type=int, default=3)
@@ -31,16 +31,15 @@ parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=50.0)
 parser.add_argument('-epoch_size', type=int, default=500)
-parser.add_argument('-lambda_u', type=float, default=0.1)
+parser.add_argument('-n_futures', type=int, default=10)
+parser.add_argument('-u_reg', type=float, default=1.0)
+parser.add_argument('-u_hinge', type=float, default=0.5)
 parser.add_argument('-lambda_a', type=float, default=0.0)
 parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=1)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
-
 parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
-
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -65,8 +64,15 @@ torch.cuda.manual_seed(opt.seed)
 
 
 
-opt.model_file = f'{opt.model_dir}/policy_networks/'
-opt.model_file += f'svg-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdau={opt.lambda_u}-lambdaa={opt.lambda_a}-gamma={opt.gamma}-lrtz={opt.lrt_z}-updatez={opt.z_updates}-seed={opt.seed}'
+opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
+opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
+opt.model_file += f'-npred={opt.npred}'
+opt.model_file += f'-ureg={opt.u_reg}'
+opt.model_file += f'-gamma={opt.gamma}'
+opt.model_file += f'-lrtz={opt.lrt_z}'
+opt.model_file += f'-updatez={opt.z_updates}'
+opt.model_file += f'-seed={opt.seed}'
+
 if opt.value_model == '':
     opt.model_file += '-novalue'
 
@@ -108,7 +114,8 @@ model.cuda()
 
 dataloader = DataLoader(None, opt, opt.dataset)
 model.train()
-model.estimate_uncertainty_stats(dataloader, n_batches=100, npred=opt.npred) 
+model.opt.u_hinge = opt.u_hinge
+planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred) 
 model.eval()
 
 
@@ -122,11 +129,11 @@ def train(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = model.train_policy_net_svg(inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
+        pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.lambda_u * loss_u + opt.lambda_a * loss_a
+        loss_policy = loss_c + opt.u_reg * loss_u 
         if not math.isnan(loss_policy.item()):
             loss_policy.backward()
             grad_norm += utils.grad_norm(model.policy_net).item()
@@ -164,11 +171,11 @@ def test(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, _ = model.train_policy_net_svg(inputs, targets, car_sizes, n_models=10, lrt_z=1.0, n_updates_z = 0)
+        pred, actions, _ = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=1.0, n_updates_z = 0)
         loss_c = pred[2]
         loss_u = pred[3]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.lambda_u * loss_u
+        loss_policy = loss_c + opt.u_reg * loss_u
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
             total_loss_u += loss_u.item()

@@ -6,6 +6,7 @@ import gym
 import pdb
 import importlib
 import models
+import planning
 import utils
 from dataloader import DataLoader
 from torch.autograd import Variable
@@ -38,8 +39,11 @@ parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000model')
+
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-policy_model_il', type=str, default='')
 parser.add_argument('-policy_model_svg', type=str, default='svg-policy-gauss-nfeature=256-npred=40-lambdau=1.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-seed=1novalue.model')
 parser.add_argument('-policy_model_tm', type=str, default='mbil-policy-gauss-nfeature=256-npred=1-lambdac=0.0-gamma=0.99-seed=1-model=fwd-cnn-ten3-zdropout=0.5.model')
@@ -100,7 +104,7 @@ if opt.u_reg > 0.0:
     forward_model.opt.u_hinge = opt.u_hinge
     if hasattr(forward_model, 'value_function'):
         forward_model.value_function.train()
-    forward_model.estimate_uncertainty_stats(dataloader, n_batches=50, npred=opt.npred)
+    planning.estimate_uncertainty_stats(forward_model, dataloader, n_batches=50, npred=opt.npred)
 
     
 
@@ -122,6 +126,15 @@ env = gym.make(env_names[opt.map])
 plan_file = opt.method
 
 if 'bprop' in opt.method:
+    if 'vae3' in opt.mfile:
+        plan_file += f'-model=vae'
+    elif 'ten3' in opt.mfile:
+        plan_file += f'-model=ten'
+    if 'zdropout=0.5' in opt.mfile: 
+        plan_file += '-zdropout=0.5'
+    elif 'zdropout=0.0' in opt.mfile:
+        plan_file += '-zdropout=0.0'
+    
     plan_file += f'-rollouts={opt.n_rollouts}'
     plan_file += f'-rollout_length={opt.npred}'
     plan_file += f'-lrt={opt.bprop_lrt}'
@@ -167,7 +180,7 @@ for j in range(n_test):
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
         elif opt.method == 'bprop':
-            a = forward_model.plan_actions_backprop(input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec)
+            a = planning.plan_actions_backprop(forward_model, input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec)
         elif opt.method == 'policy-il':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
             a = a.squeeze().cpu().view(1, 2).numpy()
