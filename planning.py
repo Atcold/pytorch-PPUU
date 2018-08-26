@@ -299,7 +299,7 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     if hasattr(model, 'value_function'):
         v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(), Variable(pred_states[:, -model.value_function.opt.ncond:].contiguous().data))
     else:
-        v = Variable(torch.zeros(n_futures, 1).cuda())
+        v = Variable(torch.zeros(bsize, 1).cuda())
     gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
     proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
 

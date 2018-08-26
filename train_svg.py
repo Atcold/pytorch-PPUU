@@ -39,7 +39,7 @@ parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=1)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
+parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -147,7 +147,7 @@ def train(nbatches, npred):
             print('warning, NaN')
             pdb.set_trace()
 
-        if i == 0: 
+        if i == 0 and False:  # TODO
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
