@@ -40,12 +40,12 @@ parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
 
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-policy_model_il', type=str, default='')
-parser.add_argument('-policy_model_svg', type=str, default='svg-policy-gauss-nfeature=256-npred=40-lambdau=1.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-seed=1novalue.model')
+parser.add_argument('-policy_model_svg', type=str, default='svg-policy-gauss-policy-gauss-nfeature=256-npred=20-ureg=0.5-gamma=0.99-lrtz=0.0-updatez=0-seed=1.model')
 parser.add_argument('-policy_model_tm', type=str, default='mbil-policy-gauss-nfeature=256-npred=1-lambdac=0.0-gamma=0.99-seed=1-model=fwd-cnn-ten3-zdropout=0.5.model')
 #parser.add_argument('-mfile', type=str, default='model=policy-cnn-mdn-bsize=64-ncond=20-npred=1-lrt=0.0001-nhidden=256-nfeature=256-nmixture=1-gclip=10.model')
 
@@ -81,7 +81,7 @@ def load_models():
         forward_model.policy_net = policy_network_mbil.policy_net
         forward_model.policy_net.stats = stats
     if opt.policy_model_svg != '':
-        policy_network_svg = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_tm}')['model']
+        policy_network_svg = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_svg}')['model']
         policy_network_svg.stats = stats
         forward_model.policy_net = policy_network_svg.policy_net
         forward_model.policy_net.stats = stats

@@ -302,10 +302,11 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
         v = Variable(torch.zeros(bsize, 1).cuda())
     gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
     proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
+    lane_loss = torch.mean(pred_costs[:, :, 1] * gamma_mask[:, :npred])
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
 
-    return [pred_images, pred_states, proximity_loss, total_u_loss], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
+    return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
 

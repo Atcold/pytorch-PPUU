@@ -35,8 +35,9 @@ parser.add_argument('-n_futures', type=int, default=10)
 parser.add_argument('-u_reg', type=float, default=1.0)
 parser.add_argument('-u_hinge', type=float, default=0.5)
 parser.add_argument('-lambda_a', type=float, default=0.0)
+parser.add_argument('-lambda_l', type=float, default=0.1)
 parser.add_argument('-lrt_z', type=float, default=1.0)
-parser.add_argument('-z_updates', type=int, default=1)
+parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
@@ -44,6 +45,7 @@ parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-test_only', type=int, default=0)
+parser.add_argument('-save_movies', type=int, default=1)
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -68,6 +70,7 @@ opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
 opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'
+opt.model_file += f'-lambdal={opt.lambda_l}'
 opt.model_file += f'-gamma={opt.gamma}'
 opt.model_file += f'-lrtz={opt.lrt_z}'
 opt.model_file += f'-updatez={opt.z_updates}'
@@ -123,7 +126,7 @@ model.eval()
 def train(nbatches, npred):
     model.train()
     model.policy_net.train()
-    total_loss_c, total_loss_u, total_loss_a, n_updates, grad_norm = 0, 0, 0, 0, 0
+    total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates, grad_norm = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
@@ -131,7 +134,8 @@ def train(nbatches, npred):
         targets = utils.make_variables(targets)
         pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
         loss_c = pred[2]
-        loss_u = pred[3]
+        loss_l = pred[3]
+        loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
         loss_policy = loss_c + opt.u_reg * loss_u 
         if not math.isnan(loss_policy.item()):
@@ -142,12 +146,13 @@ def train(nbatches, npred):
             total_loss_c += loss_c.item()
             total_loss_u += loss_u.item()
             total_loss_a += loss_a.item()
+            total_loss_l += loss_l.item()
             n_updates += 1
         else:
             print('warning, NaN')
             pdb.set_trace()
 
-        if i == 0:  
+        if i == 0 and opt.save_movies == 1:  
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
@@ -160,26 +165,29 @@ def train(nbatches, npred):
     total_loss_c /= n_updates
     total_loss_u /= n_updates
     total_loss_a /= n_updates
+    total_loss_l /= n_updates
     print(f'[avg grad norm: {grad_norm / n_updates}]')
-    return total_loss_c, total_loss_u, total_loss_a
+    return total_loss_c, total_loss_l, total_loss_u, total_loss_a
 
 def test(nbatches, npred):
     model.train()
     model.policy_net.train()
-    total_loss_c, total_loss_u, total_loss_a, n_updates = 0, 0, 0, 0
+    total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates = 0, 0, 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         pred, actions, _ = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=1.0, n_updates_z = 0)
         loss_c = pred[2]
-        loss_u = pred[3]
+        loss_l = pred[3]
+        loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
         loss_policy = loss_c + opt.u_reg * loss_u
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
             total_loss_u += loss_u.item()
             total_loss_a += loss_a.item()
+            total_loss_l += loss_l.item()
             n_updates += 1
         else:
             print('warning, NaN')
@@ -187,9 +195,10 @@ def test(nbatches, npred):
         del inputs, actions, targets, pred
 
     total_loss_c /= n_updates
+    total_loss_l /= n_updates
     total_loss_u /= n_updates
     total_loss_a /= n_updates
-    return total_loss_c, total_loss_u, total_loss_a
+    return total_loss_c, total_loss_l, total_loss_u, total_loss_a
 
 
 
@@ -212,7 +221,7 @@ for i in range(500):
                 'n_iter': n_iter}, 
                opt.model_file + '.model')
     model.intype('gpu')
-    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, u: {train_losses[1]:.4f}, a: {train_losses[2]:.4f}] | test: [c: {valid_losses[0]:.4f}, u: {valid_losses[1]:.4f}, a: {valid_losses[2]:.4f}]'
+    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
