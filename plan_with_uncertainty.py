@@ -153,6 +153,9 @@ if 'policy-tm' in opt.method:
 if 'policy-il' in opt.method:
     plan_file += f'-{opt.policy_model_il}'
 
+if 'policy-svg' in opt.method:
+    plan_file += f'-{opt.policy_model_svg}'
+
 
 
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
