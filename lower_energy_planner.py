@@ -1,8 +1,11 @@
 import argparse
-import numpy
+import numpy as np
 import gym
 import pdb
 import torch
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
@@ -40,23 +43,68 @@ def get_controlled_car(env):
 
 def dE_dxj(env, autonomous_car_id, x, y):
     tot = 0
-    energy_vector = numpy.array([1, 10])
+    energy_vector = np.array([1, 3])
 
     for car in env.vehicles:
         if car.id is not autonomous_car.id:
             cx, cy = car.get_state().numpy()[:2] + car.get_state().numpy()[2:]*car._dt
-            ener = -10000*energy_vector[0]*(x - cx)/(energy_vector[0]*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
-            #if car.id == 700:
-                #print(ener)
+            #ener = -100*(1/(car._speed+0.001))*energy_vector[0]*(x - cx)/(energy_vector[0]*(1/(car._speed+0.001))*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
+            ener = -5000*energy_vector[0]*(x - cx)/(energy_vector[0]*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
             tot += ener
     return tot
+
+def aux(env, auto_car_id, x,y):
+    tot = 0
+    energy_vector = np.array([1, 3])
+
+    for car in env.vehicles:
+        if car.id is not auto_car_id:
+            cx, cy = car.get_state().numpy()[:2]
+            ener = 1./(energy_vector[0]*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
+            tot += ener
+    return tot
+
+import scipy.misc
+from torch.nn.functional import affine_grid, grid_sample
+
+def action_SGD(image, cpt):  # with (a,b) being the action
+    scipy.misc.imsave('ex_image_{}.jpg'.format(cpt), np.transpose(image[0].numpy(), (1, 2, 0)))
+    t_x, t_y = torch.tensor(0., requires_grad=True), torch.tensor(0., requires_grad=True)
+    trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]], requires_grad=True)
+    for i in range(10):
+        #future_image = affine_transformation(image, 0, (10, 10), speed, dt)  # future_image == image when a, b == 0, 0
+        grid = affine_grid(trans, torch.Size((1, 1, 117, 24)))
+        future_image = image
+        future_image[0][2] = grid_sample(image[:, 2:3].float(), grid)
+        #c = proximity_cost(future_image)
+        #print("Proximity cost :  {}".format(c.detach().numpy()[0]))
+        #c.backprop()
+        #a, b -= dc/da, db
+    scipy.misc.imsave('ex_image_affine_{}.jpg'.format(cpt), np.transpose(future_image[0].detach().numpy(), (1, 2, 0)))
+
+    return a, b
+
+
+def print_energy_fun(time, env, autonomous_car):
+
+    a_x, a_y, _, _ = autonomous_car.get_state().numpy()
+
+    xs = np.arange(0, 1300, 10)
+    ys = [aux(env, autonomous_car.id, x, a_y) for x in xs]
+
+    plt.figure(figsize=(30,5))
+    plt.plot(xs, ys)
+    plt.ylim(0, 0.0004)
+    plt.savefig('{}.png'.format(time))
+
+
 
 def get_total_energy(env, autonomous_car):
     energy = 0
     for car in env.vehicles:
         if car.id is not autonomous_car.id:
             energy += compute_energy(car.get_state()[:2], autonomous_car.get_state()[:2])
-            print(energy)
+
     return energy
 
 for episode in range(1000):
@@ -65,22 +113,12 @@ for episode in range(1000):
     max_a = 30
     done = False
     a, b = 0., 0.
+    cpt = 0
     while not done:
-        autonomous_car = get_controlled_car(env)
-        if autonomous_car:
-            #print("total energy is %f" % get_total_energy(env, autonomous_car))
-            x_o, y_o, dx_o, dy_o = autonomous_car.get_state().numpy()
-            x, y = x_o, y_o
-            #print("starting x = {}".format(x))
-            #print(dx_o)
-            for i in range(20):
-                x -= 10*dE_dxj(env, autonomous_car.id, x, y)
-
-            #print("x = {}".format(x))
-            a = ((x - x_o)/ autonomous_car._dt -  dx_o) / autonomous_car._dt
-            a = a if abs(a) < max_a else numpy.sign(a) * max_a
-
-        observation, reward, done, info = env.step(numpy.array((a,0)))
+        observation, reward, done, info =   env.step(np.array((a,b)))
+        if observation:
+            a, b = action_SGD(observation[0][0:1], cpt)
+            cpt += 1
 
         env.render()
 
