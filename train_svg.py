@@ -137,7 +137,7 @@ def train(nbatches, npred):
         loss_l = pred[3]
         loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u 
+        loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l
         if not math.isnan(loss_policy.item()):
             loss_policy.backward()
             grad_norm += utils.grad_norm(model.policy_net).item()
@@ -182,7 +182,7 @@ def test(nbatches, npred):
         loss_l = pred[3]
         loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u
+        loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
             total_loss_u += loss_u.item()
