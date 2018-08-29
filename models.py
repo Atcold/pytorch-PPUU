@@ -1552,6 +1552,8 @@ class FwdCNN_VAE3(nn.Module):
         self.optimizer_a_stats = None
 
     def create_policy_net(self, opt):
+        if opt.policy == 'policy-gauss':
+            self.policy_net = StochasticPolicy(opt)
         if opt.policy == 'policy-ten':
             self.policy_net = PolicyTEN(opt)
         elif opt.policy == 'policy-vae':

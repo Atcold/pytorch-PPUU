@@ -39,7 +39,8 @@ parser.add_argument('-lambda_l', type=float, default=0.1)
 parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -67,6 +68,14 @@ torch.cuda.manual_seed(opt.seed)
 
 
 opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
+if 'vae3' in opt.mfile:
+    opt.model_file += f'-model=vae'
+elif 'ten3' in opt.mfile:
+    opt.model_file += f'-model=ten'
+if 'zdropout=0.5' in opt.mfile: 
+    opt.model_file += '-zdropout=0.5'
+elif 'zdropout=0.0' in opt.mfile:
+    opt.model_file += '-zdropout=0.0'
 opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'

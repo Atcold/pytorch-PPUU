@@ -139,7 +139,7 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
 
 
 
-def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1):
+def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1, lambda_l = 0.0):
 
     if use_action_buffer:
         actions = Variable(torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda())
@@ -197,7 +197,9 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
             loss = loss + u_reg * uncertainty_loss
         else:
             uncertainty_loss = Variable(torch.zeros(1))
-                
+
+        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
+        loss = loss + lambda_l * lane_loss
         loss.backward()
         print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())) 
         torch.nn.utils.clip_grad_norm([actions], 1)
