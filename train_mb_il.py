@@ -4,7 +4,7 @@ from dataloader import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
-import models
+import models, planning
 import importlib
 
 
@@ -48,7 +48,8 @@ parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.05-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.05-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -76,8 +77,17 @@ torch.cuda.manual_seed(opt.seed)
 opt.model_file = f'{opt.model_dir}/policy_networks/'
 
 opt.model_file += f'mbil-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdac={opt.lambda_c}-gamma={opt.gamma}-seed={opt.seed}'
-opt.model_file += '-' + re.search('model=(.*)-layers', opt.mfile)[0][:-7]
-opt.model_file += '-' + re.search('zdropout=(\d+)\.(\d+)', opt.mfile)[0]
+if 'vae3' in opt.mfile:
+    opt.model_file += f'-model=vae'
+    model_type = 'vae'
+elif 'ten3' in opt.mfile:
+    opt.model_file += f'-model=ten'
+    model_type = 'ten'
+if 'zdropout=0.5' in opt.mfile: 
+    opt.model_file += '-zdropout=0.5'
+elif 'zdropout=0.0' in opt.mfile:
+    opt.model_file += '-zdropout=0.0'
+
 
 print(f'[will save as: {opt.model_file}]')
 
@@ -138,7 +148,7 @@ def compute_loss(targets, predictions, gamma=1.0, r=True):
 
 def train(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
-    model.train()
+    model.eval()
     model.policy_net.train()
     total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
@@ -147,7 +157,7 @@ def train(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, _ = model.train_policy_net(inputs, targets, dropout=opt.p_dropout)
+        pred, _ = planning.train_policy_net_mbil(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
         proximity_cost = proximity_cost * Variable(gamma_mask)
@@ -188,7 +198,7 @@ def test(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, pred_actions = model.train_policy_net(inputs, targets, targetprop = opt.targetprop, dropout=0.0)            
+        pred, pred_actions = planning.train_policy_net_mbil(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)            
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
         proximity_cost = proximity_cost * Variable(gamma_mask)

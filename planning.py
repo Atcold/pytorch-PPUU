@@ -126,19 +126,6 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1, lambda_l = 0.0):
 
     if use_action_buffer:
@@ -312,3 +299,58 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
 
 
 
+def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type = 'ten'):
+    input_images, input_states = inputs
+    target_images, target_states, target_costs = targets
+    bsize = input_images.size(0)
+    npred = target_images.size(1)
+    pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
+
+    z = None
+    total_ploss = Variable(torch.zeros(1).cuda())
+    z_list = []
+    for t in range(npred):
+        actions, _, _, _ = model.policy_net(input_images, input_states)
+        # encode the inputs
+        h_x = model.encoder(input_images, input_states)
+        # encode the targets into z
+        h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
+        if model_type == 'ten':
+            z = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1))
+        elif model_type == 'vae':
+            mu_logvar = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1)).view(bsize, 2, model.opt.nz)
+            mu = mu_logvar[:, 0]
+            logvar = mu_logvar[:, 1]
+            z = model.reparameterize(mu, logvar, True)
+        z_ = z
+        z_list.append(z_)
+        z_exp = model.z_expander(z_).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
+        h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
+        a_emb = model.a_encoder(actions).view(h_x.size())
+
+        if model.opt.zmult == 0:
+            h = utils.combine(h_x, z_exp, model.opt.combine)
+            h = utils.combine(h, a_emb, model.opt.combine)
+        elif model.opt.zmult == 1:
+            a_emb = torch.sigmoid(a_emb)
+            z_exp = torch.sigmoid(z_exp)
+            h = h_x + a_emb + (1-a_emb) * z_exp
+        if not model.disable_unet:
+            h = h + model.u_network(h)
+        pred_image, pred_state, pred_cost = model.decoder(h)
+        pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+        # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
+        pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
+        input_images = torch.cat((input_images[:, 1:], pred_image), 1)
+        input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
+        pred_images.append(pred_image)
+        pred_states.append(pred_state)
+        pred_costs.append(pred_cost)
+        pred_actions.append(actions)
+
+    pred_images = torch.cat(pred_images, 1)
+    pred_states = torch.stack(pred_states, 1)
+    pred_costs = torch.stack(pred_costs, 1)
+    pred_actions = torch.stack(pred_actions, 1)
+
+    return [pred_images, pred_states, pred_costs, total_ploss], pred_actions

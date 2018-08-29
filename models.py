@@ -1113,56 +1113,6 @@ class FwdCNN_TEN3(nn.Module):
 
 
 
-    def train_policy_net(self, inputs, targets, targetprop=0, dropout=0.0, n_models=10):
-        input_images, input_states = inputs
-        target_images, target_states, target_costs = targets
-        bsize = input_images.size(0)
-        npred = target_images.size(1)
-        pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
-
-        z = None
-        total_ploss = Variable(torch.zeros(1).cuda())
-        self.train()
-        z_list = []
-        for t in range(npred):
-            actions, _, _, _ = self.policy_net(input_images, input_states)
-            # encode the inputs
-            h_x = self.encoder(input_images, input_states)
-            # encode the targets into z
-            h_y = self.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
-            z = self.z_network(utils.combine(h_x, h_y, self.opt.combine).view(bsize, -1))
-            z_ = z
-            z_list.append(z_)
-            z_exp = self.z_expander(z_).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
-            a_emb = self.a_encoder(actions).view(h_x.size())
-
-            if self.opt.zmult == 0:
-                h = utils.combine(h_x, z_exp, self.opt.combine)
-                h = utils.combine(h, a_emb, self.opt.combine)
-            elif self.opt.zmult == 1:
-                a_emb = torch.sigmoid(a_emb)
-                z_exp = torch.sigmoid(z_exp)
-                h = h_x + a_emb + (1-a_emb) * z_exp
-            if not self.disable_unet:
-                h = h + self.u_network(h)
-            pred_image, pred_state, pred_cost = self.decoder(h)
-            pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
-            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images.append(pred_image)
-            pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
-            pred_actions.append(actions)
-
-        pred_images = torch.cat(pred_images, 1)
-        pred_states = torch.stack(pred_states, 1)
-        pred_costs = torch.stack(pred_costs, 1)
-        pred_actions = torch.stack(pred_actions, 1)
-
-        return [pred_images, pred_states, pred_costs, total_ploss], pred_actions
 
 
     def train_prior_net(self, inputs, targets):
