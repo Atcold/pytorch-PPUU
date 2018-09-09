@@ -8,7 +8,7 @@ import scipy.misc
 import sys, pickle
 from matplotlib.image import imsave
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
-from gym import core
+from gym import core, spaces
 import os
 from imageio import imwrite
 from torch.autograd import Variable
@@ -20,6 +20,10 @@ from torch.autograd import Variable
 # A US highway lane width is 3.7 metres, here 50 pixels
 LANE_W = 24  # pixels / 3.7 m, lane width
 SCALE = LANE_W / 3.7  # pixels per metre
+
+STATE_C = 3
+STATE_H, STATE_W = 117, 24
+STATE_D = 4
 
 colours = {
     'w': (255, 255, 255),
@@ -518,7 +522,7 @@ class Car:
         state_images = torch.stack(state_images).permute(0, 3, 1, 2)
         zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
         states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
-        observation = (state_images[-n:], states[-n:])
+        observation = dict(context=state_images[-n:], state=states[-n:])
         proximity_cost = torch.Tensor(zip_[2][-n:])
         lane_cost = torch.Tensor(transpose[1][-n:])
         pixel_proximity_cost = torch.Tensor(transpose[2][-n:])
@@ -582,9 +586,17 @@ class Simulator(core.Env):
     LANE_W = LANE_W
     DUMP_NAME = 'data_ai_v0'
 
+    # Action space definition
+    action_space = spaces.Box(np.array([-1, -1]), np.array([+1, +1]))  # brake / accelerate, right / left
+
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir=''):
 
+        # Observation spaces definition
+        self.observation_space = spaces.Dict(dict(
+            state=spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D), dtype=np.float32),  # position, velocity
+            context=spaces.Box(low=0, high=255, shape=(nb_states, STATE_C, STATE_H, STATE_W), dtype=np.uint8)
+        ))
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
         self.fps = fps  # updates per second
