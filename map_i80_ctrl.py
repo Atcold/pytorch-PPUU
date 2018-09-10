@@ -57,3 +57,10 @@ class ControlledI80(I80):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def reset(self, **kwargs):
+        super().reset(**kwargs)
+        observation = None
+        while observation is None:
+            observation, reward, done, info = self.step()
+        return observation

@@ -375,7 +375,7 @@ def log_sum_exp(value, dim=None, keepdim=False):
 # y: points to evaluate the negative-log-likelihood of, under the model determined by these parameters
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     minsigma = sigma.min().item()
-    assert (minsigma >= 0, '{} < 0'.format(minsigma))
+    assert minsigma >= 0, f'{minsigma} < 0'.format()
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)

@@ -61,7 +61,7 @@ class encoder(nn.Module):
                 nn.Linear(n_hidden, n_hidden),
                 nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(n_hidden, self.opt.hidden_size)
+                nn.Linear(n_hidden, opt.hidden_size)
             )
 
         if a_size > 0:
@@ -74,7 +74,7 @@ class encoder(nn.Module):
                 nn.Linear(n_hidden, n_hidden),
                 nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(n_hidden, self.opt.hidden_size)
+                nn.Linear(n_hidden, opt.hidden_size)
             )
 
     def forward(self, images, states=None, actions=None):
