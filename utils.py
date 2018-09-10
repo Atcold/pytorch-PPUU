@@ -1,5 +1,5 @@
 import torch
-import os, json, pdb, math, numpy, random, re
+import os, json, pdb, math, numpy, random, re, glob
 from datetime import datetime
 import scipy
 from sklearn import decomposition
@@ -36,7 +36,17 @@ def printgradnorm(self, grad_input, grad_output):
 
 
 
-
+def read_images(dirname, pytorch=True):
+    imgs = []
+    for f in glob.glob(dirname + '*.png'):
+        im = scipy.misc.imread(f)
+        if pytorch:
+            im = torch.from_numpy(im)
+        imgs.append(im)
+    if pytorch:
+        imgs = torch.stack(imgs).permute(0, 3, 1, 2).clone()
+    return imgs
+    
 
 
 

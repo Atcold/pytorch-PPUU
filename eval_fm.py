@@ -147,7 +147,7 @@ for i in range(opt.n_batches):
                 print('[saving video: {}]'.format(dirname_movie), end="\r")
                 utils.save_movie(dirname_movie, pred_[0][b].data, pred_[1][b].data, pred_[2][b].data)
 
-        actions_perm = actions[torch.arange(opt.batch_size-1, 0, -1).long().cuda()]
+        actions_perm = actions[torch.randperm(opt.batch_size).long().cuda()]
 
         # also generate videos with different action sequences
         pred_perm, _= model(inputs, actions_perm, targets, sampling=opt.sampling)
