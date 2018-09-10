@@ -162,16 +162,13 @@ def combine(x, y, method):
         return x * y
 
 
-def format_losses(loss_i, loss_s, loss_c, loss_p=None, loss_p2=None, split='train'):
+def format_losses(loss_i, loss_s, loss_p=None, split='train'):
     log_string = ' '
     log_string += '{} loss ['.format(split)
     log_string += 'i: {:.5f}, '.format(loss_i)
     log_string += 's: {:.5f}, '.format(loss_s)
-    log_string += 'c: {:.5f}'.format(loss_c)
     if loss_p is not None:
         log_string += ', p: {:.5f}'.format(loss_p)
-    if loss_p2 is not None:
-        log_string += ', p2: {:.5f}'.format(loss_p2)
     log_string += ']'
     return log_string
 
