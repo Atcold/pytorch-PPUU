@@ -523,10 +523,13 @@ class Car:
         zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
         states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
         observation = dict(context=state_images[-n:], state=states[-n:])
-        proximity_cost = torch.Tensor(zip_[2][-n:])
-        lane_cost = torch.Tensor(transpose[1][-n:])
-        pixel_proximity_cost = torch.Tensor(transpose[2][-n:])
-        cost = (proximity_cost, lane_cost, self.collisions_per_frame, pixel_proximity_cost)
+        cost = dict(
+            proximity_cost=zip_[2][-1],
+            lane_cost=self._states_image[1][1],
+            pixel_proximity_cost=self._states_image[1][2],
+            collisions_per_frame=self.collisions_per_frame,
+            arrived_to_dst=self.arrived_to_dst,
+        )
         return observation, cost, self.off_screen or done, self
 
     def dump_state_image(self, save_dir='scratch/', mode='img'):

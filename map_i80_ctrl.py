@@ -12,6 +12,7 @@ class ControlledI80Car(I80Car):
         self.is_controlled = False
         self.buffer_size = 0
         self.lanes = None
+        self.arrived_to_dst = False  # arrived to destination
 
     @property
     def current_lane(self):
@@ -21,7 +22,9 @@ class ControlledI80Car(I80Car):
 
         # Otherwise fetch x location
         x = self._position[0]
-        if x > self.screen_w - 1.75 * self.look_ahead: self.off_screen = True
+        if x > self.screen_w - 1.75 * self.look_ahead:
+            self.off_screen = True
+            self.arrived_to_dst = True
 
         # Fetch the y location
         y = self._position[1]
@@ -29,6 +32,7 @@ class ControlledI80Car(I80Car):
         # If way too up
         if y < self.lanes[0]['min']:
             self.off_screen = True
+            self.arrived_to_dst = False
             return 0
 
         # Maybe within a sensible range?
@@ -38,11 +42,12 @@ class ControlledI80Car(I80Car):
 
         # Or maybe on the ramp
         bottom = self.lanes[-1]['max']
-        if y <= bottom + 53 - self._position[0] * 0.035:
+        if y <= bottom + 53 - x * 0.035:
             return 6
 
         # Actually, way too low
         self.off_screen = True
+        self.arrived_to_dst = False
         return 6
 
     @property
