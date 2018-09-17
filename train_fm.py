@@ -20,7 +20,7 @@ parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3, help='layers in frame encoder/decoders')
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v10/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=64)
@@ -96,7 +96,7 @@ else:
     # create new model
     # specify deterministic model we use to initialize parameters with
     if opt.warmstart == 1:
-        prev_model = f'{opt.model_dir}/model=fwd-cnn3-layers=3-bsize=64-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-nhidden=128-dropout={opt.dropout}-gclip=5.0-warmstart=0-seed=1.model'
+        prev_model = f'{opt.model_dir}/model=fwd-cnn-layers={opt.layers}-bsize=64-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-dropout={opt.dropout}-gclip=5.0-warmstart=0-seed=1.step200000.model'
     else:
         prev_model = ''
 

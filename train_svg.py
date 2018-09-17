@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-layers', type=int, default=3)
@@ -40,8 +40,10 @@ parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
+parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -136,6 +138,7 @@ def train(nbatches, npred):
     model.train()
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates, grad_norm = 0, 0, 0, 0, 0, 0
+    total_loss_policy = 0
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
@@ -156,6 +159,7 @@ def train(nbatches, npred):
             total_loss_u += loss_u.item()
             total_loss_a += loss_a.item()
             total_loss_l += loss_l.item()
+            total_loss_policy += loss_policy.item()
             n_updates += 1
         else:
             print('warning, NaN')
@@ -175,13 +179,15 @@ def train(nbatches, npred):
     total_loss_u /= n_updates
     total_loss_a /= n_updates
     total_loss_l /= n_updates
+    total_loss_policy /= n_updates
     print(f'[avg grad norm: {grad_norm / n_updates}]')
-    return total_loss_c, total_loss_l, total_loss_u, total_loss_a
+    return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
 
 def test(nbatches, npred):
     model.train()
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates = 0, 0, 0, 0, 0
+    total_loss_policy = 0
     for i in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
@@ -197,6 +203,7 @@ def test(nbatches, npred):
             total_loss_u += loss_u.item()
             total_loss_a += loss_a.item()
             total_loss_l += loss_l.item()
+            total_loss_policy += loss_policy.item()
             n_updates += 1
         else:
             print('warning, NaN')
@@ -207,7 +214,8 @@ def test(nbatches, npred):
     total_loss_l /= n_updates
     total_loss_u /= n_updates
     total_loss_a /= n_updates
-    return total_loss_c, total_loss_l, total_loss_u, total_loss_a
+    total_loss_policy /= n_updates
+    return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
 
 
 
@@ -230,7 +238,7 @@ for i in range(500):
                 'n_iter': n_iter}, 
                opt.model_file + '.model')
     model.intype('gpu')
-    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}]'
+    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}, p: {valid_losses[4]:.4f}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 

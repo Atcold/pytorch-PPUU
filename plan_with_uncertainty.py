@@ -39,9 +39,9 @@ parser.add_argument('-lambda_l', type=float, default=0.0)
 parser.add_argument('-graph_density', type=float, default=0.001)
 parser.add_argument('-display', type=int, default=0)
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
 
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
@@ -169,7 +169,7 @@ for j in range(n_test):
     print('[new episode, will save to: {}]'.format(movie_dir))
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
-    env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    inputs=env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     inputs, done, mu, std = None, None, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
@@ -180,7 +180,9 @@ for j in range(n_test):
             while inputs is None:
                 inputs, cost, done, info = env.step(numpy.zeros((2,)))
             print('[done]')
-        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
+        input_images = inputs['context'].contiguous()
+        input_states = inputs['state'].contiguous()
+#        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
         car_size = torch.Tensor([info._width / (0.3048 * 24 / 3.7), info._length / (0.3048 * 24 / 3.7)]).view(1, 2).cuda()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))

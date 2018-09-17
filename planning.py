@@ -34,17 +34,15 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     pred_images, pred_states, pred_costs = [], [], []
     for t in range(npred):
         z = Z_rep[:, t]
-        pred_image, pred_state, pred_cost = model.forward_single_step(input_images, input_states, actions[:, t], z)
+        pred_image, pred_state = model.forward_single_step(input_images, input_states, actions[:, t], z)
         if detach:
             pred_image = Variable(pred_image.data)
             pred_state = Variable(pred_state.data)
-            pred_cost = Variable(pred_cost.data)
             
         input_images = torch.cat((input_images[:, 1:], pred_image), 1)
         input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
         pred_images.append(pred_image)
         pred_states.append(pred_state)
-        pred_costs.append(pred_cost)
 
     pred_images = torch.stack(pred_images, 1).squeeze()
     pred_states = torch.stack(pred_states, 1).squeeze()
@@ -184,8 +182,10 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
             loss = loss + u_reg * uncertainty_loss
         else:
             uncertainty_loss = Variable(torch.zeros(1))
-
-        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
+        
+        lane_loss = torch.mean(utils.lane_cost(pred_images, car_sizes.expand(n_futures, 2)) * gamma_mask[:, :npred])
+#        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
+#        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
         loss = loss + lambda_l * lane_loss
         loss.backward()
         print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())) 
@@ -233,17 +233,15 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     model.eval()
     for t in range(npred):
         actions, _, _, _ = model.policy_net(input_images, input_states)
-        pred_image, pred_state, pred_cost = model.forward_single_step(input_images, input_states, actions, Z[t])
+        pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, Z[t])
         input_images = torch.cat((input_images[:, 1:], pred_image), 1)
         input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
         pred_images.append(pred_image)
         pred_states.append(pred_state)
-        pred_costs.append(pred_cost)
         pred_actions.append(actions)
         
     pred_images = torch.cat(pred_images, 1)
     pred_states = torch.stack(pred_states, 1)
-    pred_costs = torch.stack(pred_costs, 1)
     pred_actions = torch.stack(pred_actions, 1)
     
     input_images = input_images_orig.clone()
@@ -267,7 +265,7 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
         pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = [], [], [], []
         for t in range(npred):
             actions, _, _, _ = model.policy_net(input_images, input_states)
-            pred_image, pred_state, pred_cost = model.forward_single_step(input_images, input_states, actions, Z[t])
+            pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, Z[t])
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
             pred_images_adv.append(pred_image)
@@ -291,7 +289,9 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
         v = Variable(torch.zeros(bsize, 1).cuda())
     gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
     proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
-    lane_loss = torch.mean(pred_costs[:, :, 1] * gamma_mask[:, :npred])
+    lane_loss = torch.mean(utils.lane_cost(pred_images, car_sizes) * gamma_mask[:, :npred])
+
+#    lane_loss = torch.mean(pred_costs[:, :, 1] * gamma_mask[:, :npred])
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
 

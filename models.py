@@ -671,7 +671,8 @@ class FwdCNN_TEN(nn.Module):
         else:
             print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
-            pretrained_model = torch.load(mfile)['model']
+            pretrained_model = torch.load(mfile)
+            if type(pretrained_model) is dict: pretrained_model = pretrained_model['model']
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
             self.a_encoder = pretrained_model.a_encoder
@@ -692,9 +693,6 @@ class FwdCNN_TEN(nn.Module):
         )
 
         self.z_zero = Variable(torch.zeros(self.opt.batch_size, self.opt.nz))
-
-        if self.opt.action_indep_net == 1:
-            self.action_indep_net = action_indep_net(opt)
 
         # if beta > 0, it means we are training a prior network jointly
         if self.opt.beta > 0:
@@ -817,7 +815,7 @@ class FwdCNN_TEN(nn.Module):
             ploss = ploss.cuda()
             ploss2 = ploss2.cuda()
 
-        pred_images, pred_states, pred_costs = [], [], []
+        pred_images, pred_states = [], []
         z_list = []
 
         z = None
@@ -836,7 +834,7 @@ class FwdCNN_TEN(nn.Module):
                         self.z_zero = Variable(torch.zeros(bsize, self.opt.nz).cuda())
                         z = self.z_zero
                 else:
-                    z = self.z_network(h_x + h_y).view(bsize, self.opt.nz)
+                    z = self.z_network((h_x + h_y).view(bsize, -1)).view(bsize, self.opt.nz)
                     if save_z:
                         self.save_z(z)
                     if self.opt.beta > 0:
@@ -861,11 +859,10 @@ class FwdCNN_TEN(nn.Module):
             h = h + a_emb
             h = h + self.u_network(h)
 
-            pred_image, pred_state, pred_cost = self.decoder(h)
+            pred_image, pred_state = self.decoder(h)
             if sampling is not None:
                 pred_image.detach()
                 pred_state.detach()
-                pred_cost.detach()
             pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
             # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
 #            pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
@@ -874,13 +871,11 @@ class FwdCNN_TEN(nn.Module):
             input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
             pred_images.append(pred_image)
             pred_states.append(pred_state)
-            pred_costs.append(pred_cost)
 
         pred_images = torch.cat(pred_images, 1)
         pred_states = torch.stack(pred_states, 1)
-        pred_costs = torch.stack(pred_costs, 1)
         z_list = torch.stack(z_list, 1)
-        return [pred_images, pred_states, pred_costs, z_list], [ploss, ploss2]
+        return [pred_images, pred_states, z_list], [ploss, ploss2]
 
     def reset_action_buffer(self, npred):
         self.actions_buffer = torch.zeros(npred, self.opt.n_actions).cuda()
@@ -1144,7 +1139,8 @@ class FwdCNN_VAE(nn.Module):
         else:
             print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
-            pretrained_model = torch.load(mfile)['model']
+            pretrained_model = torch.load(mfile)
+            if type(pretrained_model) is dict: pretrained_model = pretrained_model['model']
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
             self.a_encoder = pretrained_model.a_encoder
@@ -1187,9 +1183,9 @@ class FwdCNN_VAE(nn.Module):
             return mu
 
     def sample_z(self, bsize, method=None, h_x=None):
-        if self.opt.model == 'fwd-cnn-vae3-fp':
+        if self.opt.model == 'fwd-cnn-vae-fp':
             z = Variable(torch.randn(bsize, self.opt.nz).cuda())
-        elif self.opt.model == 'fwd-cnn-vae3-lp':
+        elif self.opt.model == 'fwd-cnn-vae-lp':
             mu_logvar_prior = self.z_network_prior(h_x.view(bsize, -1)).view(bsize, 2, self.opt.nz)
             mu_prior = mu_logvar_prior[:, 0]
             logvar_prior = mu_logvar_prior[:, 1]
@@ -1246,10 +1242,10 @@ class FwdCNN_VAE(nn.Module):
                     logvar = mu_logvar[:, 1]
                     z = self.reparameterize(mu, logvar, True)
                     logvar = torch.clamp(logvar, max = 4) # this can go to inf when taking exp(), so clamp it
-                    if self.opt.model == 'fwd-cnn-vae3-fp':
+                    if self.opt.model == 'fwd-cnn-vae-fp':
                         kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
                         kld /= bsize
-                    elif self.opt.model == 'fwd-cnn-vae3-lp':
+                    elif self.opt.model == 'fwd-cnn-vae-lp':
                         mu_logvar_prior = self.z_network_prior(h_x.view(bsize, -1)).view(bsize, 2, self.opt.nz)
                         mu_prior = mu_logvar_prior[:, 0]
                         logvar_prior = mu_logvar_prior[:, 1]
@@ -1442,6 +1438,7 @@ class StochasticPolicy(nn.Module):
         eps = Variable(torch.randn(bsize, n_samples, self.n_outputs).cuda())
         a = eps * std.view(bsize, 1, self.n_outputs) * std_mult
         a = a + mu.view(bsize, 1, self.n_outputs)
+#        a = 3*torch.tanh(a)
 
         if normalize_outputs:
             a = a.data

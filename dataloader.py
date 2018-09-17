@@ -11,9 +11,6 @@ class DataLoader():
         self.random.seed(12345) # use this so that the same batches will always be picked
 
         if dataset == 'i80':
-#            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v{}/'.format(opt.v)
-#            data_dir = './traffic-data/state-action-cost/data_i80_v0'
-#            data_dir = '/misc/vlgscratch4/LecunGroup/atcold/traffic-data/state-action-cost/data_i80_v0'
             data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0'
             if single_shard:
                 # quick load for debugging
@@ -76,9 +73,9 @@ class DataLoader():
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
-        self.n_train = int(math.floor(self.n_episodes * 0.9))
-        self.n_valid = int(math.floor(self.n_episodes * 0.05))
-        self.n_test = int(math.floor(self.n_episodes * 0.05))
+        self.n_train = int(math.floor(self.n_episodes * 0.8))
+        self.n_valid = int(math.floor(self.n_episodes * 0.1))
+        self.n_test = int(math.floor(self.n_episodes * 0.1))
         splits_path = data_dir + '/splits.pth'
         if os.path.exists(splits_path):
             print('[loading data splits: {}]'.format(splits_path))
@@ -92,7 +89,7 @@ class DataLoader():
             perm = numpy.random.permutation(self.n_episodes)
             self.train_indx = perm[0:self.n_train]
             self.valid_indx = perm[self.n_train+1:self.n_train+self.n_valid]
-            self.test_indx = perm[self.n_train+self.n_valid+1:self.n_train+self.n_valid+self.n_test]
+            self.test_indx = perm[self.n_train+self.n_valid+1:]
             torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
 
         stats_path = data_dir + '/data_stats.pth'

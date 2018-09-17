@@ -19,9 +19,8 @@ parser.add_argument('-model', type=str, default='policy-il-mdn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-fmap_geom', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v8/policy_networks/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/policy_networks/')
 parser.add_argument('-n_episodes', type=int, default=20)
-parser.add_argument('-lanes', type=int, default=8)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-seed', type=int, default=1)
@@ -75,7 +74,7 @@ def train(nbatches):
     total_loss, nb = 0, 0
     for i in range(nbatches):
         optimizer.zero_grad()
-        inputs, actions, targets = dataloader.get_batch_fm('train')
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
@@ -83,7 +82,6 @@ def train(nbatches):
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
             loss.backward()
-            print(utils.grad_norm(policy).item())
             if opt.grad_clip != -1:
                 torch.nn.utils.clip_grad_norm_(policy.parameters(), opt.grad_clip)
             optimizer.step()
@@ -97,7 +95,7 @@ def test(nbatches):
     policy.eval()
     total_loss, nb = 0, 0
     for i in range(nbatches):
-        inputs, actions, targets = dataloader.get_batch_fm('valid')
+        inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
@@ -115,7 +113,7 @@ def test(nbatches):
 
 print('[training]')
 best_valid_loss = 1e6
-for i in range(100):
+for i in range(200):
     train_loss = train(opt.epoch_size)
     valid_loss = test(opt.epoch_size)
     if valid_loss < best_valid_loss:
