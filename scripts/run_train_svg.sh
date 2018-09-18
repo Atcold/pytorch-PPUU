@@ -6,7 +6,7 @@ for npred in 20; do
             for lambda_a in 0.0; do 
                 for z_updates in 0; do 
                     for lrt_z in 0.0; do 
-                        for lambda_l in 0.0 0.1 0.2; do 
+                        for lambda_l in 0.0 0.1 0.2 0.5; do 
                             sbatch submit_train_svg.slurm $npred $u_reg $lrt_z $z_updates $bsize $lambda_l
                         done
                     done

@@ -92,7 +92,6 @@ def lane_cost(images, car_size):
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)[0]
-    pdb.set_trace()
     return costs.view(bsize, npred)
 
 

@@ -162,7 +162,9 @@ if 'policy-svg' in opt.method:
 
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
 
-times_to_collision = []
+# different performance metrics
+time_travelled, distance_travelled, road_completed = [], [], []
+
 n_test = len(splits['test_indx'])
 for j in range(n_test):
     movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
@@ -174,12 +176,16 @@ for j in range(n_test):
     inputs, done, mu, std = None, None, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
     cntr = 0
+    inputs, cost, done, info = env.step(numpy.zeros((2,)))
+    input_state_t0 = inputs['state'].contiguous()[-1]
     while not done: 
+        '''
         if inputs is None:
             print('[finding valid input]')
             while inputs is None:
                 inputs, cost, done, info = env.step(numpy.zeros((2,)))
             print('[done]')
+        '''
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
@@ -212,12 +218,11 @@ for j in range(n_test):
             if info.collisions_per_frame > 0:
                 print(f'[collision after {cntr} frames, ending]')
                 done = True
-
-            print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(a[t][0], a[t][1], cost[0][-1], cost[1][-1]))
+            print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost']))
 
             images.append(input_images[-1])
             states.append(input_states[-1])
-            costs.append([cost[0][-1].item(), cost[1][-1].item()])
+            costs.append([cost['pixel_proximity_cost'], cost['lane_cost']])
             if opt.mfile == 'no-action':
                 actions.append(a[t])
                 mu_list.append(mu)
@@ -229,11 +234,13 @@ for j in range(n_test):
                     std_list.append(std.data.cpu().numpy())
             t += 1
         costs_ = numpy.stack(costs)
-        if (len(images) > 600) or (opt.nexec == -1):
-            done = True
-
-    times_to_collision.append(len(images))
-    utils.log(opt.save_dir + '/' + plan_file + '.log', 'ep: {} | time: {} | mean perf: {} | median perf: {}'.format(j, len(images), torch.Tensor(times_to_collision).mean(), torch.Tensor(times_to_collision).median()))
+    input_state_tfinal = inputs['state'][-1]
+    time_travelled.append(len(images))
+    distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
+    road_completed.append(1 if cost['arrived_to_dst'] else 0)
+    log_string = 'ep: {} | time: {} | mean time: {} | mean distance: {} | mean success: {}'.format(j, len(images), torch.Tensor(time_travelled).mean(), torch.Tensor(distance_travelled).mean(), torch.Tensor(road_completed).mean())
+    print(log_string)
+    utils.log(opt.save_dir + '/' + plan_file + '.log', log_string)
     images = torch.stack(images)
     states = torch.stack(states)
     costs = torch.tensor(costs)
