@@ -432,7 +432,12 @@ class Car:
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
         centre = self._position + (d * self._length) // 2
-        sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
+        try:
+            sub_surface = screen_surface.subsurface((*(centre + m - x_y / 2), *x_y))
+        except ValueError as ex:  # if the agent fucks up
+            print(f'{self} fucked up')  # notify about the event
+            self.off_screen = True  # we're off_screen
+            return self._states_image[-1]  # return last state
         theta = np.arctan2(*d[::-1]) * 180 / np.pi  # in degrees
         rot_surface = pygame.transform.rotate(sub_surface, theta)
         width_height = np.floor(np.array(width_height))
