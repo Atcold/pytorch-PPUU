@@ -6,6 +6,7 @@ import gym
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
+parser.add_argument('-map', type=str, default='i80')
 parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-nb_predictions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
@@ -23,14 +24,20 @@ kwargs = {
     'nb_states': opt.nb_conditions,
 }
 
+
 gym.envs.registration.register(
-    id='Traffic-v3',
-    entry_point='traffic_gym_v3:ControlledI80',
-    kwargs=kwargs,
+    id='I-80-v1',
+    entry_point='map_i80_ctrl:ControlledI80',
+    kwargs={'fps': 10, 'nb_states': 20, 'display': 0, 'delta_t': 0.1},
 )
 
 print('Building the environment (loading data, if any)')
-env = gym.make('Traffic-v' + opt.v)
+env_names = {
+    'i80': 'I-80-v1',
+}
+
+env = gym.make(env_names[opt.map])
+
 
 for episode in range(10):
 
@@ -39,8 +46,7 @@ for episode in range(10):
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))
-        if observation is not None:
-            print(reward[0][-1], reward[1][-1])
+        print(reward)
 #        print(observation, reward, done, info)
         env.render()
     print('end of episode')
