@@ -645,7 +645,9 @@ class Simulator(core.Env):
             }
 
         self.random = random.Random()
-        self.random.seed(54321)
+
+    def seed(self, seed=None):
+        self.random.seed(seed)
 
     def build_lanes(self, nb_lanes):
         return tuple(
