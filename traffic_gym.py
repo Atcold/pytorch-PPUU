@@ -529,9 +529,9 @@ class Car:
         states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
         observation = dict(context=state_images[-n:], state=states[-n:])
         cost = dict(
-            proximity_cost=zip_[2][-1],
-            lane_cost=self._states_image[1][1],
-            pixel_proximity_cost=self._states_image[1][2],
+            proximity_cost=self._states[-1][2],
+            lane_cost=self._states_image[-1][1],
+            pixel_proximity_cost=self._states_image[-1][2],
             collisions_per_frame=self.collisions_per_frame,
             arrived_to_dst=self.arrived_to_dst,
         )
