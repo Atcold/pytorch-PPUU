@@ -1,54 +1,50 @@
 import argparse
-import random
-import torch
 import numpy
 import gym
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
-parser.add_argument('-map', type=str, default='i80')
 parser.add_argument('-nb_conditions', type=int, default=10)
-parser.add_argument('-nb_predictions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
-parser.add_argument('-models_dir', type=str, default='./models_il/')
-parser.add_argument('-v', type=str, default='3', choices={'3'})
+parser.add_argument('-display', type=int, default=1)
+parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-fps', type=int, default=1e3)
+parser.add_argument('-delta_t', type=float, default=0.1)
+parser.add_argument('-nb_episodes', type=int, default=10)
 
 opt = parser.parse_args()
 
-random.seed(opt.seed)
-numpy.random.seed(opt.seed)
-torch.manual_seed(opt.seed)
-
-kwargs = {
-    'fps': 50,
-    'nb_states': opt.nb_conditions,
-}
-
+kwargs = dict(
+    fps=opt.fps,
+    nb_states=opt.nb_conditions,
+    display=opt.display,
+    delta_t=opt.delta_t,
+)
 
 gym.envs.registration.register(
     id='I-80-v1',
     entry_point='map_i80_ctrl:ControlledI80',
-    kwargs={'fps': 10, 'nb_states': 20, 'display': 0, 'delta_t': 0.1},
+    kwargs=kwargs,
 )
 
-print('Building the environment (loading data, if any)')
 env_names = {
     'i80': 'I-80-v1',
 }
 
+print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
+env.seed(123)
 
+for episode in range(opt.nb_episodes):
+    context, states = list(), list()
 
-for episode in range(10):
-
-    env.reset()
+    observation = env.reset(time_slot=None, vehicle_id=None)  # if None => picked at random
 
     done = False
     while not done:
         observation, reward, done, info = env.step(numpy.zeros((2,)))
-        print(reward)
-#        print(observation, reward, done, info)
         env.render()
-    print('end of episode')
+
+    print('Episode completed!')
 
 print('Done')
