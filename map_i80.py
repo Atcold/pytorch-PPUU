@@ -160,7 +160,7 @@ class I80Car(Car):
         if self._states_image and self._states_image[-1][2] > beta:
             self.collisions_per_frame += 1
             # print(f'Collision registered for vehicle {self}')
-            print(f'Accident! Check vehicle {self}. Proximity of {self._states_image[-1][2]}.')
+            # print(f'Accident! Check vehicle {self}. Proximity of {self._states_image[-1][2]}.')
 
 
 class I80(Simulator):
