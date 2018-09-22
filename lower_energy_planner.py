@@ -3,9 +3,13 @@ import numpy as np
 import gym
 import pdb
 import torch
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+from differentiable_cost import proximity_cost
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
@@ -13,13 +17,15 @@ parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-delta_t', type=float, default=0.1)
 
 opt = parser.parse_args()
 
 kwargs = {
     'fps': 50,
     'nb_states': opt.nb_conditions,
-    'display': opt.display
+    'display': opt.display,
+    'delta_t': opt.delta_t
 }
 
 gym.envs.registration.register(
@@ -35,77 +41,92 @@ env_names = {
 print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
-def get_controlled_car(env):
-    if env.controlled_car and env.controlled_car['locked']:
-        return env.controlled_car['locked']
-    else :
-        return None
-
-def dE_dxj(env, autonomous_car_id, x, y):
-    tot = 0
-    energy_vector = np.array([1, 3])
-
-    for car in env.vehicles:
-        if car.id is not autonomous_car.id:
-            cx, cy = car.get_state().numpy()[:2] + car.get_state().numpy()[2:]*car._dt
-            #ener = -100*(1/(car._speed+0.001))*energy_vector[0]*(x - cx)/(energy_vector[0]*(1/(car._speed+0.001))*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
-            ener = -5000*energy_vector[0]*(x - cx)/(energy_vector[0]*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
-            tot += ener
-    return tot
-
-def aux(env, auto_car_id, x,y):
-    tot = 0
-    energy_vector = np.array([1, 3])
-
-    for car in env.vehicles:
-        if car.id is not auto_car_id:
-            cx, cy = car.get_state().numpy()[:2]
-            ener = 1./(energy_vector[0]*(cx - x)**2 + energy_vector[1]*(cy - y)**2)**2
-            tot += ener
-    return tot
-
 import scipy.misc
 from torch.nn.functional import affine_grid, grid_sample
 
-def action_SGD(image, cpt):  # with (a,b) being the action
-    scipy.misc.imsave('ex_image_{}.jpg'.format(cpt), np.transpose(image[0].numpy(), (1, 2, 0)))
-    t_x, t_y = torch.tensor(0., requires_grad=True), torch.tensor(0., requires_grad=True)
-    trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]], requires_grad=True)
-    for i in range(10):
-        #future_image = affine_transformation(image, 0, (10, 10), speed, dt)  # future_image == image when a, b == 0, 0
+class Model(torch.nn.Module):
+    def __init__(self, dt):
+        super(Model, self).__init__()
+        self.dt = dt
+        self.ortho_dir = torch.zeros([2])
+        self.params =  torch.tensor([0., 0], requires_grad=True)
+
+
+    def init_params(self):
+        self.params.data = torch.tensor([0.,0.])
+
+
+    def forward(self, speed, direction, image, state):
+
+        self.ortho_dir[0] = direction[1]
+        self.ortho_dir[1] = -direction[0]
+
+        t = (self.params[0]*self.dt)*direction*self.dt
+
+
+        trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]])
+        trans[0, 0, 2] = -t[1]/24.
+        trans[0, 1, 2] = -t[0]/117.
+
         grid = affine_grid(trans, torch.Size((1, 1, 117, 24)))
-        future_image = image
-        future_image[0][2] = grid_sample(image[:, 2:3].float(), grid)
-        #c = proximity_cost(future_image)
-        #print("Proximity cost :  {}".format(c.detach().numpy()[0]))
-        #c.backprop()
+
+        future_context = grid_sample(image[:, :].float()/255., grid)
+        costs, proximity_mask = proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0))
+
+        grid.retain_grad()
+        future_context.retain_grad()
+        trans.retain_grad()
+        t.retain_grad()
+
+        #from ipdb import set_trace; set_trace()
+        return costs
+
+model = Model(opt.delta_t)
+
+def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
+    #scipy.misc.imsave('exp/ex_image_{}.jpg'.format(cpt), np.transpose(image[0].numpy(), (1, 2, 0)))
+
+    speed = torch.norm(state[0, 2:])
+    direction = state[0, 2:]/speed
+
+    #a, b = torch.tensor(0., requires_grad=True), torch.tensor(0., requires_grad=True)
+    #optimizer = torch.optim.SGD([model.params], lr=0.01)
+
+    model.init_params()
+
+    for i in range(1):
+       #future_image = affine_transformation(image, 0, (10, 10), speed, dt)  # future_image == image when a, b == 0, 0
+
+
+        costs = model(speed, direction, image, state)
+
+        #if i == 0:
+            #print("Proximity cost :  {}".format(costs))
+
+        costs.backward()
+        #from ipdb import set_trace; set_trace()
+
+        #grad_a = torch.autograd.grad(loss, a)
+        #optimizer.step()
+        print(" no flip", model.params.grad.data[0])
+        model.params.data[0] = model.params.data[0] - 50000*model.params.grad.data[0]
+        #model.params.data[1] = model.params.data[1] - model.params.grad.data[1]
+#        model.params.grad.zero_()
+        model.params.grad.zero_()
+
+        costs = model(speed, direction, torch.flip(image, [2]), state)
+        costs.backward()
+        print(" flip", model.params.grad.data[0])
+        model.params.data[0] = model.params.data[0] + 50000*model.params.grad.data[0]
+        model.params.grad.zero_()
+
+
+        #print(model.params)
         #a, b -= dc/da, db
-    scipy.misc.imsave('ex_image_affine_{}.jpg'.format(cpt), np.transpose(future_image[0].detach().numpy(), (1, 2, 0)))
+    #scipy.misc.imsave('exp/ex_image_affine_{}.jpg'.format(cpt), np.transpose(future_image[0].detach().numpy(), (1, 2, 0)))
 
-    return a, b
-
-
-def print_energy_fun(time, env, autonomous_car):
-
-    a_x, a_y, _, _ = autonomous_car.get_state().numpy()
-
-    xs = np.arange(0, 1300, 10)
-    ys = [aux(env, autonomous_car.id, x, a_y) for x in xs]
-
-    plt.figure(figsize=(30,5))
-    plt.plot(xs, ys)
-    plt.ylim(0, 0.0004)
-    plt.savefig('{}.png'.format(time))
-
-
-
-def get_total_energy(env, autonomous_car):
-    energy = 0
-    for car in env.vehicles:
-        if car.id is not autonomous_car.id:
-            energy += compute_energy(car.get_state()[:2], autonomous_car.get_state()[:2])
-
-    return energy
+    #return model.params.detach()[0], model.params.detach()[1]
+    return model.params.detach()
 
 for episode in range(1000):
     env.reset()
@@ -115,10 +136,19 @@ for episode in range(1000):
     a, b = 0., 0.
     cpt = 0
     while not done:
-        observation, reward, done, info =   env.step(np.array((a,b)))
-        if observation:
-            a, b = action_SGD(observation[0][0:1], cpt)
+        #a += 1
+        print(f"a = {a}")
+        observation, reward, done, info =   env.step(np.array((a,0)))
+        if observation is not None:
+            input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
+            speed = input_states[-1:][:, 2:].norm(2, 1)
+            print("speed : ", speed.data)
+            #continue
+            a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
             cpt += 1
+            #a = torch.max(torch.tensor([a, -speed/model.dt]))
+            a = a.clamp(-30, 30)
+
 
         env.render()
 
