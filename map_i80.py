@@ -426,7 +426,7 @@ class I80(Simulator):
         self.frame += int(self.delta_t * 10)
 
         # Run out of frames?
-        done = self.frame >= self.max_frame or self.user_is_done
+        done = self.frame >= self.max_frame or self.used_is_done
 
         if self.controlled_car and self.controlled_car['locked']:
             return_ = self.controlled_car['locked'].get_last(

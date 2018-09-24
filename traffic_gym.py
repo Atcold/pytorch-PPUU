@@ -654,7 +654,7 @@ class Simulator(core.Env):
         self.controlled_car = None
         self.nb_states = nb_states
         self.data_dir = data_dir
-        self.user_is_done = None
+        self.used_is_done = None
 
         self.display = display
         if self.display:  # if display is required
@@ -701,7 +701,7 @@ class Simulator(core.Env):
             self.controlled_car = {
                 'locked': False,
             }
-        self.user_is_done = False
+        self.used_is_done = False
 
     def policy_imitation(self, observation):
         s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
@@ -926,7 +926,7 @@ class Simulator(core.Env):
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self._pause()
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_d:
-                    self.user_is_done = True
+                    self.used_is_done = True
 
             # if self.collision:
             #     self._pause()
