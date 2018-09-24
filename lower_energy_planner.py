@@ -61,7 +61,7 @@ class Model(torch.nn.Module):
         self.ortho_dir[0] = direction[1]
         self.ortho_dir[1] = -direction[0]
 
-        t = (self.params[0]*self.dt)*direction*self.dt
+        t = self.params[0]*direction
 
 
         trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]])
@@ -70,7 +70,7 @@ class Model(torch.nn.Module):
 
         grid = affine_grid(trans, torch.Size((1, 1, 117, 24)))
 
-        future_context = grid_sample(image[:, :].float()/255., grid)
+        future_context = grid_sample(image[:, :].float(), grid)
         costs, proximity_mask = proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0))
 
         grid.retain_grad()
@@ -109,7 +109,7 @@ def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
         #grad_a = torch.autograd.grad(loss, a)
         #optimizer.step()
         print(" no flip", model.params.grad.data[0])
-        model.params.data[0] = model.params.data[0] - 50000*model.params.grad.data[0]
+        model.params.data[0] = model.params.data[0] - model.params.grad.data[0]
         #model.params.data[1] = model.params.data[1] - model.params.grad.data[1]
 #        model.params.grad.zero_()
         model.params.grad.zero_()
@@ -117,7 +117,7 @@ def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
         costs = model(speed, direction, torch.flip(image, [2]), state)
         costs.backward()
         print(" flip", model.params.grad.data[0])
-        model.params.data[0] = model.params.data[0] + 50000*model.params.grad.data[0]
+        model.params.data[0] = model.params.data[0] + model.params.grad.data[0]
         model.params.grad.zero_()
 
 
@@ -147,7 +147,9 @@ for episode in range(1000):
             a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
             cpt += 1
             #a = torch.max(torch.tensor([a, -speed/model.dt]))
-            a = a.clamp(-10, 30)
+            a = a.clamp(-14, 16)
+            if reward[2] > 0:
+                break
 
 
         env.render()
