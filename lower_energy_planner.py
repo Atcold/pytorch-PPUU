@@ -147,7 +147,7 @@ for episode in range(1000):
             a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
             cpt += 1
             #a = torch.max(torch.tensor([a, -speed/model.dt]))
-            a = a.clamp(-30, 30)
+            a = a.clamp(-10, 30)
 
 
         env.render()
