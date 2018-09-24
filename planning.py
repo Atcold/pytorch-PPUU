@@ -212,7 +212,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
 
 
 
-def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10):
+def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10, infer_z = False):
     
     input_images_orig, input_states_orig = inputs
     target_images, target_states, target_costs = targets
@@ -228,12 +228,21 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     # sample futures
     Z = model.sample_z(npred * bsize, method=sampling_method)
     if type(Z) is list: Z = Z[0]
-    Z = Z.view(npred, bsize, model.opt.nz)
+    Z = Z.view(npred, bsize, -1)
     # get initial action sequence
     model.eval()
     for t in range(npred):
         actions, _, _, _ = model.policy_net(input_images, input_states)
-        pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, Z[t])
+        if infer_z:
+            h_x = model.encoder(input_images, input_states)
+            h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
+            mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
+            mu = mu_logvar[:, 0]
+            logvar = mu_logvar[:, 1]
+            z_t = model.reparameterize(mu, logvar, True)
+        else:
+            z_t = Z[t]
+        pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, z_t)
         input_images = torch.cat((input_images[:, 1:], pred_image), 1)
         input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
         pred_images.append(pred_image)
@@ -247,51 +256,49 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     input_images = input_images_orig.clone()
     input_states = input_states_orig.clone()
     if n_updates_z > 0:
+        Z_adv = Variable(Z.data.clone())
         # optimize z vectors to be more difficult
-        pred_actions = Variable(pred_actions.data.clone())
-        Z.requires_grad = True
-        optimizer_z = optim.Adam([Z], lrt_z)
-        for k in range(n_updates_z):
+#        pred_actions = Variable(pred_actions.data.clone())
+        Z_adv.requires_grad = True
+        optimizer_z = optim.Adam([Z_adv], lrt_z)
+        for k in range(n_updates_z + 1):
             optimizer_z.zero_grad()
-            pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z, sampling='fixed')
-            pred_cost = pred[2][:, :, 0].mean()
-            _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
-            loss_z = -pred_cost + total_u_loss.mean()
-            loss_z.backward()
-            torch.nn.utils.clip_grad_norm_([Z], 1)
-            optimizer_z.step()
-            print(f'[z opt | iter: {k} | pred cost: {pred_cost.item()}]')
+            pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
+            pred_cost_adv, _ = utils.proximity_cost(pred[0], Variable(pred[1].data), car_sizes, unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 
-        pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = [], [], [], []
-        for t in range(npred):
-            actions, _, _, _ = model.policy_net(input_images, input_states)
-            pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, Z[t])
-            input_images = torch.cat((input_images[:, 1:], pred_image), 1)
-            input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
-            pred_images_adv.append(pred_image)
-            pred_states_adv.append(pred_state)
-            pred_costs_adv.append(pred_cost)
-            pred_actions_adv.append(actions)
+            if k < n_updates_z + 1:
+                _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z_adv.permute(1, 0, 2), compute_total_loss=True)
 
-        pred_images_adv = torch.cat(pred_images_adv, 1)
-        pred_states_adv = torch.stack(pred_states_adv, 1)
-        pred_costs_adv = torch.stack(pred_costs_adv, 1)
-        pred_actions_adv = torch.stack(pred_actions_adv, 1)
-        # use the adversarial states
-        pred_images = pred_images_adv
-        pred_states = pred_states_adv
+                loss_z = -pred_cost_adv.mean() #+ total_u_loss.mean()
+                loss_z.backward(retain_graph=True)
+                torch.nn.utils.clip_grad_norm_([Z_adv], 1)
+                optimizer_z.step()
+#                print(f'[z opt | iter: {k} | pred cost: {pred_cost_adv.mean().item()}]')
+                print(f'[z opt | iter: {k} | pred cost: {pred_cost_adv.mean().item()} | u_cost: {total_u_loss.mean().item()}]')
 
-
-    proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes, unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
-    if hasattr(model, 'value_function'):
-        v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(), Variable(pred_states[:, -model.value_function.opt.ncond:].contiguous().data))
-    else:
-        v = Variable(torch.zeros(bsize, 1).cuda())
     gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
-    proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
-    lane_loss = torch.mean(utils.lane_cost(pred_images, car_sizes) * gamma_mask[:, :npred])
+    if not hasattr(model, 'cost'):
+        proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes, unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        if n_updates_z > 0:
+            proximity_cost = 0.5*proximity_cost + 0.5*pred_cost_adv.squeeze()
+        if hasattr(model, 'value_function'):
+            v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(), Variable(pred_states[:, -model.value_function.opt.ncond:].contiguous().data))
+        else:
+            v = Variable(torch.zeros(bsize, 1).cuda())
+        lane_cost = utils.lane_cost(pred_images, car_sizes)
+    else:
+        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), Variable(pred_states.data).view(-1, 4))
+        pred_costs = pred_costs.view(bsize, npred, 2)
+        proximity_cost = pred_costs[:, :, 0]
+        lane_cost = pred_costs[:, :, 1]
 
-#    lane_loss = torch.mean(pred_costs[:, :, 1] * gamma_mask[:, :npred])
+    if hasattr(model, 'value_function'):
+        proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
+        lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+    else:
+        lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+        proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+        
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
 
@@ -299,7 +306,7 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
 
 
 
-def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type = 'ten'):
+def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type = 'vae'):
     input_images, input_states = inputs
     target_images, target_states, target_costs = targets
     bsize = input_images.size(0)
@@ -316,9 +323,9 @@ def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_m
         # encode the targets into z
         h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
         if model_type == 'ten':
-            z = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1))
+            z = model.z_network((h_x + h_y).view(bsize, -1))
         elif model_type == 'vae':
-            mu_logvar = model.z_network(utils.combine(h_x, h_y, model.opt.combine).view(bsize, -1)).view(bsize, 2, model.opt.nz)
+            mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
             mu = mu_logvar[:, 0]
             logvar = mu_logvar[:, 1]
             z = model.reparameterize(mu, logvar, True)
@@ -328,16 +335,10 @@ def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_m
         h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
         a_emb = model.a_encoder(actions).view(h_x.size())
 
-        if model.opt.zmult == 0:
-            h = utils.combine(h_x, z_exp, model.opt.combine)
-            h = utils.combine(h, a_emb, model.opt.combine)
-        elif model.opt.zmult == 1:
-            a_emb = torch.sigmoid(a_emb)
-            z_exp = torch.sigmoid(z_exp)
-            h = h_x + a_emb + (1-a_emb) * z_exp
-        if not model.disable_unet:
-            h = h + model.u_network(h)
-        pred_image, pred_state, pred_cost = model.decoder(h)
+        h = h_x + z_exp
+        h = h + a_emb
+        h = h + model.u_network(h)
+        pred_image, pred_state = model.decoder(h)
         pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
         # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
         pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
@@ -345,12 +346,10 @@ def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_m
         input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
         pred_images.append(pred_image)
         pred_states.append(pred_state)
-        pred_costs.append(pred_cost)
         pred_actions.append(actions)
 
     pred_images = torch.cat(pred_images, 1)
     pred_states = torch.stack(pred_states, 1)
-    pred_costs = torch.stack(pred_costs, 1)
     pred_actions = torch.stack(pred_actions, 1)
 
-    return [pred_images, pred_states, pred_costs, total_ploss], pred_actions
+    return [pred_images, pred_states, None, total_ploss], pred_actions
