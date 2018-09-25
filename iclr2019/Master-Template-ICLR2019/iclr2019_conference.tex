@@ -13,7 +13,7 @@
 \usepackage{url}
 
 
-\title{Model-Based Planning under Aleatoric and Epistemic Uncertainty}
+\title{Learning Policies from Observational Data by Penalizing Forward Model Uncertainty}
 
 % Authors must not appear in the submitted version. They should be hidden
 % as long as the \iclrfinalcopy macro remains commented out below.
@@ -62,6 +62,25 @@ Address \\
   This encourages the policy network to produce actions which keep it on the manifold of states seen during training. 
 We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
 \end{abstract}
+
+
+
+\textcolor{red}{
+  TODO:
+  \begin{itemize}
+  \item Mikael: [jobs running] Add model-based imitation learner baselines using the deterministic model, since the deterministic model seems to work better than expected.
+  \item Mikael: [jobs running] Add figure to visualize distribution of action sequences (plotted in 2D space) for different methods, to build intuition as to how the uncertainty regularizer keeps them on the manifold
+  \item Mikael: (high priority) Update figures to reflect that we are learning the cost predictor
+  \item Mikael: (medium priority) Add baseline without uncertainty regularizer where we just penalize the $\ell_2$ norm of the actions.
+  \item Mikael: (medium priority) Quantify the change in action sensitivity when using inferred vs. sampled latent variables
+  \item Mikael: (medium priority) Try adversarially optimized latent variables
+  \item Mikael: (medium priority) Try adding uncertainty regularizer to imitation learner - can we use this when we don't have an explicit cost?
+  \item Alfredo: (high priority) Add model-free baselines
+  \item Alfredo: (high priority) Get rule-based baseline from Etienne
+  \item Alfredo: (high priority) Update figure \ref{I-80} (delete middle image and make ego car blue)
+  \end{itemize}
+  }
+
 
 \section{Introduction}
 
@@ -410,7 +429,7 @@ We now report experimental results. All training details can be found in Appendi
     VG-sim($\infty$) + Epistemic Cost & 962.9 & 56.4 \\
 %    SVG($\infty$) & 103.0 & 0.0 \\
 %    SVG($\infty$) + Epistemic Cost & 525.8 & 14.5 \\
-    SVG-sim($\infty$) + Epistemic Cost & 976.4 & 59.1 \\
+    SVG-sim($\infty$) + Epistemic Cost & \textbf{976.4} & \textbf{59.1} \\
     \hline
   \end{tabular}
   \caption{Planning performance on NGSIM dataset, measured in mean episode length. An episode ends when the controlled car collides with another car, drives off the road or reaches the end of the road segment.}
@@ -419,7 +438,7 @@ We now report experimental results. All training details can be found in Appendi
 
 
   The 1-step imitation learner performs poorly.
-  Training SMBIL policies with longer rollouts improves performance up to a point, but still does not beat the simple baseline of performing no action.
+  Training MBIL policies with longer rollouts improves performance up to a point, but still does not beat the simple baseline of performing no action.
   Both SVG and VG without the uncertainty cost also give poor performance.
   However, adding the uncertainty cost improves performance dramatically, outperforming all other methods by a wide margin.
   Despite the difference in prediction quality observed in Figure \ref{prediction-results}, using the stochastic rather than deterministic forward model offers a relatively modest improvement in terms of the performance of the policy network it is used to train.
@@ -440,20 +459,19 @@ We now report experimental results. All training details can be found in Appendi
 
 \begin{figure*}[t!]
     \centering
-    \subfigure[$\lambda_U=0.01$]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_reg_prediction-crop.pdf}}
-    \subfigure[$\lambda_U=0$]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_no_reg_prediction-crop.pdf}} \\
-
+    \subfigure[with uncertainty cost]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_reg_prediction-crop.pdf}}
+    \subfigure[without uncertainty cost]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_no_reg_prediction-crop.pdf}} \\
     \subfigure{
 
-  \begin{tabular}{|llll|}
+  \begin{tabular}{|lrrrr|}
     \hline
-    Method & Ep. Length & Predicted cost & $C_U$ \\
-    \hhline{|====|}
-    SVG & 2.6 & 0.0005 & 8717 \\
-    SVG + Epistemic Cost & 29.6 & 0.0830 & 1.451 \\
+    Method & Mean Distance & Success Rate & Total Predicted Cost & $C_U$ \\
+    \hhline{|=====|}
+    SVG($\infty$) & 88.7 & 0.0 & 0.03 & 4087.4 \\
+    SVG($\infty$) + Epistemic Cost & 976.4 & 59.1 & 0.22 & 1.1 \\
     \hline
   \end{tabular}
-}
+    }
 %  Executing these actions in the environment gives very poor performance, as shown in Table \ref{main-table}.
     \caption{Predictions made by the same forward model for an action sequence produced by a policy trained \textit{with} (top) and \textit{without} (bottom) the epistemic uncertainty cost. Without the uncertainty cost, the policy network learns to output pathological action sequences which produce invalid predictions which nevertheless have low cost.}
     \label{svg-pred}
@@ -462,14 +480,26 @@ We now report experimental results. All training details can be found in Appendi
 There is a significant difference in performance between $\mbox{SVG}(\infty)$ and $\mbox{SVG-sim}(\infty)$.
 The main difference between these two methods is that $\mbox{SVG}(\infty)$ uses latent variables which are inferred from true trajectories in the training set using the posterior network, whereas $\mbox{SVG-sim}(\infty)$ uses latent variables which are sampled from the prior distribution $p(z)$. To better understand the effect of these two approaches, we compared the predictions made by the forward model using inferred and sampled latent variables for different sequences of actions sampled from the training set. Examples are shown in Figure \ref{action-sensitivity}. The predicted sequences using the inferred latent variables resemble the ground truth sequence, even when changing the sequence of actions input to the forward model. In contrast, when using latent variables sampled from the prior, changing the action sequence results in different sequences being predicted by the forward model.
 This suggests that using inferred latent variables reduces the sensitivity of the forward model to the actions.
-To quantify this, we measured the magnitude of the partial derivatives of the output images with respect to actions, averaged over the training set:
+To quantify this, we measured the magnitude of the partial derivatives of the output images with respect to actions, averaged over the training set, and found that these derivative were much smaller when the latent variables were inferred rather than sampled.
 
-\begin{equation}
-\frac{\| f_\theta(s_{1:t}, a_t + \epsilon, z_t) - f_\theta(s_{1:t}, a_t - \epsilon, z_t) \|_2}{\| 2\epsilon \|_2}
-\end{equation}
+\begin{figure*}[t!]
+    \centering
+  \begin{tabular}{|ccc|}
+    \hline
+    Method & $\| \partial i_{t+1} / \partial a_t \|_2$ & $\| \partial u_{t+1} / \partial {a_t} \|_2$\\
+    \hhline{|===|}
+    SVG($\infty$) & - & - \\
+    SVG($\infty$) & - & - \\
+    \hline
+  \end{tabular}
+\end{figure*}
+
+
+
 
 One explanation is that the forward model encodes some factors of variation of the output due to the actions in its latent variables.
-The sequence latent variables sampled from the prior are independent, which may cause these effects to cancel each other over the sequence. However, the sequence of inferred latent variables are highly dependent, and together they may explain away the effects of the actions. We ran an additional experiment where we trained a forward model which samples the latent variables from the prior, rather than the posterior, with probability $0.5$, in an effort to encourage it to extract more information from the actions.
+The sequence latent variables sampled from the prior are independent, which may cause these effects to cancel each other over the sequence. However, the sequence of inferred latent variables are highly dependent, and together they may explain away the effects of the actions.
+%We ran an additional experiment where we trained a forward model which samples the latent variables from the prior, rather than the posterior, with probability $0.5$, in an effort to encourage it to extract more information from the actions.
 
 %  We additionally performed several ablation experiments to understand the effects of different modeling choices, shown in table \ref{ablation}.
 %  Using the action buffer has a non-negligible effect on the SMPC planning, as we see a performance drop when starting from newly initialized actions every time planning is required rather than initializing with a previously optimized action sequence.
@@ -483,9 +513,12 @@ The sequence latent variables sampled from the prior are independent, which may 
 
   \section{Conclusion}
 
-  In this work we have presented an end-to-end approach for learning driving policies from observational data, which includes preparing a dataset of real-world driving trajectories, adapting it to become a planning environment, training a stochastic forward model, and using it for planning together with a new uncertainty regularizer which solves the domain mismatch problem.
+  \textcolor{red}{TODO: improve}
+  
+  In this work we have presented an end-to-end approach for learning driving policies from observational data, which includes preparing a dataset of real-world driving trajectories, adapting it to become a planning environment, training action-conditional forward models, and using them to train policies using with a new uncertainty regularizer which addresses the domain mismatch problem.
   There are several directions for future work.
-  First, our current approach does not capture dependencies which are longer than 20 time steps into the future, which corresponds to 2 seconds.
+  Although we have applied it here in the context of learning driving policies, the approach is general and could be used in other domains.
+  Furthermore, our current approach does not capture dependencies which are longer than 20 time steps into the future, which corresponds to 2 seconds.
   We tried two different approaches to capture longer-term dependencies: learning a value function using temporal differences (which in theory can capture arbitrary length dependencies) and unrolling for more time steps, but these did not yield any improvements and sometimes hurt performance. This requires more investigation.
 %  Second, we observed that the latent variables still encoded action information, although adding the dropout on the latent variables reduced this problem.
 %  Finding a more principled method would be an interesting direction for future work.
