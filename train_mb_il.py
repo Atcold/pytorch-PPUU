@@ -20,7 +20,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v9/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=16)
 parser.add_argument('-batch_size', type=int, default=8)
@@ -41,15 +41,15 @@ parser.add_argument('-curriculum_length', type=int, default=16)
 parser.add_argument('-zeroact', type=int, default=0)
 parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-targetprop', type=int, default=0)
-parser.add_argument('-loss_c', type=int, default=1)
+parser.add_argument('-loss_c', type=int, default=0)
 parser.add_argument('-lambda_c', type=float, default=0.0)
 parser.add_argument('-lambda_h', type=float, default=0.0)
 parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.05-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -77,12 +77,15 @@ torch.cuda.manual_seed(opt.seed)
 opt.model_file = f'{opt.model_dir}/policy_networks/'
 
 opt.model_file += f'mbil-{opt.policy}-nfeature={opt.nfeature}-npred={opt.npred}-lambdac={opt.lambda_c}-gamma={opt.gamma}-seed={opt.seed}'
-if 'vae3' in opt.mfile:
+if 'vae' in opt.mfile:
     opt.model_file += f'-model=vae'
     model_type = 'vae'
-elif 'ten3' in opt.mfile:
+elif 'ten' in opt.mfile:
     opt.model_file += f'-model=ten'
     model_type = 'ten'
+elif 'model=fwd-cnn-layers' in opt.mfile:
+    model_type = 'det'
+    opt.model_file += '-deterministic'
 if 'zdropout=0.5' in opt.mfile: 
     opt.model_file += '-zdropout=0.5'
 elif 'zdropout=0.0' in opt.mfile:
@@ -108,8 +111,8 @@ else:
     model.opt.actions_subsample = opt.actions_subsample
     optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
     n_iter = 0
-    stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
-    model.stats=stats
+#    stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
+#    model.stats=stats
     if 'ten' in opt.mfile:
         pzfile = opt.model_dir + opt.mfile + '.pz'
         p_z = torch.load(pzfile)
@@ -124,7 +127,7 @@ model.cuda()
 model.disable_unet=False
 
 
-
+print('[loading data]')
 dataloader = DataLoader(None, opt, opt.dataset)
 
 
@@ -139,12 +142,12 @@ def compute_loss(targets, predictions, gamma=1.0, r=True):
     pred_images, pred_states, pred_costs, loss_p = predictions
     loss_i = F.mse_loss(pred_images, target_images, reduce=False).mean(4).mean(3).mean(2)
     loss_s = F.mse_loss(pred_states, target_states, reduce=False).mean(2)
-    loss_c = F.mse_loss(pred_costs, target_costs, reduce=False).mean(2)
+#    loss_c = F.mse_loss(pred_costs, target_costs, reduce=False).mean(2)
     if gamma < 1.0:
         loss_i *= gamma_mask
         loss_s *= gamma_mask
         loss_c *= gamma_mask
-    return loss_i.mean(), loss_s.mean(), loss_c.mean(), loss_p.mean()
+    return loss_i.mean(), loss_s.mean(), Variable(torch.zeros(1)), loss_p.mean()
 
 def train(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
@@ -159,11 +162,11 @@ def train(nbatches, npred):
         actions = Variable(actions)
         pred, _ = planning.train_policy_net_mbil(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
-        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
-        proximity_cost = proximity_cost * Variable(gamma_mask)
-        lane_cost = lane_cost * Variable(gamma_mask)
-        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
-        loss_policy = loss_i + loss_s + opt.lambda_c*loss_c + opt.lambda_h*loss_p
+#        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
+#        proximity_cost = proximity_cost * Variable(gamma_mask)
+#        lane_cost = lane_cost * Variable(gamma_mask)
+#        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
+        loss_policy = loss_i + loss_s + opt.lambda_h*loss_p
         if opt.loss_c == 1:
             loss_policy += loss_c_
         if not math.isnan(loss_policy.item()):
@@ -172,7 +175,6 @@ def train(nbatches, npred):
             optimizer.step()
             total_loss_i += loss_i.item()
             total_loss_s += loss_s.item()
-            total_loss_c += loss_c.item()
             total_loss_p += loss_p.item()
             total_loss_policy += loss_policy.item()
             n_updates += 1
@@ -200,17 +202,12 @@ def test(nbatches, npred):
         actions = Variable(actions)
         pred, pred_actions = planning.train_policy_net_mbil(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)            
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
-        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
-        proximity_cost = proximity_cost * Variable(gamma_mask)
-        lane_cost = lane_cost * Variable(gamma_mask)
-        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
-        loss_policy = loss_i + loss_s + opt.lambda_c*loss_c + opt.lambda_h*loss_p
+        loss_policy = loss_i + loss_s 
         if opt.loss_c == 1:
             loss_policy += loss_c_
         if not math.isnan(loss_policy.item()):
             total_loss_i += loss_i.item()
             total_loss_s += loss_s.item()
-            total_loss_c += loss_c.item()
             total_loss_p += loss_p.item()
             total_loss_policy += loss_policy.item()
             n_updates += 1
@@ -265,8 +262,8 @@ else:
                    opt.model_file + '.model')
         model.intype('gpu')
         log_string = f'step {n_iter} | npred {npred} | bsize {bsize} | esize {opt.epoch_size} | '
-        log_string += utils.format_losses(*train_losses, split='train')
-        log_string += utils.format_losses(*valid_losses, split='valid')
+        log_string += utils.format_losses(train_losses[0], train_losses[1], split='train')
+        log_string += utils.format_losses(valid_losses[0], valid_losses[1], split='valid')
         print(log_string)
         utils.log(opt.model_file + '.log', log_string)
         if i > 0 and(i % opt.curriculum_length == 0) and (opt.npred == -1) and npred < 400:

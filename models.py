@@ -612,7 +612,25 @@ class FwdCNN(nn.Module):
             self.u_network = pretrained_model.u_network
             self.encoder.n_inputs = opt.ncond
 
+    # dummy function
+    def sample_z(self, bsize, method=None):
+        return Variable(torch.zeros(bsize, 32).cuda())
 
+
+    def forward_single_step(self, input_images, input_states, action, z):
+        # encode the inputs (without the action)
+        bsize = input_images.size(0)
+        h_x = self.encoder(input_images, input_states)
+        h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
+        a_emb = self.a_encoder(action).view(h_x.size())
+
+        h = h_x 
+        h = h + a_emb
+        h = h + self.u_network(h)
+        pred_image, pred_state = self.decoder(h)
+        pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
+        pred_state = pred_state + input_states[:, -1]
+        return pred_image, pred_state
 
 
     def forward(self, inputs, actions, target, sampling=None, z_dropout=None):
@@ -637,6 +655,16 @@ class FwdCNN(nn.Module):
         pred_images = torch.cat(pred_images, 1)
         pred_states = torch.stack(pred_states, 1)
         return [pred_images, pred_states, None], Variable(torch.zeros(1).cuda())
+
+
+    def create_policy_net(self, opt):
+        if opt.policy == 'policy-gauss':
+            self.policy_net = StochasticPolicy(opt)
+        if opt.policy == 'policy-ten':
+            self.policy_net = PolicyTEN(opt)
+        elif opt.policy == 'policy-vae':
+            self.policy_net = PolicyVAE(opt)
+
 
     def intype(self, t):
         if t == 'gpu':
@@ -1253,7 +1281,10 @@ class FwdCNN_VAE(nn.Module):
                         kld = utils.kl_criterion(mu, logvar, mu_prior, logvar_prior)
                     ploss += kld
             else:
-                z = self.sample_z(bsize, method=None, h_x=h_x)
+                if z_seq is not None:
+                    z = z_seq[t]
+                else:
+                    z = self.sample_z(bsize, method=None, h_x=h_x)
 
             z_list.append(z)
             z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
@@ -1376,12 +1407,38 @@ class PolicyCNN(nn.Module):
         elif t == 'cpu':
             self.cpu()
 
+class CostPredictor(nn.Module):
+    def __init__(self, opt):
+        super(CostPredictor, self).__init__()
+        self.opt = opt
+        self.encoder = encoder(opt, 0, 1)
+        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.proj = nn.Linear(self.hsize, opt.n_hidden)
+
+        self.fc = nn.Sequential(
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, opt.n_hidden),
+            nn.ReLU(),
+            nn.Linear(opt.n_hidden, 2), 
+            nn.Tanh()
+        )
+
+    def forward(self, state_images, states):
+        bsize = state_images.size(0)
+        h = self.encoder(state_images, states).view(bsize, self.hsize)
+        h = self.proj(h)
+        h = self.fc(h)
+        return h
+
 
 
 # Stochastic Policy, output is a diagonal Gaussian and learning
 # uses the reparameterization trick. 
 class StochasticPolicy(nn.Module):
-    def __init__(self, opt, context_dim=0, output_dim=None):
+    def __init__(self, opt, context_dim=0, actor_critic=False, output_dim=None):
         super(StochasticPolicy, self).__init__()
         self.opt = opt
         self.encoder = encoder(opt, 0, opt.ncond)
@@ -1400,6 +1457,7 @@ class StochasticPolicy(nn.Module):
             nn.Linear(opt.n_hidden, opt.n_hidden)
         )
 
+
         if context_dim > 0:
             self.context_encoder = nn.Sequential(
                 nn.Linear(context_dim, opt.n_hidden), 
@@ -1411,6 +1469,11 @@ class StochasticPolicy(nn.Module):
 
         self.mu_net = nn.Linear(opt.n_hidden, self.n_outputs)
         self.logvar_net = nn.Linear(opt.n_hidden, self.n_outputs)
+        self.actor_critic = actor_critic
+        if actor_critic:
+            self.value_net = nn.Linear(opt.n_hidden, 1)
+            self.saved_actions = []
+            self.rewards = []
 
 
     def forward(self, state_images, states, context=None, sample=True, normalize_inputs=False, normalize_outputs=False, n_samples=1, std_mult=1.0):
@@ -1447,7 +1510,12 @@ class StochasticPolicy(nn.Module):
             a += self.stats['a_mean'].view(1, 1, 2).expand(a.size()).cuda()
 
         entropy = std.mean()
-        return a.squeeze(), entropy, mu, std
+        if self.actor_critic:
+            value = self.value_net(h).view(bsize, 1)
+            return a.squeeze(), entropy, mu, std, value
+        else:
+            return a.squeeze(), entropy, mu, std
+
 
 
     def intype(self, t):
@@ -1465,6 +1533,15 @@ class StochasticPolicy(nn.Module):
                 self.a_std = self.a_std.cpu()
                 self.s_mean = self.s_mean.cpu()
                 self.s_std = self.s_std.cpu()
+
+
+
+
+
+
+
+
+
 
 
 

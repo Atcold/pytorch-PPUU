@@ -38,11 +38,11 @@ parser.add_argument('-lambda_a', type=float, default=0.0)
 parser.add_argument('-lambda_l', type=float, default=0.1)
 parser.add_argument('-lrt_z', type=float, default=1.0)
 parser.add_argument('-z_updates', type=int, default=0)
+parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae3-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-learned_cost', type=int, default=1)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-value_model', type=str, default='model=value-bsize=64-ncond=20-npred=50-lrt=0.0001-nhidden=64-nfeature=64-gclip=10-dropout=0.1-gamma=0.99-nsync=1.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -70,14 +70,39 @@ torch.cuda.manual_seed(opt.seed)
 
 
 opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
-if 'vae3' in opt.mfile:
+
+
+
+# load the model
+model = torch.load(opt.model_dir + opt.mfile)
+if type(model) is dict: model = model['model']
+model.disable_unet=False
+model.create_policy_net(opt)
+if opt.value_model != '':
+    value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
+    model.value_function = value_function
+optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
+n_iter = 0
+stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
+model.stats=stats
+if 'ten' in opt.mfile:
+    pzfile = opt.model_dir + opt.mfile + '.pz'
+    p_z = torch.load(pzfile)
+    model.p_z = p_z
+model.intype('gpu')
+model.cuda()
+
+
+if 'vae' in opt.mfile:
     opt.model_file += f'-model=vae'
-elif 'ten3' in opt.mfile:
+elif 'ten' in opt.mfile:
     opt.model_file += f'-model=ten'
 if 'zdropout=0.5' in opt.mfile: 
     opt.model_file += '-zdropout=0.5'
 elif 'zdropout=0.0' in opt.mfile:
     opt.model_file += '-zdropout=0.0'
+if 'model=fwd-cnn-layers' in opt.mfile:
+    opt.model_file += '-deterministic'
 opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'
@@ -85,44 +110,19 @@ opt.model_file += f'-lambdal={opt.lambda_l}'
 opt.model_file += f'-gamma={opt.gamma}'
 opt.model_file += f'-lrtz={opt.lrt_z}'
 opt.model_file += f'-updatez={opt.z_updates}'
+opt.model_file += f'-inferz={opt.infer_z}'
+opt.model_file += f'-learnedcost={opt.learned_cost}'
 opt.model_file += f'-seed={opt.seed}'
 
 if opt.value_model == '':
     opt.model_file += '-novalue'
 
+if opt.learned_cost == 1:
+    model.cost = torch.load(opt.model_dir + f'/{opt.mfile}.cost.model')['model']
+
+
 print(f'[will save as: {opt.model_file}]')
 
-if os.path.isfile(opt.model_file + '.model') and False: 
-    print('[found previous checkpoint, loading]')
-    checkpoint = torch.load(opt.model_file + '.model')
-    model = checkpoint['model']
-    optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt, eps=1e-3)
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    n_iter = checkpoint['n_iter']
-    if opt.test_only == 0:
-        utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
-else:
-    # load the model
-    model = torch.load(opt.model_dir + opt.mfile)
-    if type(model) is dict: model = model['model']
-    model.disable_unet=False
-    model.create_policy_net(opt)
-    if opt.value_model != '':
-        value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
-        model.value_function = value_function
-    optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
-    n_iter = 0
-    stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
-    model.stats=stats
-    if 'ten' in opt.mfile:
-        pzfile = opt.model_dir + opt.mfile + '.pz'
-        p_z = torch.load(pzfile)
-        model.p_z = p_z
-
-
-
-model.intype('gpu')
-model.cuda()
 
 
 
@@ -144,7 +144,7 @@ def train(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates)
+        pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates, infer_z=(opt.infer_z==1))
         loss_c = pred[2]
         loss_l = pred[3]
         loss_u = pred[4]

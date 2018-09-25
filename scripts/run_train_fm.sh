@@ -3,14 +3,14 @@
 rm *.err
 rm *.out
 
-for model in fwd-cnn-ten; do 
+for model in fwd-cnn-vae-fp; do 
     for lrt in 0.0001; do 
         for nfeature in 256; do 
             for warmstart in 1; do 
                 for ncond in 20; do 
-                    for npred in 20; do 
+                    for npred in 1; do 
                         for nz in 32; do 
-                            for beta in 0.0; do 
+                            for beta in 1e-6; do 
                                 for z_dropout in 0.0 0.5; do 
                                     for layers in 3; do 
                                         for bsize in 64; do
