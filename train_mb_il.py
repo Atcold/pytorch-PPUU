@@ -48,7 +48,8 @@ parser.add_argument('-lambda_lane', type=float, default=0.1)
 parser.add_argument('-lrt_traj', type=float, default=0.5)
 parser.add_argument('-niter_traj', type=int, default=20)
 parser.add_argument('-gamma', type=float, default=1.0)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
@@ -82,6 +83,9 @@ if 'vae' in opt.mfile:
 elif 'ten' in opt.mfile:
     opt.model_file += f'-model=ten'
     model_type = 'ten'
+elif 'model=fwd-cnn-layers' in opt.mfile:
+    model_type = 'det'
+    opt.model_file += '-deterministic'
 if 'zdropout=0.5' in opt.mfile: 
     opt.model_file += '-zdropout=0.5'
 elif 'zdropout=0.0' in opt.mfile:
@@ -123,7 +127,7 @@ model.cuda()
 model.disable_unet=False
 
 
-
+print('[loading data]')
 dataloader = DataLoader(None, opt, opt.dataset)
 
 

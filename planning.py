@@ -320,22 +320,24 @@ def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_m
         actions, _, _, _ = model.policy_net(input_images, input_states)
         # encode the inputs
         h_x = model.encoder(input_images, input_states)
-        # encode the targets into z
-        h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
-        if model_type == 'ten':
-            z = model.z_network((h_x + h_y).view(bsize, -1))
-        elif model_type == 'vae':
-            mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
-            mu = mu_logvar[:, 0]
-            logvar = mu_logvar[:, 1]
-            z = model.reparameterize(mu, logvar, True)
-        z_ = z
-        z_list.append(z_)
-        z_exp = model.z_expander(z_).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
-        h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
+        if model_type == 'ten' or model_type == 'vae':
+            # encode the targets into z
+            h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
+            if model_type == 'ten':
+                z = model.z_network((h_x + h_y).view(bsize, -1))
+            elif model_type == 'vae':
+                mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
+                mu = mu_logvar[:, 0]
+                logvar = mu_logvar[:, 1]
+                z = model.reparameterize(mu, logvar, True)
+            z_ = z
+            z_list.append(z_)
+            z_exp = model.z_expander(z_).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
+            h_x = h_x.view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
+            h = h_x + z_exp
+        else:
+            h = h_x
         a_emb = model.a_encoder(actions).view(h_x.size())
-
-        h = h_x + z_exp
         h = h + a_emb
         h = h + model.u_network(h)
         pred_image, pred_state = model.decoder(h)
