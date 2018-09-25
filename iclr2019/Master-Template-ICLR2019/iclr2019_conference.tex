@@ -58,7 +58,8 @@ Address \\
 \begin{abstract}
   In this work, we propose an end-to-end approach for learning policies for autonomous driving from purely observational data.
   It consists of learning a dynamics model from a large dataset of human driving trajectories, which is then used to train a fast, feedforward policy network.
-  Key to our approach is the use of a differentiable cost term used when training the policy network which penalizes the uncertainty of the dynamics model, using recent methods for uncertainty estimation for neural networks based on dropout.
+  Learning a policy from only observational data is challenging to to covariate shift between distributions seen at training and test times.
+  We propose two ways of leveraging a learned dynamics model to address this issue: a model-based imitation learning approach which matches expert trajectories rather than actions, and differentiable cost term which penalizes the uncertainty of the dynamics model,  using recent methods for uncertainty estimation for neural networks based on dropout.
   This encourages the policy network to produce actions which keep it on the manifold of states seen during training. 
 We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
 \end{abstract}
@@ -97,7 +98,6 @@ Theoretical results have also shown the model-based approach to offer improved s
 
 Despite these improvements, there exist settings where even a \textit{single} poor action executed by an agent in a real environment can have consequences which are not acceptable.
 At the same time, with data collection becoming increasingly inexpensive, there are many settings where observational data of an environment is abundant.
-%If observational data is available, an alternative approach is to try to learn purely from observational data.
 This suggests a need for algorithms which can learn policies primarily from observational data, which can then perform well in a real environment.
 Autonomous driving is an example of such a setting: on one hand, trajectories of human drivers can be easily collected using traffic cameras \citep{NGSIM}, resulting in an abundance of observational data; on the other hand, learning through interaction with the real environment is not a viable solution.
 
@@ -120,9 +120,7 @@ In the interactive setting, this problem is naturally self-correcting, since sta
 
 In this work, we propose an end-to-end, model-based approach for learning driving policies from purely observational data.
 We first introduce a large-scale dataset of real-world driving trajectories, which we also adapt into an environment for testing learned policies and planning methods; both dataset and environment will be made public.
-%To handle this, we use recent advances in stochastic video prediction to learn an action-conditional stochastic forward model which can then be used for planning.
 This dataset is highly stochastic due to the unpredictable nature of human driving, and we train both deterministic and stochastic action-conditional forward models which can then be used for planning.
-%To handle this, we use recent advances in stochastic video prediction to learn an action-conditional stochastic forward model which can then be used for planning.
 The key element of our approach is a differentiable term in the cost function used at planning time, representing the uncertainty of the forward model about its own predictions, which is calculated using dropout.
 Minimizing this term encourages a planner or policy network to choose action sequences which keep it on the data manifold which the forward model was trained on.
 We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
@@ -161,8 +159,6 @@ The images $i_t$ are centered around the ego car and encode both the lane emplac
 Each image has 3 channels: the first (red) encodes the lane markings, the second (green) encodes the locations of neighboring cars, which are represented as rectangles reflecting the dimensions of each car, and the third channel (blue) represents the ego car, also scaled to the correct dimensions.
 This is summarized in Figure \ref{I-80}.
 We also define two cost functions to be minimized at planning time: a proximity cost which reflects how close the ego car is to neighboring cars, and a lane cost which reflects how much the ego car overlaps with lane markings. These are represented as a cost vector at each timestep, $c_t = (C_{proximity}(s_t), C_{lane}(s_t))$.
-%Both costs are computed using masks in pixel space, which are pointwise multiplied with the green channel for the proximity cost and the red channel for the lane cost.
-%These operations are differentiable so that we can backpropagate gradients of both costs with respect to actions through images predicted by a forward model.
 
 
 We also adapted this dataset to be used as an environment to evaluate learned policies, with the same interface as OpenAI Gym \citep{OpenAIBaselines}.
@@ -172,11 +168,9 @@ This approach avoids hand-designing a policy for the neighboring cars which woul
 The limitation is that the neighboring cars do not react to the controlled car, which makes the problem more difficult.
 
 
-\section{Planning Approach}
+\section{Action-conditional Forward Model}
 
-Our approach consists of two steps: learning an action-conditional dynamics model and cost predictor using the collected observational data, and then using this model to train a fast, feedforward policy network. We describe the two steps below.
-
-\subsection{Action-conditional Forward Model}
+Our approach consists of two steps: learning an action-conditional dynamics model and cost predictor using the collected observational data, and then using this model to train a fast, feedforward policy network.
 
 We trained both deterministic and stochastic dynamics models.
 Our deterministic model $f_\theta(s_{1:t}, a_t)$ takes as input a sequence of past states $s_{1:t}$ and an action $a_t$, and produces a prediction of the next state $\tilde{s}_{t+1} = (\tilde{i}_t, \tilde{u}_t)$.  
@@ -190,24 +184,7 @@ The per-sample loss which it minimizes is given by:
 
 For the stochastic model, we adapted recent approaches for stochastic video prediction \citep{Babaeizadeh2018, Denton2018} based on Variational Autoencoders \citep{VAE}.
 In addition to $s_{1:t}$ and $a_t$, the model takes as input a latent variable $z_t$ which represents the information about the next state $s_{t+1}$ which is not a deterministic function of the input.
-During training, latent variables are sampled from a posterior network $q_\phi(s_{1:t}, s_{t+1})$ which outputs the parameters $(\mu_\phi, \sigma_\phi)$ of a diagonal Gaussian distribution over latent variables conditioned on the past inputs and true targets. This network is trained jointly with the prediction model using the reparameterization trick, and a term is included in the loss to minimize the KL divergence between the posterior distribution and a fixed prior $p(z)$, which in our case is an isotropic Gaussian.
-Specifically, the updates are given by:
-
-\begin{alignat}{2}
-  \label{eq:update-eqn}
-  &(\mu_\phi, \sigma_\phi) &&= q_\phi(s_{1:t}, s_{t+1}) \\
-  &\epsilon &&\sim \mathcal{N}(0, I) \\
-  &z_t &&= \mu_\phi + \sigma_\phi \cdot \epsilon \\
-  &\tilde{s}_{t+1} = (\tilde{i}_{t+1}, \tilde{u}_{t+1}) &&= f_\theta(s_{1:t}, a_t, z_t)
-%  &\ell(f_\theta(s_{1:t}, a_t, z_t), s_{t+1}) + \beta D_{\mbox{KL}}(f_\phi(s_{1:t}, s_{t+1}), \mathcal{N}(0, I))
-\end{alignat}
-
-The per-sample loss is given by:
-
-\begin{align}
-  \label{eq:update-eqn}
-  \ell(s_{1:t}, s_{t+1}) = \|\tilde{i}_t - i_t \|_2^2 + \| \tilde{u}_t - u_t \|_2^2 + \beta D_{KL}(\mathcal{N}(\mu_\phi, \sigma_\phi) || p(z))
-\end{align}
+During training, latent variables are sampled from a posterior network $q_\phi(s_{1:t}, s_{t+1})$ which outputs the parameters $(\mu_\phi, \sigma_\phi)$ of a diagonal Gaussian distribution over latent variables conditioned on the past inputs and true targets. This network is trained jointly with the prediction model using the reparameterization trick, and a term is included in the loss to minimize the KL divergence between the posterior distribution and a fixed prior $p(z)$, which in our case is an isotropic Gaussian. Details of the stochastic model updates are given in Appendix \ref{model-details}. 
 
 After the dynamics model is trained, we train another network $f_c$ which takes as input a state predicted by the forward model and produces an estimate of the associated proximity and lane costs. This is trained by minimizing the per sample loss:
 
@@ -217,38 +194,18 @@ After the dynamics model is trained, we train another network $f_c$ which takes 
 
 After training, different future predictions and associated costs for a given sequence of frames can be generated by sampling different latent variables from the prior distribution.
 The deterministic and stochastic models have an identical architecture except for the latent variables in the stochastic model.
-Details of the prediction model and inference network architectures are given in Appendix \ref{model-details}.
+%Details of the prediction model and inference network architectures are given in Appendix \ref{model-details}.
 
-\subsection{Training a Policy Network}
+\section{Training a Policy Network}
 
-
-\begin{figure*}[t!]
-    \centering
-    \subfigure{\includegraphics[width=0.7\textwidth]{figures/driving/svg-crop.pdf}} \\
-    \label{svg}
-    \caption{Training the policy network using the stochastic forward model. Gradients with respect to costs associated with predicted states are passed through the unrolled forward model into a policy network.}
-\end{figure*}
-
-
-Once the forward model and cost predictor are trained, we can use them to train a parameterized policy network $\pi_\psi$.
-In the case of the deterministic forward model, we first sample an initial state sequence $s_{1:t}$ from the training set, unroll the forward model over $T$ time steps, and backpropagate gradients of the predicted costs with respect to the parameters of the policy network.
+Once the forward model is trained, we can use it to train a parameterized policy network $\pi_\psi$.
+In the case of the deterministic forward model, we first sample an initial state sequence $s_{1:t}$ from the training set, unroll the forward model over $T$ time steps, and backpropagate gradients of some associated cost function with respect to the parameters of the policy network.
 In the case of the stochastic forward model, we additionally sample latent variables from the prior for each step and input them into the forward model.
-%We do this by first randomly sampling an initial input state $s_t$ from the training set, and then unrolling the forward model for $T$ steps, at each step sampling a latent variable from the prior distribution $p(z)$ and an action from the policy network using the previous state as input.
-%This produces a sequence of predicted states which are passed through the cost function.
-%We then backpropagate gradients of these costs through the unrolled forward model to the actions produced by the policy network, whose weights are then updated to produce actions which would lower the predicted cost.
-During this process the weights of the forward model are fixed, and only the weights of the policy network are optimized. This is illustrated in Figure \ref{svg}.
+During this process the weights of the forward model are fixed, and only the weights of the policy network are optimized.
+We propose two approaches: a model-based variant on imitation learning where the cost is the distance between the trajectory predicted by the forward model and the expert trajectory, and a regularized form of value gradients which contains an explicit cost term which forced the policy network to produce actions which keep it on the manifold where the forward model is confident in its predictions. 
+This is illustrated in Figure \ref{svg}. Which method to apply depends on whether the observational data contains expert trajectories and the availability of a well-defined cost function.
 
-    For the deterministic model, our approach is similar to that of \citep{Nguyen1989}.
-    For the stochastic model, our approach is related to the $\mbox{SVG}(\infty)$ algorithm introduced in \citep{SVG}, with two differences. The first is that they sample a sequence of states $s_t, ..., s_{t+T}$ from the training set (or replay buffer), and infer the corresponding sequence of latent variables $z_t, ..., z_{t+T}$ (in our setup, this can be done using the posterior network $q_\phi$), whereas we sample latent variables from the prior. We compare the two approaches and found that using inferred latent variables causes a drop in performance, which we discuss in Section \ref{experiments}.
-    The second is that they consider an interactive setting where the agent collects experience from the environment which it then uses to train its dynamics model.
-
-
-
-
-
-
-    \section{Differentiable Epistemic Uncertainty Cost}
-    \label{uncertainty-cost}
+\subsection{Uncertainty-Regularized Value Gradients}
 
     We propose to augment the predicted costs with an additional cost term which penalizes the uncertainty of the forward model, calculated using dropout, and use derivatives of this cost to train the policy network.
     Dropout \citep{Dropout2012, Dropout2014} consists of randomly setting hidden units in a neural network to zero with some probability, and has been shown to substantially reduce overfitting.
@@ -294,8 +251,33 @@ where $D$ is the dimensionality of the output. Minimizing this quantity with res
 
 
 
+\begin{figure*}[t!]
+    \centering
+    \subfigure{\includegraphics[width=0.7\textwidth]{figures/driving/svg-crop.pdf}} \\
+    \label{svg}
+    \caption{Training the policy network using the stochastic forward model. Gradients with respect to costs associated with predicted states are passed through the unrolled forward model into a policy network.}
+\end{figure*}
 
 
+
+%    For the deterministic model, our approach is similar to that of \citep{Nguyen1989}.
+%    For the stochastic model, our approach is related to the $\mbox{SVG}(\infty)$ algorithm introduced in \citep{SVG}, with two differences. The first is that they sample a sequence of states $s_t, ..., s_{t+T}$ from the training set (or replay buffer), and infer the corresponding sequence of latent variables $z_t, ..., z_{t+T}$ (in our setup, this can be done using the posterior network $q_\phi$), whereas we sample latent variables from the prior. We compare the two approaches and found that using inferred latent variables causes a drop in performance, which we discuss in Section \ref{experiments}.
+%    The second is that they consider an interactive setting where the agent collects experience from the environment which it then uses to train its dynamics model.
+
+
+\subsection{Model-Based Imitation Learning}
+
+  We also experimented with a variant of imitation learning using the learned stochastic model, which we found performed better than the standard version. One issue with imitation learning is that errors can accumulate quickly, leading to divergence from the states seen during training.
+  One cause may be that the model is simply minimizing the $\ell_2$ loss in action space, which may not correspond to minimizing distances in trajectory space.
+  Consider the following example where an agent is walking exactly along the side of a cliff, and must output an action which represents its angle.
+  To the left is a drop, and to the right is solid ground.
+  Say the expert action is to go straight, i.e. $a_{t+1} = 0$. Now consider two possible actions predicted by the network, $\tilde{a}_{t+1} = -\epsilon$ (slight left) and $\tilde{a}_{t+1} = +\epsilon$ (slight right).
+  Both of these actions incur the same $\ell_2$ cost of $\epsilon$, but have very different consequences. If the agent moves slightly away from the expert action on the left side, they fall off the cliff, which causes a large deviation of their subsequent states from the expert states. If they move slightly to the right however, they stay on solid ground and their subsequent states remain close to the expert states.
+
+  As an alternative, we experimented with training a policy to match expert \textit{trajectories}, rather than actions.
+  We do this by unrolling the forward model for multiple timesteps, outputting actions by the policy network using the model predictions, and minimizing the error between the final trajectory output by the forward model and the expert trajectory observed in the dataset.
+%  This is illustrated in Figure \ref{mbil-diagram}.
+  The motivation here is that if the policy network outputs an action which causes small divergence from the target trajectory at the next timestep, but large divergences later on, it will receive gradients from these larger errors backpropagated through the unrolled forward model.
 
 \section{Related Work}
 
@@ -415,21 +397,23 @@ We now report experimental results. All training details can be found in Appendi
 %    MBIL (stochastic, 1 step) & 173.9 & 0.2 \\
 %    MBIL (stochastic, 3 step) & 231.2 & 0.0 \\
     %    MBIL (stochastic, 5 step) & 238.6 & 0.2 \\
-    MBIL (deterministic, 10 step) & - & - \\
-    MBIL (deterministic, 20 step) & - & - \\
-    MBIL (deterministic, 30 step) & - & - \\
-    MBIL (deterministic, 40 step) & - & - \\    
-    MBIL (stochastic, 10 step) & 283.7 & 0.7 \\
-    MBIL (stochastic, 20 step) & 333.3 & 1.2 \\
-    MBIL (stochastic, 30 step) & 348.6 & 0.7 \\
-    MBIL (stochastic, 40 step) & 385.6 & 0.8 \\
+    MBIL (deterministic, 1 step) & 327 & 6.4 \\
+    MBIL (deterministic, 3 step) & 473 & 16.2 \\
+    MBIL (deterministic, 5 step) & - & - \\
+    MBIL (deterministic, 10 step) & 943 & 67.1 \\
+    MBIL (deterministic, 20 step) & 1024 & 66.6 \\
+    MBIL (deterministic, 30 step) & 1028 & 67.7 \\
+    MBIL (stochastic, 10 step) & 284 & 0.7 \\
+    MBIL (stochastic, 20 step) & 333 & 1.2 \\
+    MBIL (stochastic, 30 step) & 349 & 0.7 \\
+    MBIL (stochastic, 40 step) & 386 & 0.8 \\
     \hline
-    VG-sim($\infty$) & 97.6 & 0.0 \\
-    SVG-sim($\infty$) & 88.7 & 0.0 \\
-    VG-sim($\infty$) + Epistemic Cost & 962.9 & 56.4 \\
+    VG($\infty$) & 97 & 0.0 \\
+    SVG($\infty$) & 88 & 0.0 \\
+    VG($\infty$) + Epistemic Cost & 963 & 56.4 \\
 %    SVG($\infty$) & 103.0 & 0.0 \\
 %    SVG($\infty$) + Epistemic Cost & 525.8 & 14.5 \\
-    SVG-sim($\infty$) + Epistemic Cost & \textbf{976.4} & \textbf{59.1} \\
+    SVG($\infty$) + Epistemic Cost & \textbf{976} & \textbf{59.1} \\
     \hline
   \end{tabular}
   \caption{Planning performance on NGSIM dataset, measured in mean episode length. An episode ends when the controlled car collides with another car, drives off the road or reaches the end of the road segment.}
@@ -662,6 +646,27 @@ The result is then run through a deconvolutional network with 256-128-64 feature
     \caption{Individual components of the stochastic prediction model.}
 \end{figure}
 \label{model-components}
+
+
+
+The specific updates of the stochastic forward model are given by:
+
+\begin{alignat}{2}
+  \label{eq:update-eqn}
+  &(\mu_\phi, \sigma_\phi) &&= q_\phi(s_{1:t}, s_{t+1}) \\
+  &\epsilon &&\sim \mathcal{N}(0, I) \\
+  &z_t &&= \mu_\phi + \sigma_\phi \cdot \epsilon \\
+  &\tilde{s}_{t+1} = (\tilde{i}_{t+1}, \tilde{u}_{t+1}) &&= f_\theta(s_{1:t}, a_t, z_t)
+%  &\ell(f_\theta(s_{1:t}, a_t, z_t), s_{t+1}) + \beta D_{\mbox{KL}}(f_\phi(s_{1:t}, s_{t+1}), \mathcal{N}(0, I))
+\end{alignat}
+
+The per-sample loss is given by:
+
+\begin{align}
+  \label{eq:update-eqn}
+  \ell(s_{1:t}, s_{t+1}) = \|\tilde{i}_t - i_t \|_2^2 + \| \tilde{u}_t - u_t \|_2^2 + \beta D_{KL}(\mathcal{N}(\mu_\phi, \sigma_\phi) || p(z))
+\end{align}
+
 
 
 \section{Planning Approaches}
