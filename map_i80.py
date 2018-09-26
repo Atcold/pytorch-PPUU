@@ -1,3 +1,4 @@
+import torch
 from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
@@ -223,6 +224,8 @@ class I80(Simulator):
         self.nb_lanes = 7
         self.smoothing_window = 15
         self.max_frame = -1
+        pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
+        self.data_stats = torch.load(pth) if self.normalise_state else None
 
     @staticmethod
     def _get_data_frame(time_slot, x_max, x_offset):
@@ -406,7 +409,11 @@ class I80(Simulator):
         done = self.frame >= self.max_frame or self.user_is_done
 
         if self.controlled_car and self.controlled_car['locked']:
-            return_ = self.controlled_car['locked'].get_last(self.nb_states, done)
+            return_ = self.controlled_car['locked'].get_last(
+                n=self.nb_states,
+                done=done,
+                norm_state=self.normalise_state and self.data_stats,
+            )
             if return_: return return_
 
         # return observation, reward, done, info

@@ -518,16 +518,21 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last(self, n, done):
+    def get_last(self, n, done, norm_state=False):
         if len(self._states_image) < n: return None  # no enough samples
         # n × (state_image, lane_cost, proximity_cost, frame) ->
         # -> (n × state_image, n × lane_cost, n × proximity_cost, n × frame)
         transpose = list(zip(*self._states_image))
         state_images = transpose[0]
-        state_images = torch.stack(state_images).permute(0, 3, 1, 2)
+        state_images = torch.stack(state_images).permute(0, 3, 1, 2)[-n:]
+
         zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
-        states = torch.stack(zip_[0])[:, 0]  # select the ego-state (of 1 + 6 states we keep track)
-        observation = dict(context=state_images[-n:], state=states[-n:])
+        states = torch.stack(zip_[0])[:, 0][-n:]  # select the ego-state (of 1 + 6 states we keep track)
+        if norm_state is not False:  # normalise the states, if requested
+            states = states.sub(norm_state['s_mean']).div(norm_state['s_std'])  # N(0, 1) range
+            state_images = state_images.float().div(255)  # [0, 1] range
+        observation = dict(context=state_images, state=states)
+
         cost = dict(
             proximity_cost=self._states[-1][2],
             lane_cost=self._states_image[-1][1],
@@ -598,7 +603,7 @@ class Simulator(core.Env):
     action_space = spaces.Box(np.array([-1, -1]), np.array([+1, +1]))  # brake / accelerate, right / left
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
-                 policy_type='hardcoded', nb_states=0, data_dir=''):
+                 policy_type='hardcoded', nb_states=0, data_dir='', normalise_state=False):
 
         # Observation spaces definition
         self.observation_space = spaces.Dict(dict(
@@ -646,6 +651,7 @@ class Simulator(core.Env):
             }
 
         self.random = random.Random()
+        self.normalise_state = normalise_state
 
     def seed(self, seed=None):
         self.random.seed(seed)
