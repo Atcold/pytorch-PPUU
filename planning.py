@@ -44,8 +44,12 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         pred_images.append(pred_image)
         pred_states.append(pred_state)
 
-    pred_images = torch.stack(pred_images, 1).squeeze()
-    pred_states = torch.stack(pred_states, 1).squeeze()
+    if npred > 1:
+        pred_images = torch.stack(pred_images, 1).squeeze()
+        pred_states = torch.stack(pred_states, 1).squeeze()
+    else:
+        pred_images = torch.stack(pred_images, 1)[:, 0]
+        pred_states = torch.stack(pred_states, 1)[:, 0]
         
     pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 

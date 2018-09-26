@@ -55,7 +55,7 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
-opt.save_dir = opt.model_dir + '/planning_results/'
+opt.save_dir = opt.model_dir + '/planning_results2/'
 opt.height = 117
 opt.width = 24
 opt.h_height = 14
@@ -139,7 +139,7 @@ if 'bprop' in opt.method:
         plan_file += '-inferz=0'
     elif 'inferz=1' in opt.mfile:
         plan_file += '-inferz=1'
-    if 'deterministic' in opt.policy_model_svg:
+    if ('deterministic' in opt.policy_model_svg) or ('deterministic' in opt.policy_model_tm):
         plan_file += '-deterministic'
     if 'learnedcost=1' in opt.policy_model_svg:
         plan_file += '-learnedcost=1'
@@ -173,7 +173,7 @@ if 'policy-svg' in opt.method:
 print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
 
 # different performance metrics
-time_travelled, distance_travelled, road_completed = [], [], []
+time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
 n_test = len(splits['test_indx'])
 for j in range(n_test):
@@ -188,6 +188,8 @@ for j in range(n_test):
     cntr = 0
     inputs, cost, done, info = env.step(numpy.zeros((2,)))
     input_state_t0 = inputs['state'].contiguous()[-1]
+    action_sequences.append([])
+    state_sequences.append([])
     while not done: 
         '''
         if inputs is None:
@@ -218,7 +220,8 @@ for j in range(n_test):
             a = a[0]
             a = forward_model.plan_actions_backprop(input_images, input_states, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, actions=a, u_reg=opt.u_reg, nexec=opt.nexec)
 
-            
+        action_sequences[-1].append(a)
+        state_sequences[-1].append(input_states)
         cntr += 1
         cost_test = 0
         t = 0
@@ -251,6 +254,9 @@ for j in range(n_test):
     log_string = 'ep: {} | time: {} | mean time: {} | mean distance: {} | mean success: {}'.format(j, len(images), torch.Tensor(time_travelled).mean(), torch.Tensor(distance_travelled).mean(), torch.Tensor(road_completed).mean())
     print(log_string)
     utils.log(opt.save_dir + '/' + plan_file + '.log', log_string)
+    torch.save(action_sequences, opt.save_dir + '/' + plan_file + '.actions')
+    torch.save(state_sequences, opt.save_dir + '/' + plan_file + '.states')
+
     images = torch.stack(images)
     states = torch.stack(states)
     costs = torch.tensor(costs)
