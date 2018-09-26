@@ -409,7 +409,17 @@ We now report experimental results. All training details can be found in Appendi
     where $C_{proximity}$ and $C_{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}, and $C_U$ is the model uncertainty cost described in Section \ref{uncertainty-cost}. We compare results with $\lambda_U = 0$ and $\lambda_U > 0$ to show its effect.
 
 
+\begin{figure*}[t!]
+    \centering
+    \subfigure[]{\includegraphics[width=0.48\textwidth]{figures/driving/distance_perf-crop.pdf}}
+    \subfigure[]{\includegraphics[width=0.48\textwidth]{figures/driving/success_perf-crop.pdf}}
+    \label{trajectories}
+    \caption{Performance on NGSIM dataset.}
+\end{figure*}
+    
 
+
+\begin{comment}
   \begin{table}[t]
     \centering
   \begin{tabular}{|lrr|}
@@ -444,6 +454,8 @@ We now report experimental results. All training details can be found in Appendi
   \caption{Planning performance on NGSIM dataset.}
   \label{main-table}
   \end{table}
+
+\end{comment}
 
 
   The 1-step imitation learner performs poorly.
