@@ -13,7 +13,7 @@
 \usepackage{url}
 
 
-\title{Learning Policies from Observational Data by Penalizing Forward Model Uncertainty}
+\title{Learning Policies from Observational Data with Learned Environment Models}
 
 % Authors must not appear in the submitted version. They should be hidden
 % as long as the \iclrfinalcopy macro remains commented out below.
@@ -56,12 +56,18 @@ Address \\
 \maketitle
 
 \begin{abstract}
-  In this work, we propose an end-to-end approach for learning policies for autonomous driving from purely observational data.
-  It consists of learning a dynamics model from a large dataset of human driving trajectories, which is then used to train a fast, feedforward policy network.
-  Learning a policy from only observational data is challenging to to covariate shift between distributions seen at training and test times.
-  We propose two ways of leveraging a learned dynamics model to address this issue: a model-based imitation learning approach which matches expert trajectories rather than actions, and differentiable cost term which penalizes the uncertainty of the dynamics model,  using recent methods for uncertainty estimation for neural networks based on dropout.
-  This encourages the policy network to produce actions which keep it on the manifold of states seen during training. 
-We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
+%  In this work, we propose two model-based approaches for learning policies for autonomous driving from purely observational data.
+%  We first learn a dynamics model from a large dataset of human driving trajectories, which is then used to train a fast, feedforward policy network.
+  Learning a policy using only observational data is challenging because the distribution of states induced by a learned policy may differ from the distribution of states observed during training.
+  In this work, we propose a general framework for learning policies from purely observational data using learned environment models.
+  Policies are trained by minimizing two costs: one cost which measures the optimality of the state distribution which it induces, and one cost which measures how well this distribution matches the distribution seen during training.
+%  In this work, we show how a learned model of the environment dynamics can be used to train a policy by explicitly including a term which enforces a match between future states induced by the policy and the observed states.
+
+
+  
+%  In this work, we propose two ways of leveraging a learned model of the environment dynamics to address this issue: a model-based imitation learning approach which matches expert trajectories rather than actions, and differentiable cost term which penalizes the uncertainty of the dynamics model.
+%  This encourages the policy network to produce actions which keep it on the manifold of states seen during training. 
+%We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
 \end{abstract}
 
 
@@ -69,13 +75,10 @@ We show in our experiments that model-based control using this additional regula
 \textcolor{red}{
   TODO:
   \begin{itemize}
-  \item Mikael: [jobs running] Add model-based imitation learner baselines using the deterministic model, since the deterministic model seems to work better than expected.
-  \item Mikael: [jobs running] Add figure to visualize distribution of action sequences (plotted in 2D space) for different methods, to build intuition as to how the uncertainty regularizer keeps them on the manifold
+  \item Mikael: (high priority) improve writing to incorporate model-based imitation learning
   \item Mikael: (high priority) Update figures to reflect that we are learning the cost predictor
+  \item Mikael: (high priority) Quantify the change in action sensitivity when using inferred vs. sampled latent variables
   \item Mikael: (medium priority) Add baseline without uncertainty regularizer where we just penalize the $\ell_2$ norm of the actions.
-  \item Mikael: (medium priority) Quantify the change in action sensitivity when using inferred vs. sampled latent variables
-  \item Mikael: (medium priority) Try adversarially optimized latent variables
-  \item Mikael: (medium priority) Try adding uncertainty regularizer to imitation learner - can we use this when we don't have an explicit cost?
   \item Alfredo: (high priority) Add model-free baselines
   \item Alfredo: (high priority) Get rule-based baseline from Etienne
   \item Alfredo: (high priority) Update figure \ref{I-80} (delete middle image and make ego car blue)
@@ -125,48 +128,6 @@ The key element of our approach is a differentiable term in the cost function us
 Minimizing this term encourages a planner or policy network to choose action sequences which keep it on the data manifold which the forward model was trained on.
 We show in our experiments that model-based control using this additional regularizer substantially outperforms unregularized control, as well as both standard and model-based imitation learners, and enables learning good driving policies using only observational data with no environment interaction.
 
-\section{Dataset and Planning Environment}
-\label{dataset-and-planning}
-
-To begin with, we summarize the dataset and planning environment which we used, with full details provided in Appendix \ref{i80-dataset-prep}.
-The Next Generation Simulation program's Interstate 80 (NGSIM I-80) dataset \citep{NGSIM} consists of 45 minutes of recordings from traffic cameras made of a stretch of highway.
-The driver behavior is complex and includes sudden accelerations, lane changes and merges which are difficult to predict; as such the dataset has high aleatoric uncertainty.
-After recording, a viewpoint transformation is applied to rectify the perspective, and vehicles are identified and tracked throughout the video.
-This yields a total 5596 car trajectories, which are then split into training ($80\%$), validation ($10\%$) and testing sets ($10\%$).
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.8\textwidth]{figures/driving/I-80.pdf}
-  \caption{
-    Preprocessing pipeline for the NGSIM-I80 data set.
-    Orange arrows show same vehicles across stages.
-    Blue arrows show corresponding extracted context state.
-    (a) Snapshots from two of the seven cameras.
-    (b) View point transformation, car localisation and tracking.
-    (c) Every vehicle in the simulator is initialised with starting position, initial velocity, dimensions, and ID number.
-    %    A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
-    (d) Context states are extracted from rectangular regions surrounding each vehicle.
-    (e) Five examples of context states extracted at the previous stage.
-    Notice how vehicles oriented slightly to the left (2nd and 3rd examples) have lane markings rotated to the right.
-  }
-\label{I-80}
-\end{figure}
-
-
-We then applied additional preprocessing to obtain a state and action representations $(s_t, a_t)$ for each car, suitable for learning an action-conditional predictive model.
-Our state representation $s_t$ consists of two components: an image $i_t$ representing the neighborhood of the car, and a vector $u_t$ representing its current position and velocity.
-The images $i_t$ are centered around the ego car and encode both the lane emplacements and the locations of other cars.
-Each image has 3 channels: the first (red) encodes the lane markings, the second (green) encodes the locations of neighboring cars, which are represented as rectangles reflecting the dimensions of each car, and the third channel (blue) represents the ego car, also scaled to the correct dimensions.
-This is summarized in Figure \ref{I-80}.
-We also define two cost functions to be minimized at planning time: a proximity cost which reflects how close the ego car is to neighboring cars, and a lane cost which reflects how much the ego car overlaps with lane markings. These are represented as a cost vector at each timestep, $c_t = (C_{proximity}(s_t), C_{lane}(s_t))$.
-
-
-We also adapted this dataset to be used as an environment to evaluate learned policies, with the same interface as OpenAI Gym \citep{OpenAIBaselines}.
-Choosing a policy for neighboring cars is challenging due to a cold-start problem: to accurately evaluate a learned policy, the other cars would need to follow human-like policies which would realistically react to the controlled car, which are not available.
-We take the approach of letting all the other cars in the environment follow their trajectories from the dataset, while a single car is controlled by the policy we seek to evaluate.
-This approach avoids hand-designing a policy for the neighboring cars which would likely not reflect the diverse nature of human driving.
-The limitation is that the neighboring cars do not react to the controlled car, which makes the problem more difficult.
-
 
 \section{Action-conditional Forward Model}
 
@@ -204,6 +165,27 @@ In the case of the stochastic forward model, we additionally sample latent varia
 During this process the weights of the forward model are fixed, and only the weights of the policy network are optimized.
 We propose two approaches: a model-based variant on imitation learning where the cost is the distance between the trajectory predicted by the forward model and the expert trajectory, and a regularized form of value gradients which contains an explicit cost term which forced the policy network to produce actions which keep it on the manifold where the forward model is confident in its predictions. 
 This is illustrated in Figure \ref{svg}. Which method to apply depends on whether the observational data contains expert trajectories and the availability of a well-defined cost function.
+
+
+    \begin{align*}
+    \underset{\psi}{\mbox{ argmin }} \Big[ \sum_{i=1}^{T} C(s_{t+i}) + U(s_{t+1}) \Big],  \mbox{ such that: }
+    \begin{cases}
+      \tilde{a}_{t+i} = \pi_\psi(s_{t+i-1}) \\
+      \tilde{s}_{t+i} = f(\tilde{s}_{t+i-1}, \tilde{a}_{t+i}) \\
+      \end{cases}
+    \end{align*}
+
+
+
+    \begin{align*}
+    \underset{\psi}{\mbox{ argmin }} \Big[ \sum_{i=1}^{T} C(s_{t+i}) + U(s_{t+1}) \Big],  \mbox{ such that: }
+    \begin{cases}
+      z_{t+i} \sim p(z) \\
+      \tilde{a}_{t+i} = \pi_\psi(s_{t+i-1}) \\
+      \tilde{s}_{t+i} = f(\tilde{s}_{t+i-1}, \tilde{a}_{t+i}, z_{t+i}) \\
+      \end{cases}
+    \end{align*}
+
 
 \subsection{Uncertainty-Regularized Value Gradients}
 
@@ -279,6 +261,51 @@ where $D$ is the dimensionality of the output. Minimizing this quantity with res
 %  This is illustrated in Figure \ref{mbil-diagram}.
   The motivation here is that if the policy network outputs an action which causes small divergence from the target trajectory at the next timestep, but large divergences later on, it will receive gradients from these larger errors backpropagated through the unrolled forward model.
 
+
+
+\section{Dataset and Planning Environment}
+\label{dataset-and-planning}
+
+To begin with, we summarize the dataset and planning environment which we used, with full details provided in Appendix \ref{i80-dataset-prep}.
+The Next Generation Simulation program's Interstate 80 (NGSIM I-80) dataset \citep{NGSIM} consists of 45 minutes of recordings from traffic cameras made of a stretch of highway.
+The driver behavior is complex and includes sudden accelerations, lane changes and merges which are difficult to predict; as such the dataset has high aleatoric uncertainty.
+After recording, a viewpoint transformation is applied to rectify the perspective, and vehicles are identified and tracked throughout the video.
+This yields a total 5596 car trajectories, which are then split into training ($80\%$), validation ($10\%$) and testing sets ($10\%$).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figures/driving/I-80.pdf}
+  \caption{
+    Preprocessing pipeline for the NGSIM-I80 data set.
+    Orange arrows show same vehicles across stages.
+    Blue arrows show corresponding extracted context state.
+    (a) Snapshots from two of the seven cameras.
+    (b) View point transformation, car localisation and tracking.
+    (c) Every vehicle in the simulator is initialised with starting position, initial velocity, dimensions, and ID number.
+    %    A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
+    (d) Context states are extracted from rectangular regions surrounding each vehicle.
+    (e) Five examples of context states extracted at the previous stage.
+    Notice how vehicles oriented slightly to the left (2nd and 3rd examples) have lane markings rotated to the right.
+  }
+\label{I-80}
+\end{figure}
+
+
+We then applied additional preprocessing to obtain a state and action representations $(s_t, a_t)$ for each car, suitable for learning an action-conditional predictive model.
+Our state representation $s_t$ consists of two components: an image $i_t$ representing the neighborhood of the car, and a vector $u_t$ representing its current position and velocity.
+The images $i_t$ are centered around the ego car and encode both the lane emplacements and the locations of other cars.
+Each image has 3 channels: the first (red) encodes the lane markings, the second (green) encodes the locations of neighboring cars, which are represented as rectangles reflecting the dimensions of each car, and the third channel (blue) represents the ego car, also scaled to the correct dimensions.
+This is summarized in Figure \ref{I-80}.
+We also define two cost functions to be minimized at planning time: a proximity cost which reflects how close the ego car is to neighboring cars, and a lane cost which reflects how much the ego car overlaps with lane markings. These are represented as a cost vector at each timestep, $c_t = (C_{proximity}(s_t), C_{lane}(s_t))$.
+
+
+We also adapted this dataset to be used as an environment to evaluate learned policies, with the same interface as OpenAI Gym \citep{OpenAIBaselines}.
+Choosing a policy for neighboring cars is challenging due to a cold-start problem: to accurately evaluate a learned policy, the other cars would need to follow human-like policies which would realistically react to the controlled car, which are not available.
+We take the approach of letting all the other cars in the environment follow their trajectories from the dataset, while a single car is controlled by the policy we seek to evaluate.
+This approach avoids hand-designing a policy for the neighboring cars which would likely not reflect the diverse nature of human driving.
+The limitation is that the neighboring cars do not react to the controlled car, which makes the problem more difficult.
+
+  
 \section{Related Work}
 
 In recent years, several works have explored video prediction, both in the deterministic setting \citep{VPN,Srivastava15,DentonB17} and the stochastic setting \citep{mathieu-iclr-2016, Villegas17, Babaeizadeh2018, Denton2018}.
@@ -383,9 +410,9 @@ We now report experimental results. All training details can be found in Appendi
     \hline
     Method & Mean Distance & Success Rate (\%)  \\
     \hhline{|===|}
-    Human & 1358.5 & 100.0 \\
+    Human & 1358 & 100.0 \\
     \hline
-    No action & 566.2 & 16.2 \\
+    No action & 566 & 16.2 \\
     Rule-Based Policy & - & - \\
     \hline
     A3C & - & - \\
@@ -393,20 +420,20 @@ We now report experimental results. All training details can be found in Appendi
     DDPG & - & - \\
     DDPG + warmstart buffer & - & - \\
     \hline
-    1-step IL & 322.2 & 1.4 \\
+    1-step IL & 322 & 1.4 \\
 %    MBIL (stochastic, 1 step) & 173.9 & 0.2 \\
 %    MBIL (stochastic, 3 step) & 231.2 & 0.0 \\
     %    MBIL (stochastic, 5 step) & 238.6 & 0.2 \\
-    MBIL (deterministic, 1 step) & 327 & 6.4 \\
-    MBIL (deterministic, 3 step) & 473 & 16.2 \\
-    MBIL (deterministic, 5 step) & - & - \\
-    MBIL (deterministic, 10 step) & 943 & 67.1 \\
-    MBIL (deterministic, 20 step) & 1024 & 66.6 \\
-    MBIL (deterministic, 30 step) & 1028 & 67.7 \\
-    MBIL (stochastic, 10 step) & 284 & 0.7 \\
-    MBIL (stochastic, 20 step) & 333 & 1.2 \\
-    MBIL (stochastic, 30 step) & 349 & 0.7 \\
-    MBIL (stochastic, 40 step) & 386 & 0.8 \\
+    MBIL (1 step) & 327 & 6.4 \\
+    MBIL (3 step) & 473 & 16.2 \\
+    MBIL (5 step) & 830 & 37.5 \\
+    MBIL (10 step) & 943 & 67.1 \\
+    MBIL (20 step) & 1024 & 66.6 \\
+    MBIL (30 step) & 1028 & 67.7 \\
+    Stochastic MBIL (10 step) & 284 & 0.7 \\
+    Stochastic MBIL (20 step) & 333 & 1.2 \\
+    Stochastic MBIL (30 step) & 349 & 0.7 \\
+    Stochastic MBIL (40 step) & 386 & 0.8 \\
     \hline
     VG($\infty$) & 97 & 0.0 \\
     SVG($\infty$) & 88 & 0.0 \\
@@ -430,6 +457,14 @@ We now report experimental results. All training details can be found in Appendi
 %  In contrast, SVG with the uncertainty penalty is both fast and effective.
   Videos of the learned policies driving in the environment can be found at \url{https://youtu.be/ApjHjhyAMw0}.
   The policy learns effective behaviors such as braking, accelerating and turning to avoid other cars.
+
+\begin{figure*}[t!]
+    \centering
+    \subfigure[Ground truth sequence]{\includegraphics[width=0.48\textwidth]{figures/driving/trajectories-crop.pdf}}
+    \label{trajectories}
+    \caption{Video prediction results using a deterministic and stochastic model. Two different future predictions are generated by the stochastic model by sampling two different sequences of latent variables. The deterministic model averages over possible futures, producing blurred predictions.}
+\end{figure*}
+  
 
 
   To illustrate the effect of the epistemic uncertainty cost, we plot predictions made by the stochastic forward model for an action sequence produced by SVG policy networks trained with and without the epistemic uncertainty cost, shown in Figure \ref{svg-pred}.
