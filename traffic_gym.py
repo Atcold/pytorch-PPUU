@@ -600,10 +600,10 @@ class Simulator(core.Env):
     DUMP_NAME = 'data_ai_v0'
 
     # Action space definition
-    action_space = spaces.Box(np.array([-1, -1]), np.array([+1, +1]))  # brake / accelerate, right / left
+    action_space = spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)  # brake / accelerate, right / left
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
-                 policy_type='hardcoded', nb_states=0, data_dir='', normalise_state=False):
+                 policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False):
 
         # Observation spaces definition
         self.observation_space = spaces.Dict(dict(
@@ -651,6 +651,7 @@ class Simulator(core.Env):
             }
 
         self.random = random.Random()
+        self.normalise_action = normalise_action
         self.normalise_state = normalise_state
 
     def seed(self, seed=None):

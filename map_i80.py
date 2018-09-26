@@ -225,7 +225,7 @@ class I80(Simulator):
         self.smoothing_window = 15
         self.max_frame = -1
         pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
-        self.data_stats = torch.load(pth) if self.normalise_state else None
+        self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
 
     @staticmethod
     def _get_data_frame(time_slot, x_max, x_offset):
@@ -309,6 +309,10 @@ class I80(Simulator):
     #     }
 
     def step(self, policy_action=None):
+
+        if self.normalise_action and policy_action is not None:
+            np.multiply(policy_action, self.data_stats['a_std'], policy_action)  # multiply by the std
+            np.add(policy_action, self.data_stats['a_mean'], policy_action)  # add the mean
 
         df = self.df
         now = df['Frame ID'] == self.frame
