@@ -1,3 +1,4 @@
+import torch
 from random import choice, randrange
 
 from custom_graphics import draw_dashed_line
@@ -223,9 +224,13 @@ class I80(Simulator):
         self.nb_lanes = 7
         self.smoothing_window = 15
         self.max_frame = -1
+        pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
+        self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
+        self.cached_data_frames = dict()
 
-    @staticmethod
-    def _get_data_frame(time_slot, x_max, x_offset):
+    def _get_data_frame(self, time_slot, x_max, x_offset):
+        if time_slot in self.cached_data_frames:
+            return self.cached_data_frames[time_slot]
         file_name = f'traffic-data/xy-trajectories/{time_slot}.txt'
         print(f'Loading trajectories from {file_name}')
         df = pd.read_table(file_name, sep='\s+', header=None, names=(
@@ -251,6 +256,9 @@ class I80(Simulator):
 
         # Get valid x coordinate rows
         valid_x = (df['Local Y'] * FOOT * SCALE - x_offset).between(0, x_max)
+
+        # Cache data frame for later retrieval
+        self.cached_data_frames[time_slot] = df[valid_x]
 
         # Restrict data frame to valid x coordinates
         return df[valid_x]
@@ -306,6 +314,10 @@ class I80(Simulator):
     #     }
 
     def step(self, policy_action=None):
+
+        if self.normalise_action and policy_action is not None:
+            np.multiply(policy_action, self.data_stats['a_std'], policy_action)  # multiply by the std
+            np.add(policy_action, self.data_stats['a_mean'], policy_action)  # add the mean
 
         df = self.df
         now = df['Frame ID'] == self.frame
@@ -403,10 +415,16 @@ class I80(Simulator):
         self.frame += int(self.delta_t * 10)
 
         # Run out of frames?
-        done = self.frame >= self.max_frame
+        done = self.frame >= self.max_frame or self.user_is_done
 
         if self.controlled_car and self.controlled_car['locked']:
-            return_ = self.controlled_car['locked'].get_last(self.nb_states, done)
+            return_ = self.controlled_car['locked'].get_last(
+                n=self.nb_states,
+                done=done,
+                norm_state=self.normalise_state and self.data_stats,
+                return_reward=self.return_reward,
+                gamma=self.gamma,
+            )
             if return_: return return_
 
         # return observation, reward, done, info
