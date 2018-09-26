@@ -518,7 +518,7 @@ class Car:
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
 
-    def get_last(self, n, done, norm_state=False):
+    def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
         if len(self._states_image) < n: return None  # no enough samples
         # n × (state_image, lane_cost, proximity_cost, frame) ->
         # -> (n × state_image, n × lane_cost, n × proximity_cost, n × frame)
@@ -540,6 +540,23 @@ class Car:
             collisions_per_frame=self.collisions_per_frame,
             arrived_to_dst=self.arrived_to_dst,
         )
+
+        if return_reward:  # if we're playing with model free RL, have fun with reward shaping
+            arrived = self.arrived_to_dst
+            collision = self.collisions_per_frame > 0
+            done = done or collision  # die if collide
+            max_rew = 2
+            win = max_rew / (1 - gamma)
+            reward = max_rew - cost['pixel_proximity_cost'] - cost['lane_cost'] + win * arrived
+
+            # So, observation must be just one damn numpy thingy
+            observation = torch.cat((
+                states.view(n, -1),
+                state_images.view(n, -1),
+            ), dim=1).numpy()
+
+            return observation, reward, self.off_screen or done, self
+
         return observation, cost, self.off_screen or done, self
 
     def dump_state_image(self, save_dir='scratch/', mode='img'):
@@ -603,13 +620,12 @@ class Simulator(core.Env):
     action_space = spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)  # brake / accelerate, right / left
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
-                 policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False):
+                 policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
+                 return_reward=False, gamma=0.99):
 
         # Observation spaces definition
-        self.observation_space = spaces.Dict(dict(
-            state=spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D), dtype=np.float32),  # position, velocity
-            context=spaces.Box(low=0, high=255, shape=(nb_states, STATE_C, STATE_H, STATE_W), dtype=np.uint8)
-        ))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
+
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
         self.fps = fps  # updates per second
@@ -653,6 +669,8 @@ class Simulator(core.Env):
         self.random = random.Random()
         self.normalise_action = normalise_action
         self.normalise_state = normalise_state
+        self.return_reward = return_reward
+        self.gamma = gamma
 
     def seed(self, seed=None):
         self.random.seed(seed)

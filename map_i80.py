@@ -422,6 +422,8 @@ class I80(Simulator):
                 n=self.nb_states,
                 done=done,
                 norm_state=self.normalise_state and self.data_stats,
+                return_reward=self.return_reward,
+                gamma=self.gamma,
             )
             if return_: return return_
 
