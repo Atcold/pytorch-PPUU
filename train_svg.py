@@ -41,8 +41,8 @@ parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-learned_cost', type=int, default=1)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -107,6 +107,7 @@ opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'
 opt.model_file += f'-lambdal={opt.lambda_l}'
+opt.model_file += f'-lambdaa={opt.lambda_a}'
 opt.model_file += f'-gamma={opt.gamma}'
 opt.model_file += f'-lrtz={opt.lrt_z}'
 opt.model_file += f'-updatez={opt.z_updates}'
@@ -149,7 +150,7 @@ def train(nbatches, npred):
         loss_l = pred[3]
         loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l
+        loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l + opt.lambda_a * loss_a
         if not math.isnan(loss_policy.item()):
             loss_policy.backward()
             grad_norm += utils.grad_norm(model.policy_net).item()
@@ -197,7 +198,7 @@ def test(nbatches, npred):
         loss_l = pred[3]
         loss_u = pred[4]
         loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l
+        loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
             total_loss_u += loss_u.item()
