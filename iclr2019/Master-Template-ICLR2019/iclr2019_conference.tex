@@ -423,9 +423,9 @@ Additional video results for the model predictions and learned policies can be f
 
 \begin{figure*}[t!]
   \centering
-    \subfigure[Mean distance]{\includegraphics[width=0.48\textwidth]{figures/driving/distance_perf-crop.pdf}}
-    \subfigure[Success rate]{\includegraphics[width=0.48\textwidth]{figures/driving/success_perf-crop.pdf}}
-    \subfigure[Summary of compared methods]{
+    \subfigure{\includegraphics[width=0.48\textwidth]{figures/driving/distance_perf-crop.pdf}}
+    \subfigure{\includegraphics[width=0.48\textwidth]{figures/driving/success_perf-crop.pdf}}
+    \subfigure{
 
       \begin{tabularx}{\textwidth}{|l| X|}
     \hline
@@ -449,7 +449,7 @@ Additional video results for the model predictions and learned policies can be f
     \hline
   \end{tabularx}
   }
-    \caption{Performance on NGSIM dataset.}
+    \caption{Performance of policies learned using different methods on the NGSIM dataset. Training policies by performing longer rollouts through the environment dynamics model significantly improves performance, as does including a cost term penalizing the dynamics model's uncertainty.}
     \label{performance}
 \end{figure*}
 
