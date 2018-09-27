@@ -319,7 +319,7 @@ Our state representation $s_t$ consists of two components: an image $i_t$ repres
 The images $i_t$ are centered around the ego car and encode both the lane emplacements and the locations of other cars.
 Each image has 3 channels: the first (red) encodes the lane markings, the second (green) encodes the locations of neighboring cars, which are represented as rectangles reflecting the dimensions of each car, and the third channel (blue) represents the ego car, also scaled to the correct dimensions.
 This is summarized in Figure \ref{I-80}. The action $a_t$ at a given time step consists of a 2-dimensional vector representing the acceleration/braking of the car and its change in steering angle.
-We also define two cost functions which together make up the policy cost: a proximity cost which reflects how close the ego car is to neighboring cars, and a lane cost which reflects how much the ego car overlaps with lane markings. These are represented as a cost vector at each timestep, $c_t = (C_{proximity}(s_t), C_{lane}(s_t))$. Full details can be found in Appendix \ref{i80-dataset-prep}.
+We also define two cost functions which together make up the policy cost: a proximity cost which reflects how close the ego car is to neighboring cars, and a lane cost which reflects how much the ego car overlaps with lane markings. These are represented as a cost vector at each timestep, $c_t = (C_{\text{proximity}}(s_t), C_{\text{lane}}(s_t))$. Full details can be found in Appendix \ref{i80-dataset-prep}.
 
 
 We also adapted this dataset to be used as an environment to evaluate learned policies, with the same interface as OpenAI Gym \citep{OpenAIBaselines}.
@@ -417,10 +417,10 @@ We now report experimental results. We designed a deterministic and stochastic f
     The policy cost which we minimize for VG, SVG and \modelnamedrop is given by:
 
     \begin{equation}
-      C = C_{proximity} + 0.2 \cdot C_{lane}
+      C = C_{\text{proximity}} + 0.2 \cdot C_\text{lane}
     \end{equation}
 
-    where $C_{proximity}$ and $C_{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}. We set $\lambda=0.01$ for the deterministic model and $\lambda=0.05$ for the stochastic model.
+    where $C_{\text{proximity}}$ and $C_\text{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}. We set $\lambda=0.01$ for the deterministic model and $\lambda=0.05$ for the stochastic model.
 
 
 \begin{figure*}[t!]
