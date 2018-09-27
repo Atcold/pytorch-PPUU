@@ -55,8 +55,8 @@ Address \\
 %\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
 \begin{document}
 
-\newcommand{\modelnamedrop}{PLUR-D }
-\newcommand{\modelnameil}{PLUR-I }
+\newcommand{\modelnamedrop}{MPUR}
+\newcommand{\modelnameil}{MPIL}
 
 \maketitle
 
@@ -424,9 +424,13 @@ We now report experimental results. We designed a deterministic and stochastic f
     \hline
     \textbf{VG} & Like SVG, but using the deterministic forward model. \\
     \hline
-    \modelnamedrop & - \\
+    \textbf{\modelnameil} & - \\    
     \hline
-    \modelnameil & - \\    
+    \textbf{S-\modelnameil} & - \\    
+    \hline    
+    \textbf{\modelnamedrop} & - \\
+    \hline
+    \textbf{S-\modelnamedrop} & - \\
     \hline
   \end{tabularx}
   }
@@ -529,8 +533,8 @@ This suggests that enforcing independence between actions and latent variables m
     \hline
     Method & Mean Distance & Success Rate & Total Predicted Cost & $U$ \\
     \hhline{|=====|}
-    SVG($\infty$) & 88.7 & 0.0 & 0.03 & 4087.4 \\
-    Stochastic \modelnamedrop & 976.4 & 59.1 & 0.22 & 1.1 \\
+    VG & 88.7 & 0.0 & 0.03 & 4087.4 \\
+    \modelnamedrop & 976.4 & 59.1 & 0.22 & 1.1 \\
     \hline
   \end{tabular}
     }
