@@ -274,7 +274,6 @@ class I80(Simulator):
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
         if vehicle_id: frame = self._get_first_frame(vehicle_id)
-        self.controlled_car['v_id'] = vehicle_id
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
@@ -284,7 +283,9 @@ class I80(Simulator):
                 vehicles_history = set(self.df[self.df['Frame ID'] <= frame]['Vehicle ID'])
                 new_vehicles = set(self.df[self.df['Frame ID'] > frame]['Vehicle ID']) - vehicles_history
                 new_vehicles -= self._black_list[self._t_slot]  # clean up fuckers
-        self.controlled_car['frame'] = frame
+        if self.controlled_car:
+            self.controlled_car['frame'] = frame
+            self.controlled_car['v_id'] = vehicle_id
         self.frame = frame - int(self.delta_t * 10)
         self.vehicles_history = set()
         # # Account for off-track vehicles
@@ -461,6 +462,8 @@ class I80(Simulator):
             draw_line(s, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
             draw_line(s, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
             draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
+
+            # pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
             s = surface  # screen
