@@ -1,3 +1,5 @@
+from os.path import isfile
+
 import torch
 from random import choice, randrange
 
@@ -231,28 +233,36 @@ class I80(Simulator):
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'traffic-data/xy-trajectories/{time_slot}.txt'
-        print(f'Loading trajectories from {file_name}')
-        df = pd.read_table(file_name, sep='\s+', header=None, names=(
-            'Vehicle ID',
-            'Frame ID',
-            'Total Frames',
-            'Global Time',
-            'Local X',
-            'Local Y',
-            'Global X',
-            'Global Y',
-            'Vehicle Length',
-            'Vehicle Width',
-            'Vehicle Class',
-            'Vehicle Velocity',
-            'Vehicle Acceleration',
-            'Lane Identification',
-            'Preceding Vehicle',
-            'Following Vehicle',
-            'Spacing',
-            'Headway'
-        ))
+        file_name = f'traffic-data/xy-trajectories/{time_slot}'
+        if isfile(file_name + '.pkl'):
+            file_name += '.pkl'
+            print(f'Loading trajectories from {file_name}')
+            df = pd.read_pickle(file_name)
+        elif isfile(file_name + '.txt'):
+            file_name += '.txt'
+            print(f'Loading trajectories from {file_name}')
+            df = pd.read_table(file_name, sep='\s+', header=None, names=(
+                'Vehicle ID',
+                'Frame ID',
+                'Total Frames',
+                'Global Time',
+                'Local X',
+                'Local Y',
+                'Global X',
+                'Global Y',
+                'Vehicle Length',
+                'Vehicle Width',
+                'Vehicle Class',
+                'Vehicle Velocity',
+                'Vehicle Acceleration',
+                'Lane Identification',
+                'Preceding Vehicle',
+                'Following Vehicle',
+                'Spacing',
+                'Headway'
+            ))
+        else:
+            raise FileNotFoundError(f'{file_name}.{{pkl,txt}} not found.')
 
         # Get valid x coordinate rows
         valid_x = (df['Local Y'] * FOOT * SCALE - x_offset).between(0, x_max)
