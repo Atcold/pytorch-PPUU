@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from differentiable_cost import proximity_cost
+from utils import lane_cost
 
 
 parser = argparse.ArgumentParser()
@@ -61,7 +62,7 @@ class Model(torch.nn.Module):
         self.ortho_dir[0] = direction[1]
         self.ortho_dir[1] = -direction[0]
 
-        t = self.params[0]*direction
+        t = self.params[0]*direction + self.params[1]*self.ortho_dir*self.dt
 
 
         trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]])
@@ -71,15 +72,10 @@ class Model(torch.nn.Module):
         grid = affine_grid(trans, torch.Size((1, 1, 117, 24)))
 
         future_context = grid_sample(image[:, :].float(), grid)
-        costs, proximity_mask = proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0))
+        car_cost, _ = proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0))
+        lane_cost, _ =  proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0), green_channel=0)
 
-        grid.retain_grad()
-        future_context.retain_grad()
-        trans.retain_grad()
-        t.retain_grad()
-
-        #from ipdb import set_trace; set_trace()
-        return costs
+        return car_cost, lane_cost
 
 model = Model(opt.delta_t)
 
@@ -89,47 +85,27 @@ def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
     speed = torch.norm(state[0, 2:])
     direction = state[0, 2:]/speed
 
-    #a, b = torch.tensor(0., requires_grad=True), torch.tensor(0., requires_grad=True)
-    #optimizer = torch.optim.SGD([model.params], lr=0.01)
+    _, _, car_argmax = proximity_cost(image[:, :].unsqueeze(0), state.unsqueeze(0), return_argmax=True)
+    _, _, lane_argmax =  proximity_cost(image[:, :].unsqueeze(0), state.unsqueeze(0), green_channel=0, return_argmax=True)
 
-    model.init_params()
+    a = 0.
+    b = 0.
+    if car_argmax is not None:
+        print('car_argmax', car_argmax)
 
-    for i in range(1):
-       #future_image = affine_transformation(image, 0, (10, 10), speed, dt)  # future_image == image when a, b == 0, 0
+        #a = 50/(np.sign(car_argmax[0])*abs(abs(car_argmax[0]) - 7))
+        a = 100/car_argmax[0]
+    if lane_argmax is not None:
+        print(lane_argmax)
+        if lane_argmax[1] != 0:
+            b = 0.001/lane_argmax[1]
 
+    print("a, b : ", a, b )
 
-        costs = model(speed, direction, image, state)
-
-        #if i == 0:
-            #print("Proximity cost :  {}".format(costs))
-
-        costs.backward()
-        #from ipdb import set_trace; set_trace()
-
-        #grad_a = torch.autograd.grad(loss, a)
-        #optimizer.step()
-        print(" no flip", model.params.grad.data[0])
-        model.params.data[0] = model.params.data[0] - model.params.grad.data[0]
-        #model.params.data[1] = model.params.data[1] - model.params.grad.data[1]
-#        model.params.grad.zero_()
-        model.params.grad.zero_()
-
-        costs = model(speed, direction, torch.flip(image, [2]), state)
-        costs.backward()
-        print(" flip", model.params.grad.data[0])
-        model.params.data[0] = model.params.data[0] + model.params.grad.data[0]
-        model.params.grad.zero_()
-
-
-        #print(model.params)
-        #a, b -= dc/da, db
-    #scipy.misc.imsave('exp/ex_image_affine_{}.jpg'.format(cpt), np.transpose(future_image[0].detach().numpy(), (1, 2, 0)))
-
-    #return model.params.detach()[0], model.params.detach()[1]
-    return model.params.detach()
+    return torch.tensor(a), torch.tensor(b)
 
 for episode in range(1000):
-    env.reset()
+    observation = env.reset(car_id, timeslot=0)
 
     max_a = 30
     done = False
@@ -138,17 +114,21 @@ for episode in range(1000):
     while not done:
         #a += 1
         print(f"a = {a}")
-        observation, reward, done, info =   env.step(np.array((a,0)))
+        observation, reward, done, info =   env.step(np.array((a,b)))
         if observation is not None:
             input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
             speed = input_states[-1:][:, 2:].norm(2, 1)
             print("speed : ", speed.data)
             #continue
+            #input_images[input_images > 100] = 255
+            #input_images[input_images <= 100] = 0
+
+
             a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
             cpt += 1
-            #a = torch.max(torch.tensor([a, -speed/model.dt]))
+            a = torch.max(torch.tensor([a, -speed/model.dt]))
             a = a.clamp(-14, 16)
-            if reward[2] > 0:
+            if reward['collisions_per_frame'] > 0:
                 break
 
 

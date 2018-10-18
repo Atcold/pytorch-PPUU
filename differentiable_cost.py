@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from torch.autograd import Variable
 plt.ion()
 
-def proximity_cost(images, states, car_size=[[6.4, 14.3]], green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+def proximity_cost(images, states, car_size=[[6.4, 14.3]], green_channel=1, unnormalize=False, s_mean=None, s_std=None, return_argmax=False):
     car_size = torch.tensor(car_size)
     SCALE = 0.25
     safe_factor = 1.5
@@ -18,6 +18,7 @@ def proximity_cost(images, states, car_size=[[6.4, 14.3]], green_channel=1, unno
         states += dataloader.s_mean.view(1, 1, 4).expand(states.size()).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE #pixel/s
+    speed = torch.max(torch.tensor(30.)*SCALE, speed)
     width, length = car_size[:, 0], car_size[:, 1] # feet
     width *= SCALE * (0.3048*24/3.7) # pixels
     length *= SCALE * (0.3048*24/3.7) # pixels
@@ -55,8 +56,18 @@ def proximity_cost(images, states, car_size=[[6.4, 14.3]], green_channel=1, unno
     proximity_mask = x_filter.view(-1, crop_h, 1) @ y_filter.view(-1, 1, crop_w)
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    return costs, proximity_mask
+    costs, argmax = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
+    print("shape : ", (proximity_mask * images[:, :, green_channel].float()).size())
+    if return_argmax:
+        argmax = argmax.numpy()[0][0]
+        if argmax > 0:
+            argmax = argmax/crop_w - crop_h/2, argmax%crop_w - crop_w/2
+        else:
+            argmax = None
+        
+        return costs, proximity_mask, argmax
+    else:
+        return costs, proximity_mask
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -87,4 +98,3 @@ if __name__ == '__main__':
 
     plt.plot(costs.view(-1).cpu().numpy())
     plt.plot(pred_costs.data.view(-1).cpu().numpy())
-
