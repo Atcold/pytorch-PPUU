@@ -57,14 +57,13 @@ def proximity_cost(images, states, car_size=[[6.4, 14.3]], green_channel=1, unno
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs, argmax = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
-    print("shape : ", (proximity_mask * images[:, :, green_channel].float()).size())
     if return_argmax:
         argmax = argmax.numpy()[0][0]
         if argmax > 0:
             argmax = argmax/crop_w - crop_h/2, argmax%crop_w - crop_w/2
         else:
             argmax = None
-        
+
         return costs, proximity_mask, argmax
     else:
         return costs, proximity_mask

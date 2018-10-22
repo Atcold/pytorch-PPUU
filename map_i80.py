@@ -274,7 +274,9 @@ class I80(Simulator):
         return df[valid_x]
 
     def _get_first_frame(self, v_id):
+        print(v_id)
         vehicle_data = self.df[self.df['Vehicle ID'] == v_id]
+        print(len(vehicle_data))
         frame = vehicle_data.at[vehicle_data.index[0], 'Frame ID']
         return frame
 
@@ -494,4 +496,3 @@ class I80(Simulator):
 
             self._lane_surfaces[mode] = surface.copy()
             # pygame.image.save(surface, "i80-machine.png")
-

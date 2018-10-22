@@ -43,41 +43,6 @@ print('Building the environment (loading data, if any)')
 env = gym.make(env_names[opt.map])
 
 import scipy.misc
-from torch.nn.functional import affine_grid, grid_sample
-
-class Model(torch.nn.Module):
-    def __init__(self, dt):
-        super(Model, self).__init__()
-        self.dt = dt
-        self.ortho_dir = torch.zeros([2])
-        self.params =  torch.tensor([0., 0], requires_grad=True)
-
-
-    def init_params(self):
-        self.params.data = torch.tensor([0.,0.])
-
-
-    def forward(self, speed, direction, image, state):
-
-        self.ortho_dir[0] = direction[1]
-        self.ortho_dir[1] = -direction[0]
-
-        t = self.params[0]*direction + self.params[1]*self.ortho_dir*self.dt
-
-
-        trans = torch.tensor([[[1., 0., 0.], [0., 1., 0.]]])
-        trans[0, 0, 2] = -t[1]/24.
-        trans[0, 1, 2] = -t[0]/117.
-
-        grid = affine_grid(trans, torch.Size((1, 1, 117, 24)))
-
-        future_context = grid_sample(image[:, :].float(), grid)
-        car_cost, _ = proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0))
-        lane_cost, _ =  proximity_cost(future_context.unsqueeze(0), state.unsqueeze(0), green_channel=0)
-
-        return car_cost, lane_cost
-
-model = Model(opt.delta_t)
 
 def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
     #scipy.misc.imsave('exp/ex_image_{}.jpg'.format(cpt), np.transpose(image[0].numpy(), (1, 2, 0)))
@@ -91,49 +56,65 @@ def action_SGD(image, state, dt, cpt):  # with (a,b) being the action
     a = 0.
     b = 0.
     if car_argmax is not None:
-        print('car_argmax', car_argmax)
-
         #a = 50/(np.sign(car_argmax[0])*abs(abs(car_argmax[0]) - 7))
         a = 100/car_argmax[0]
     if lane_argmax is not None:
-        print(lane_argmax)
+        #print(lane_argmax)
         if lane_argmax[1] != 0:
             b = 0.001/lane_argmax[1]
 
-    print("a, b : ", a, b )
+    #print("a, b : ", a, b )
 
     return torch.tensor(a), torch.tensor(b)
 
-for episode in range(1000):
-    observation = env.reset(car_id, timeslot=0)
 
-    max_a = 30
-    done = False
-    a, b = 0., 0.
-    cpt = 0
-    while not done:
-        #a += 1
-        print(f"a = {a}")
-        observation, reward, done, info =   env.step(np.array((a,b)))
-        if observation is not None:
-            input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
-            speed = input_states[-1:][:, 2:].norm(2, 1)
-            print("speed : ", speed.data)
-            #continue
-            #input_images[input_images > 100] = 255
-            #input_images[input_images <= 100] = 0
+total_distance = 0
+total_nb_collisions = 0
 
-
-            a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
-            cpt += 1
-            a = torch.max(torch.tensor([a, -speed/model.dt]))
-            a = a.clamp(-14, 16)
-            if reward['collisions_per_frame'] > 0:
-                break
+splits = torch.load('splits.pth')
+n_test = len(splits['test_indx'])
+for timeslot in [0]:
+    for car_id in splits['test_indx'][:20]:
+        try:
+            observation = env.reset(time_slot=0, vehicle_id=car_id)
+        except:
+            print("Could not run experiment for car {}. Could not find anything in dataframe.".format(car_id))
+            continue
+        max_a = 30
+        done = False
+        a, b = 0., 0.
+        cpt = 0
 
 
-        env.render()
+        while not done:
+            #a += 1
+            #print(f"a = {a}")
+            observation, reward, done, info =   env.step(np.array((a,b)))
 
-    print('Episode completed!')
+            if observation is not None:
+                input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
+                speed = input_states[-1:][:, 2:].norm(2, 1)
+                #print("speed : ", speed.data)
+                #continue
+                #input_images[input_images > 100] = 255
+                #input_images[input_images <= 100] = 0
 
+
+                a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
+                cpt += 1
+                a = torch.max(torch.tensor([a, -speed/opt.delta_t]))
+                a = a.clamp(-14, 16)
+                if reward['collisions_per_frame'] > 0:
+                    break
+
+
+            env.render()
+        total_distance += (info._position - info.look_ahead)[0]
+        total_nb_collisions += info.collisions_per_frame
+        print('info before', info._position - info.look_ahead)
+        print('colisions', info.collisions_per_frame)
+
+        print('Episode completed!')
+
+print("Total MAD : {}".format(float(total_distance)/total_nb_collisions))
 print('Done')
