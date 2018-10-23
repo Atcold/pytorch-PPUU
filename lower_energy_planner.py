@@ -3,6 +3,7 @@ import numpy as np
 import gym
 import pdb
 import torch
+import utils
 
 import matplotlib
 matplotlib.use('Agg')
@@ -10,6 +11,7 @@ import matplotlib.pyplot as plt
 
 from differentiable_cost import proximity_cost
 from utils import lane_cost
+from dataloader import DataLoader
 
 
 parser = argparse.ArgumentParser()
@@ -19,6 +21,7 @@ parser.add_argument('-nb_samples', type=int, default=1)
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-map', type=str, default='i80', choices={'i80', 'us101', 'lanker', 'peach'})
 parser.add_argument('-delta_t', type=float, default=0.1)
+parser.add_argument('-debug', type=int, default=0)
 
 opt = parser.parse_args()
 
@@ -73,48 +76,52 @@ total_nb_collisions = 0
 
 splits = torch.load('splits.pth')
 n_test = len(splits['test_indx'])
-for timeslot in [0]:
-    for car_id in splits['test_indx'][:20]:
-        try:
-            observation = env.reset(time_slot=0, vehicle_id=car_id)
-        except:
-            print("Could not run experiment for car {}. Could not find anything in dataframe.".format(car_id))
-            continue
-        max_a = 30
-        done = False
-        a, b = 0., 0.
-        cpt = 0
+dataloader = DataLoader(None, opt, 'i80')
+
+for j in range(n_test):
+    car_path = dataloader.ids[splits['test_indx'][j]]
+    timeslot, car_id = utils.parse_car_path(car_path)
+    print("timeslot {}, car_id {}".format(timeslot, car_id))
+    try:
+        observation = env.reset(time_slot=0, vehicle_id=car_id)
+    except:
+        print("Could not run experiment for car {}. Could not find anything in dataframe.".format(car_id))
+        continue
+    max_a = 30
+    done = False
+    a, b = 0., 0.
+    cpt = 0
 
 
-        while not done:
-            #a += 1
-            #print(f"a = {a}")
-            observation, reward, done, info =   env.step(np.array((a,b)))
+    while not done:
+        #a += 1
+        #print(f"a = {a}")
+        observation, reward, done, info =   env.step(np.array((a,b)))
 
-            if observation is not None:
-                input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
-                speed = input_states[-1:][:, 2:].norm(2, 1)
-                #print("speed : ", speed.data)
-                #continue
-                #input_images[input_images > 100] = 255
-                #input_images[input_images <= 100] = 0
-
-
-                a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
-                cpt += 1
-                a = torch.max(torch.tensor([a, -speed/opt.delta_t]))
-                a = a.clamp(-14, 16)
-                if reward['collisions_per_frame'] > 0:
-                    break
+        if observation is not None:
+            input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
+            speed = input_states[-1:][:, 2:].norm(2, 1)
+            #print("speed : ", speed.data)
+            #continue
+            #input_images[input_images > 100] = 255
+            #input_images[input_images <= 100] = 0
 
 
-            env.render()
-        total_distance += (info._position - info.look_ahead)[0]
-        total_nb_collisions += info.collisions_per_frame
-        print('info before', info._position - info.look_ahead)
-        print('colisions', info.collisions_per_frame)
+            a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
+            cpt += 1
+            a = torch.max(torch.tensor([a, -speed/opt.delta_t]))
+            a = a.clamp(-14, 16)
+            if reward['collisions_per_frame'] > 0:
+                break
 
-        print('Episode completed!')
+
+        env.render()
+    total_distance += (info._position - info.look_ahead)[0]
+    total_nb_collisions += info.collisions_per_frame
+    print('info before', info._position - info.look_ahead)
+    print('colisions', info.collisions_per_frame)
+
+    print('Episode completed!')
 
 print("Total MAD : {}".format(float(total_distance)/total_nb_collisions))
 print('Done')
