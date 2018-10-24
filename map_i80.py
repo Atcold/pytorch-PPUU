@@ -226,14 +226,14 @@ class I80(Simulator):
         self.nb_lanes = 7
         self.smoothing_window = 15
         self.max_frame = -1
-        pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
+        pth = '../traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
         self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
         self.cached_data_frames = dict()
 
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'traffic-data/xy-trajectories/{time_slot}'
+        file_name = f'../../../traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
             print(f'Loading trajectories from {file_name}')
