@@ -43,6 +43,8 @@ env = gym.make(env_names[opt.map])
 
 a_mean = np.array([0.24238845705986023, -2.84224752249429e-05])
 a_std = np.array([5.077108383178711, 0.002106053987517953])
+
+
 a_min = (a_mean - 3*a_std)[0]
 a_max = (a_mean + 3*a_std)[0]
 
@@ -80,28 +82,24 @@ for j in range(20):
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
     print("Starting episode {}/{} with timeslot {}, car_id {}".format(j, n_test, timeslot, car_id))
-    try:
-        observation = env.reset(time_slot=timeslot, vehicle_id=car_id)
-    except:
-        observation = env.reset(time_slot=timeslot, vehicle_id=car_id)
-        print("Could not run experiment for car {}. Could not find anything in dataframe.".format(car_id))
-        continue
+    observation = env.reset(time_slot=timeslot, vehicle_id=car_id)
+
     done = False
     a, b = 0., 0.
     cpt = 0
 
 
-    while not done:
-        observation, reward, done, info =   env.step(np.array((a,b)))
-
+    while True: 
         input_images, input_states = observation['context'].contiguous(), observation['state'].contiguous()
         speed = input_states[-1:][:, 2:].norm(2, 1)
 
         a, b = action_SGD(input_images[-1:], input_states[-1:], opt.delta_t, cpt)
         cpt += 1
         a = np.amax([a, -speed.numpy()/opt.delta_t])
-        a = np.clip(a, (a_mean - 3*a_std)[0], (a_mean + 3*a_std)[0])
-        if reward['collisions_per_frame'] > 0:
+        a = np.clip(a, a_min, a_max)
+
+        observation, reward, done, info =   env.step(np.array((a,b)))
+        if done or reward['collisions_per_frame'] > 0:
             break
 
 
