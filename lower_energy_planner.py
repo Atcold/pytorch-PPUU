@@ -77,8 +77,8 @@ n_test = len(splits['test_indx'])
 dataloader = DataLoader(None, opt, 'i80')
 
 
-#for j in range(n_test):
-for j in range(20):
+for j in range(n_test):
+#for j in range(20):
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
     print("Starting episode {}/{} with timeslot {}, car_id {}".format(j, n_test, timeslot, car_id))
