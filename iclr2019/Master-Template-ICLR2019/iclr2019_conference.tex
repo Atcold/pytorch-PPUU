@@ -324,7 +324,7 @@ Ignoring this term and approximating the integral in Equation \ref{elbo} using a
 where $\bar{\theta} \sim q_D(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Optimizing this variational lower bound is equivalent to training a Variational Autoencoder with dropout.
 
 Once this model is trained, we obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ which we can sample from by sampling from the approximate posterior.
-We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty.
+We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty, using a similar approach as \citep{depeweg18}. 
 Using the conditional covariance formula we can write:
 
 \begin{align}
