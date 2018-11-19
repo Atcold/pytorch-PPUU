@@ -269,25 +269,98 @@ However, if the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, 
         A key feature of both approaches is that we optimize the objective over $T$ time steps, which is made possible by our learned dynamics model.
         This means that the actions will receive gradients from multiple time steps ahead, which will penalize actions which lead to large divergences from the training manifold further into the future, even if they only cause a small divergence at the next time step.
 
-%    For the deterministic model, our approach is similar to that of \citep{Nguyen1989}.
-%    For the stochastic model, our approach is related to the $\mbox{SVG}(\infty)$ algorithm introduced in \citep{SVG}, with two differences. The first is that they sample a sequence of states $s_t, ..., s_{t+T}$ from the training set (or replay buffer), and infer the corresponding sequence of latent variables $z_t, ..., z_{t+T}$ (in our setup, this can be done using the posterior network $q_\phi$), whereas we sample latent variables from the prior. We compare the two approaches and found that using inferred latent variables causes a drop in performance, which we discuss in Section \ref{experiments}.
-%    The second is that they consider an interactive setting where the agent collects experience from the environment which it then uses to train its dynamics model.
+\subsection{Theoretical Justification}
 
-\begin{comment}
-\subsection{Model-Based Imitation Learning}
+Our approach can be viewed as training a Bayesian neural network (BNN) with latent variables using variational inference. 
+The predictive distribution for $s_{t+1}$ is given by
 
-  We also experimented with a variant of imitation learning using the learned stochastic model, which we found performed better than the standard version. One issue with imitation learning is that errors can accumulate quickly, leading to divergence from the states seen during training.
-  One cause may be that the model is simply minimizing the $\ell_2$ loss in action space, which may not correspond to minimizing distances in trajectory space.
-  Consider the following example where an agent is walking exactly along the side of a cliff, and must output an action which represents its angle.
-  To the left is a drop, and to the right is solid ground.
-  Say the expert action is to go straight, i.e. $a_{t+1} = 0$. Now consider two possible actions predicted by the network, $\hat{a}_{t+1} = -\epsilon$ (slight left) and $\hat{a}_{t+1} = +\epsilon$ (slight right).
-  Both of these actions incur the same $\ell_2$ cost of $\epsilon$, but have very different consequences. If the agent moves slightly away from the expert action on the left side, they fall off the cliff, which causes a large deviation of their subsequent states from the expert states. If they move slightly to the right however, they stay on solid ground and their subsequent states remain close to the expert states.
+\begin{equation}
+p(s_{t+1} | s_{1:t}, a, \mathcal{D}) = \int p(s_{t+1} | f_\theta(s_{1:t}, a, z)) p(\theta, z | \mathcal{D}) d\theta dz
+\end{equation}
 
-  As an alternative, we experimented with training a policy to match expert \textit{trajectories}, rather than actions.
-  We do this by unrolling the forward model for multiple timesteps, outputting actions by the policy network using the model predictions, and minimizing the error between the final trajectory output by the forward model and the expert trajectory observed in the dataset.
-%  This is illustrated in Figure \ref{mbil-diagram}.
-  The motivation here is that if the policy network outputs an action which causes small divergence from the target trajectory at the next timestep, but large divergences later on, it will receive gradients from these larger errors backpropagated through the unrolled forward model.
-\end{comment}
+The distribution $p(\theta, z | \mathcal{D})$ reflects the posterior over model weights and latent variables given the data, and is intractable to evaluate.
+We instead approximate it with the variational distribution:
+
+\begin{align}
+  q_\eta(z, \theta) = \mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) \cdot q_D(\theta)
+\end{align}
+
+Here $q_\phi$ represents a posterior network with parameters $\phi$ which outputs the mean and variance of a diagonal Gaussian over latent variables.
+%The first term is a diagonal Gaussian whose mean and variance are given by a posterior network $q_\phi(s_{1:t}, s_{t+1}))$ with parameters $\phi$.
+%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
+The distribution $q_D$ is the \textit{dropout approximating distribution} over model parameters described in \citep{Gal16} (Section 3.2 of Supplement). 
+This defines a mixture of two Gaussians with small variances over the rows of each weight matrix in the forward model, with the mean of one Gaussian fixed at zero. The parameters of this distribution are the model weights, and samples can be drawn by applying different dropout masks. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$, 
+and can be optimized by minimizing the variational lower bound, which is equivalent to minimizing the Kullback-Leibler divergence between the approximate posterior and true posterior:
+
+%We instead approximate it by first defining a family of distributions $q_\eta(\theta, z)$ (parameterized by $\eta$) to approximate the true posterior,
+%and then learning the parameters $\eta$ by minimizing the Kullback-Leibler divergence between the approximate and true posteriors.
+%We define the approximate posterior by:
+
+
+\begin{align}
+  \mathcal{L}(\eta; s_{1:t}, s_{t+1}, a) &= -\int \log p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz +  D_{KL}(q_\eta(\theta, z) || p_0(\theta, z))
+  \label{elbo}
+\end{align}
+
+Here $p_0(z, \theta) = p_0(z) \cdot p_0(\theta)$ represents a prior over latent variables and model parameters. By applying the chain rule for KL divergences, we obtain:
+
+\begin{align*}
+D_{KL}(q_\eta(\theta, z) || p_0(\theta, z)) &= D_{KL}(\mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) \cdot q_D(\theta) || p_0(z) p_0(\theta)) \\
+&= D_{KL}(\mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) || p_0(z)) + D_{KL}(q_D(\theta | z) || p_0(\theta | z))  \\
+&= D_{KL}(\mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) || p_0(z)) + D_{KL}(q_D(\theta) || p_0(\theta)  \\
+\end{align*}
+%\begin{align}
+%  \mathcal{L}(\eta; s_{1:t}, s_{t+1}, a) = \int p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz + D_{KL}(\mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) || p_0(z)) + 
+%  D_{KL}(q_D(\theta) || p_0(\theta))
+%\end{align}
+
+Setting both Gaussians in $p_0(\theta)$ to have zero mean, the second KL term becomes equivalent to scaled $\ell_2$ regularization on the model parameters, and can be set arbitrarily small (Section 4.2 in Supplement of \citep{Gal16}). 
+Ignoring this term and approximating the integral in Equation \ref{elbo} using a single sample, we obtain:
+
+\begin{align}
+  \mathcal{L}(\theta^*, \phi, (s_{1:t}, s_{t+1}, a)) &\approx -\log p(s_{t+1} | f_{\bar{\theta}}(s_{1:t}, a, z)) + D_{KL}(\mathcal{N}(z | q_\phi(s_{1:t}, s_{t+1})) || p_0(z)) 
+\end{align}
+
+where $\bar{\theta} \sim q_D(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Optimizing this variational lower bound is equivalent to training a Variational Autoencoder with dropout.
+
+Once this model is trained, we obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ which we can sample from by sampling from the approximate posterior.
+We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty.
+Using the conditional covariance formula we can write:
+
+\begin{align}
+\mbox{cov}(\hat{s}_{t+1} | s_{1:t}, a) &= \mbox{cov}_\theta(\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]) + \mathbb{E}_\theta[\mbox{cov}_z(\hat{s}_{t+1} | s_{1:t}, a, \theta)]
+\end{align}
+
+The first term is the covariance of the random vector $\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]$ when $\theta \sim q_D(\theta)$.
+This term ignores any contribution to the variance from $z$ and only considers the effect of $\theta$. As such it represents the epistemic uncertainty.
+The second term represents the covariance of the predictions obtained by sampling different latent variables $z \sim q_\phi(s_{1:t}, s_{t+1})$ averaged over different dropout masks, and ignores any contribution to the variance from $\theta$. As such it represents the aleatoric uncertainty.
+Our uncertainty penalty explicitly penalizes the trace of the first matrix where the expectation over $z$ is approximated by a single sample from the posterior network. 
+
+%Using the law of total expectation and conditioning on $z$, we can rewrite the first term as:
+
+%\begin{align*}
+%  \mbox{cov}_\theta(\mathbb{E}[s_{t+1} | s_{1:t}, a, \theta]) &= \mbox{cov}_\theta(\mathbb{E}_z[ \mathbb{E}[[s_{t+1} | s_{1:t}, a, \theta, z]]]) \\
+%  &= \mbox{cov}_\theta(\mathbb{E}_z[s_{t+1}])
+%\end{align*}
+
+%Applying the conditional covariance formula to the second term, this time conditioning on $z$, we can write:
+
+%\begin{align}
+%\mathbb{E}_\theta[\mbox{cov}(s_{t+1} | s_{1:t}, a, \theta)] &= 
+%\end{align}
+
+
+%We define the variational distribution $q_\eta(\theta, z)$ to be the product of two distributions:
+%$q_\eta(\theta, z) = q_\phi(z | s_{1:t}, s_{t+1}) q_{\theta^*}(\theta)$. 
+%a distribution over latent variables $p(z | q_\phi(s_{1:t}, s_{t+1}))$, and a distribution over model weights $p_{\theta^*}(\theta)$.
+%The first is a diagonal Gaussian whose mean and variance are output by the posterior network $q_\phi(s_{1:t}, s_{t+1}))$. 
+%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
+%Namely, the distribution over each weight matrix in the model is a mixture of two Gaussians with small variances, with the mean of one Gaussian fixed at zero. Samples from this distribution can be drawn by applying different dropout masks to the model weights, and the parameters of the distribution are simply the model weights learned by gradient descent with dropout applied at training time. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$.
+
+
+
+
+
 
 
 \section{Dataset and Planning Environment}
