@@ -476,6 +476,35 @@ Additional video results for the model predictions and learned policies can be f
 
     We evaluated several different policies using two measures: whether the controlled car reaches the end of the road segment without colliding into another car or driving off the road, and the distance travelled before the episode ends. Policies which collide quickly will travel shorter distances. All cars are initialized at the beginning of the road segment with the initial speed they were driving at in the dataset, and then are controlled by the policy being measured. We only report performance for cars in the testing trajectories, which were not used when training the forward model or policy network.
 
+
+
+  \begin{table}[t]
+    \centering
+  \begin{tabular}{|lll|}
+    \hline
+    Method & Mean Distance & Success Rate (\%)  \\
+    \hhline{|===|}
+    Human & $209.4$ & $100.0$ \\
+    \hline
+    No action & $87.3$ & $16.2$ \\
+    \hline
+    1-step IL & $49.6$ & $1.4$ \\
+    \hline
+    SVG (stochastic) & - & - \\
+    VG (deterministic) & - & - \\
+    \hline
+    MPUR (stochastic+z-dropout) & $171.2 \pm 4.5$ & $74.8 \pm 3.0$ \\
+    MPUR (stochastic) & $166.8 \pm 2.4$ & $71.8 \pm 1.0$ \\
+    MPUR (deterministic) & $162.4 \pm 2.8$ & $69.1 \pm 1.6$ \\
+    MPER (stochastic) & $70.0 \pm 8.0$ & $4.6 \pm 2.1$ \\
+    MPER (deterministic) & $157.4 \pm 0.7$ & $63.7 \pm 0.5$ \\
+    \hline
+  \end{tabular}
+  \caption{Planning performance on NGSIM dataset.}
+  \label{main-table}
+  \end{table}
+    
+
     We compared our approach against several baselines which can also learn from observational data, which are described in Table \ref{performance}c.
     All policy networks have the same architecture, and all are fed the concatenation of the 20 previous states as input. They all output the parameters of a 2D diagonal Gaussian over action space, from which the next action is sampled.
 
