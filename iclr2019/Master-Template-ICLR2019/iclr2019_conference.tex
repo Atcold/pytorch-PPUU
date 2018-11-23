@@ -106,16 +106,12 @@ In the interactive setting, this problem is naturally self-correcting, since sta
 
 
 In this work, we propose to train a policy while explicitly penalizing the mismatch between the distribution of trajectories it induces and the one reflected in the training data.
-%We do this by using a learned dynamics model to simulate trajectories produced by the policy network, which are then brought closer to the distribution of states seen during training through a differentiable uncertainty term.
 We do this by using a learned dynamics model which is unrolled for multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory.
 This differentiable cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
 We propose to measure this second cost by using the uncertainty of the dynamics model about its own predictions, calculated using dropout.
-%We do this by first learning a dyanamics model, and then rolling out the forward model and training a policy network to minimize a differentiable cost over a rolled-out trajectory
-%We propose to do this by adding a differentiable term to the cost function used to train the policy network, which represents some measure of uncertainty of the forward model about its own predictions, and minimize this over a relatively long time horizon.
-%The key element of our approach is a differentiable term in the cost function used at planning time, representing the uncertainty of the forward model about its own predictions, which is calculated using dropout.
-%Minimizing this term encourages a planner or policy network to choose action sequences which keep it on the data manifold which the forward model was trained on.
 We evaluate our approach in the context of learning policies to drive an autonomous car in dense traffic, using a large-scale dataset of real-world driving trajectories which we also adapt into an environment for testing learned policies; both dataset and environment will be made public.
 We show in our experiments that model-based control using this additional uncertainty regularizer substantially outperforms unregularized control, and enables learning good driving policies using \emph{only} observational data with no environment interaction or additional labeling by an expert.
+Finally, we show how to effectively leverage a stochastic forward model using a modified posterior distribution, which encourages the model to maintain sensitivity to input actions. 
 
 
 \section{Model-Predictive Policy Learning with Uncertainty Regularization}
@@ -152,7 +148,7 @@ To this end we propose to use a mixture of two Gaussians, with one component fix
   &z_t &&\sim (1-u) \cdot \mathcal{N}(\mu_t, \sigma_t) + u \cdot p(z)
 \end{alignat}
 
-This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, and can be seen as applying a form of dropout to the latent variables at training time: with probability $p_u$, the latent variable is sampled from the fixed prior, rather than the learned posterior. \footnote{If the variances of both prior and posterior are fixed to zero, this reduces to standard dropout.}  
+This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, and can be seen as applying a form of global dropout to the latent variables at training time: with probability $p_u$, the latent variable vector is sampled from the fixed prior, rather than the learned posterior.
 This forces the prediction model to extract as much information as possible from the input states and actions by masking the latent variable a fraction of the time. In our experiments we will refer to this parameterization as $z$-dropout. 
 
 
@@ -244,7 +240,7 @@ However, if the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, 
         \begin{align*}
     \underset{\psi}{\mbox{ argmin }} \Big[ \sum_{i=1}^{T} \ell(\hat{s}_{t+i}, s_{t+i}) \Big],  \mbox{ such that: }
     \begin{cases}
-      z_{t+i} \sim p(z) \\
+      z_{t+i} \sim q_\phi(s_{1:t}, s_{t+1}) \\
       \hat{a}_{t+i} \sim \pi_\psi(\hat{s}_{t+i-1}) \\
       \hat{s}_{t+i} = f(\hat{s}_{t+i-1}, \hat{a}_{t+i}, z_{t+i}) \\
       \end{cases}
@@ -480,24 +476,24 @@ Additional video results for the model predictions and learned policies can be f
 
   \begin{table}[t]
     \centering
-  \begin{tabular}{|lll|ll|}
+  \begin{tabular}{|ll|ll|}
     \hline
-    Method & Model & Uncertainty Reg. & Mean Distance & Success Rate (\%)  \\
-    \hhline{|=====|}
-    Human & & & $209.4$ & $100.0$ \\
+    Method & Model & Mean Distance & Success Rate (\%)  \\
+    \hhline{|====|}
+    Human & & $209.4$ & $100.0$ \\
     \hline
-    No action & & & $87.3$ & $16.2$ \\
+    No action & & $87.3$ & $16.2$ \\
     \hline
-    1-step IL & & & $73.8 \pm 7.9$ & $7.3 \pm 4.1$ \\
+    1-step IL & & $73.8 \pm 7.9$ & $7.3 \pm 4.1$ \\
     \hline
-    SVG & stochastic & & $17.1 \pm 4.3$ & $0.0 \pm 0.0$ \\
-    VG & deterministic & & $11.9 \pm 4.2$ & $0.0 \pm 0.0$ \\
+    SVG & stochastic & $17.1 \pm 4.3$ & $0.0 \pm 0.0$ \\
+    VG & deterministic & $11.9 \pm 4.2$ & $0.0 \pm 0.0$ \\
     \hline
-    MPUR & stochastic+$z$-dropout& & $171.2 \pm 4.5$ & $74.8 \pm 3.0$ \\
-    MPUR & stochastic & & $166.8 \pm 2.4$ & $71.8 \pm 1.0$ \\
-    MPUR & deterministic & & $162.4 \pm 2.8$ & $69.1 \pm 1.6$ \\
-    MPER & stochastic & & $70.0 \pm 8.0$ & $4.6 \pm 2.1$ \\
-    MPER & deterministic & & $157.4 \pm 0.7$ & $63.7 \pm 0.5$ \\
+    MPUR & stochastic+$z$-dropout & $171.2 \pm 4.5$ & $74.8 \pm 3.0$ \\
+    MPUR & stochastic & $166.8 \pm 2.4$ & $71.8 \pm 1.0$ \\
+    MPUR & deterministic & $162.4 \pm 2.8$ & $69.1 \pm 1.6$ \\
+    MPER & stochastic & $70.0 \pm 8.0$ & $4.6 \pm 2.1$ \\
+    MPER & deterministic & $157.4 \pm 0.7$ & $63.7 \pm 0.5$ \\
     \hline
   \end{tabular}
   \caption{Planning performance on NGSIM dataset.}
@@ -526,9 +522,9 @@ Additional video results for the model predictions and learned policies can be f
 
       \begin{tabularx}{\textwidth}{|l| X|}
     \hline
-    \textbf{Human} & The actual human trajectories observed in the testing set, which are all collision-free. \\
+    \textbf{Human} & The human trajectories observed in the testing set, which are all collision-free. \\
     \hline
-    \textbf{No action} & A policy which outputs an action of zero, maintaining its current speed and direction.\\
+    \textbf{No action} & A policy which outputs an action of zero, maintaining constant speed and direction.\\
     \hline
     \textbf{1-step IL} & A policy network trained with single-step imitation learning to minimize the negative log-likelihood of the next human action observed in the dataset. \\
     \hline
@@ -536,13 +532,12 @@ Additional video results for the model predictions and learned policies can be f
     \hline
     \textbf{VG} & A policy trained with value gradients, using the deterministic forward model. This is similar to SVG, but does not involve latent variables. \\
     \hline
-    \textbf{\modelnameil} & A policy trained with \modelnameil, using the deterministic forward model.  \\
+    \textbf{\modelnameil} & A policy trained with \modelnameil, using a deterministic or stochastic model  \\
     \hline
-    \textbf{S-\modelnameil} & A policy trained with \modelnameil, using the deterministic forward model. Here latent variables are inferred using the posterior network for a state trajectory sampled from the training set. \\
+%    \textbf{S-\modelnameil} & A policy trained with \modelnameil, using the deterministic forward model. Here latent variables are inferred using the posterior network for a state trajectory sampled from the training set. \\
+    \textbf{\modelnamedrop} & A policy trained with \modelnamedrop, using a deterministic or stochastic model \\
     \hline
-    \textbf{\modelnamedrop} & A policy trained with \modelnamedrop, using the deterministic forward model. \\
-    \hline
-    \textbf{S-\modelnamedrop} & A policy trained with \modelnamedrop, using the deterministic forward model. Here latent variables are sampled from the prior $p(z)$ at every time step.\\
+%    \textbf{S-\modelnamedrop} & A policy trained with \modelnamedrop, using the deterministic forward model. Here latent variables are sampled from the prior $p(z)$ at every time step.\\
     \hline
   \end{tabularx}
   }
@@ -569,14 +564,14 @@ The stochastic model trained with a standard Gaussian posterior yields some impr
 However, the stochastic model trained with the $z$-dropout parameterization yields a significant improvement. 
 %The stochastic model trained with a standard Gaussian posterior yields a relatively minor improvement over the deterministic in the case of \modelnamedrop, but this difference is not statistically significant. 
 %The stochastic model trained with a standard Gaussian posterior yields an improvement over the deterministic model in the case of stochastic \modelnamedrop, despite the improvement in terms of visual quality shown in Figure \ref{prediction-results}. %, and gives much \textit{worse} performance for \modelnameil.
-On further investigation, we found that the standard forward model becomes less responsive to input actions when it is given latent variables inferred by the posterior network, as opposed to latent variables which are sampled from the prior. See the URL for a comparison of predictions of the forward model conditioned on different action sequences, using latent variables inferred or sampled from the prior. We also trained a policy network using \modelnamedrop with inferred rather than sampled latent variables, and observed a large drop in performance (see Appendix \ref{action-sensitivity-appendix}).
+On further investigation, we found that the standard stochastic forward model becomes less responsive to input actions when it is given latent variables inferred by the posterior network, as opposed to latent variables which are sampled from the prior. See the URL for a comparison of predictions of the forward model conditioned on different action sequences, using latent variables inferred or sampled from the prior. We also trained a policy network using \modelnamedrop with inferred rather than sampled latent variables, and observed a large drop in performance (see Appendix \ref{action-sensitivity-appendix}).
 
 One possible explanation is that the forward model encodes some factors of variation of the output due to the actions in its latent variables.
 The sequence of latent variables sampled from the prior are independent, which may cause these effects to cancel each other over the sequence. However, the latent variables inferred from a sequence of states in the training set are highly dependent, and together they may explain away the effects of the actions.
 This suggests that enforcing independence between actions and latent variables may be necessary to leverage the benefits of stochastic models.
 
 
-Figure \ref{rollout-length} shows the performance of \modelnamedrop and \modelnameil for different rollout lengths.
+Figure \ref{performance} shows the performance of \modelnamedrop and \modelnameil for different rollout lengths.
 All methods see their performance improve dramatically as we increase the rollout length, which encourages the distribution of states the policy induces and the training distribution to match over longer time horizons. We also see that the stochastic model $z$-dropout outperforms the standard stochastic model as well as the deterministic model over most rollout lengths. 
 %\modelnameil performs similarly to the 1-step imitation learner when given a rollout length of 1.
 %This makes sense as they both optimize similar objectives.
