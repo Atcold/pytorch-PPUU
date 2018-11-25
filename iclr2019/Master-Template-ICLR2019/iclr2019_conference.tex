@@ -148,8 +148,8 @@ To this end we propose to use a mixture of two Gaussians, with one component fix
   &z_t &&\sim (1-u) \cdot \mathcal{N}(\mu_\phi, \sigma_\phi) + u \cdot p(z)
 \end{alignat}
 
-This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, and can be seen as applying a form of global dropout to the latent variables at training time: with probability $p_u$, the latent variable vector is sampled from the fixed prior, rather than the learned posterior.
-This forces the prediction model to extract as much information as possible from the input states and actions by making the latent variable independent of the output a fraction of the time. In our experiments we will refer to this parameterization as $z$-dropout. 
+This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, which consists of a mixture of two Gaussians with one mean fixed at zero, and can be seen as applying a form of global dropout to the latent variables at training time: with probability $p_u$, the latent variable is sampled from the fixed prior, rather than the learned posterior \footnote{If the variances of both Gaussians are zero, this becomes equivalent to applying a form of dropout to the latent code where all units are either set to zero or unchanged with probability $p_u$.}.
+This forces the prediction model to extract as much information as possible from the input states and actions by making the latent variable independent of the output with some probability. In our experiments we will refer to this parameterization as $z$-dropout.
 
 
 \subsection{Training a Policy Network with Uncertainty Minimization}
@@ -260,22 +260,20 @@ The distribution over model predictions for $s_{t+1}$ is given by:
 \end{equation*}
 
 The distribution $p(\theta, z | \mathcal{D})$ reflects the posterior over model weights and latent variables given the data, and is intractable to evaluate.
-We instead approximate it with the variational distribution $q$ parameterized by $\eta$:
+We instead approximate it with the variational distribution $q$ parameterized by $\eta = \{\phi, \theta^*\}$:
 
 \begin{align*}
   q_\eta(z, \theta) = q_\phi(z | s_{1:t}, s_{t+1}) \cdot q_{\theta^*}(\theta)
 \end{align*}
 
-Here $q_\phi$ represents a distribution over latent variables parameterized by $\phi$, which could be a diagonal Gaussian or the mixture distribution described in Section 2.1. 
-%The first term is a diagonal Gaussian whose mean and variance are given by a posterior network $q_\phi(s_{1:t}, s_{t+1}))$ with parameters $\phi$.
-%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
-The distribution $q_{\theta^*}$ is the \textit{dropout approximating distribution} over model parameters described in \citep{Gal16} (Section 3.2 of Supplement). 
+Here $q_\phi$ represents a distribution over latent variables represented using a posterior network with parameters $\phi$, which could be a diagonal Gaussian or the mixture distribution described in Section 2.1.
+The distribution $q_{\theta^*}$ is the \textit{dropout approximating distribution} over forward model parameters described in \citep{Gal16}, a mixture of two Gaussians with one mean fixed at zero.
+We show in Appendix \ref{bnn-details} that training the stochastic forward model with dropout by minimizing the loss function in Equation \ref{model-loss} is approximately minimizing the variational lower bound on the Kullback-Leibler divergence between this approximate posterior and the true posterior.
+
+\begin{comment}
 This defines a mixture of two Gaussians with small variances over each row of each weight matrix in the forward model, with the mean of one Gaussian fixed at zero. The parameters of this distribution are the model weights, and samples can be drawn by applying different dropout masks. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$, 
 and can be optimized by minimizing the variational lower bound, which is equivalent to minimizing the Kullback-Leibler divergence between the approximate posterior and true posterior:
 
-%We instead approximate it by first defining a family of distributions $q_\eta(\theta, z)$ (parameterized by $\eta$) to approximate the true posterior,
-%and then learning the parameters $\eta$ by minimizing the Kullback-Leibler divergence between the approximate and true posteriors.
-%We define the approximate posterior by:
 
 
 \begin{align}
@@ -303,8 +301,8 @@ Ignoring this term and approximating the integral in Equation \ref{elbo} using a
 \end{align*}
 
 where $\bar{\theta} \sim q_{\theta^*}(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Assuming a diagonal Gaussian likelihood on the outputs with constant variance $1/\beta$ and scaling by $\beta$, we recover our loss term in Equation \ref{model-loss}: a variational autoencoder trained with dropout. 
-
-Once this model is trained, for a given input we obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ induced by the approximate posterior.
+\end{comment}
+Once the forward model is trained, for a given input we can obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ induced by the approximate posterior by sampling different latent variables and dropout masks.
 We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty, using a similar approach as \citep{depeweg18}. 
 Using the conditional covariance formula we can write:
 
@@ -317,32 +315,6 @@ This term ignores any contribution to the variance from $z$ and only considers t
 The second term represents the covariance of the predictions obtained by sampling different latent variables $z \sim p(z)$ averaged over different dropout masks, and ignores any contribution to the variance from $\theta$. As such it represents the aleatoric uncertainty.
 Our uncertainty penalty explicitly penalizes the trace of the first matrix where the expectation over $z$ is approximated by a single sample from the prior.
 Note also that the covariance matrix corresponding to the aleatoric uncertainty will change depending on the inputs. This allows our approach to handle heteroscedastic environments, where the aleatoric uncertainty will vary for different inputs.
-
-%We mention here how our work relates to the work of \citep{depeweg18}, which also proposed to using an uncertainty penalty 
-
-%Using the law of total expectation and conditioning on $z$, we can rewrite the first term as:
-
-%\begin{align*}
-%  \mbox{cov}_\theta(\mathbb{E}[s_{t+1} | s_{1:t}, a, \theta]) &= \mbox{cov}_\theta(\mathbb{E}_z[ \mathbb{E}[[s_{t+1} | s_{1:t}, a, \theta, z]]]) \\
-%  &= \mbox{cov}_\theta(\mathbb{E}_z[s_{t+1}])
-%\end{align*}
-
-%Applying the conditional covariance formula to the second term, this time conditioning on $z$, we can write:
-
-%\begin{align}
-%\mathbb{E}_\theta[\mbox{cov}(s_{t+1} | s_{1:t}, a, \theta)] &= 
-%\end{align}
-
-
-%We define the variational distribution $q_\eta(\theta, z)$ to be the product of two distributions:
-%$q_\eta(\theta, z) = q_\phi(z | s_{1:t}, s_{t+1}) q_{\theta^*}(\theta)$. 
-%a distribution over latent variables $p(z | q_\phi(s_{1:t}, s_{t+1}))$, and a distribution over model weights $p_{\theta^*}(\theta)$.
-%The first is a diagonal Gaussian whose mean and variance are output by the posterior network $q_\phi(s_{1:t}, s_{t+1}))$. 
-%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
-%Namely, the distribution over each weight matrix in the model is a mixture of two Gaussians with small variances, with the mean of one Gaussian fixed at zero. Samples from this distribution can be drawn by applying different dropout masks to the model weights, and the parameters of the distribution are simply the model weights learned by gradient descent with dropout applied at training time. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$.
-
-
-
 
 
 
@@ -470,10 +442,9 @@ Additional video results for the model predictions and learned policies can be f
 
     We evaluated several different policies using two measures: whether the controlled car reaches the end of the road segment without colliding into another car or driving off the road, and the distance travelled before the episode ends. Policies which collide quickly will travel shorter distances. All cars are initialized at the beginning of the road segment with the initial speed they were driving at in the dataset, and then are controlled by the policy being measured. We only report performance for cars in the testing trajectories, which were not used when training the forward model or policy network. 
 
-
-
-  \begin{table}[t]
-    \centering
+\begin{figure*}[t!]
+  \centering
+  \subfigure[]{
   \begin{tabular}{|ll|ll|}
     \hline
     Method & Model & Mean Distance & Success Rate (\%)  \\
@@ -494,28 +465,12 @@ Additional video results for the model predictions and learned policies can be f
     MPER & deterministic & $157.4 \pm 0.7$ & $63.7 \pm 0.5$ \\
     \hline
   \end{tabular}
-  \label{main-table}
-  \caption{Best results across different rollouts lengths.} 
-  \end{table}
-    
-
-    We compared our approach against several baselines which can also learn from observational data, which are described in Figure \ref{performance}.
-    All policy networks have the same architecture, and all are fed the concatenation of the 20 previous states as input. They all output the parameters of a 2D diagonal Gaussian over action space, from which the next action is sampled.
-    The policy cost which we minimize for VG, SVG and \modelnamedrop is given by:
-
-    \begin{equation}
-      C = C_{\text{proximity}} + 0.2 \cdot C_\text{lane}
-    \end{equation}
-
-    where $C_{\text{proximity}}$ and $C_\text{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}.
-
-
-\begin{figure*}[t!]
-  \centering
-    \subfigure{\includegraphics[width=0.46\textwidth]{figures/driving/rollout_length_distance-crop.pdf}}
-    \subfigure{\includegraphics[width=0.46\textwidth]{figures/driving/rollout_length_success-crop.pdf}}
-    \subfigure{
-
+  }
+  \subfigure[]{
+    \includegraphics[width=0.42\textwidth]{figures/driving/rollout_length_distance-crop.pdf}
+    \includegraphics[width=0.42\textwidth]{figures/driving/rollout_length_success-crop.pdf}
+    }
+    \subfigure[]{
       \begin{tabularx}{\textwidth}{|l| X|}
     \hline
     \textbf{Human} & The human trajectories observed in the testing set, which are all collision-free. \\
@@ -534,23 +489,32 @@ Additional video results for the model predictions and learned policies can be f
     \hline
   \end{tabularx}
   }
-    \caption{Performance of policies learned using different methods on the NGSIM dataset, measured in success rate and distance travelled. Including a cost term penalizing the dynamics model's uncertainty is essential for good performance. Using the modified posterior distribution ($z$-dropout) improves the performance of the stochastic model. Training policies by performing longer rollouts through the environment dynamics model also significantly improves performance.}
+    \caption{a) Performance of policies learned using different methods, measured in success rate and distance travelled. Including a cost term penalizing the dynamics model's uncertainty is essential for good performance. Using the modified posterior distribution ($z$-dropout) improves performance when using the stochastic forward model. b) Training policies by performing longer rollouts through the environment dynamics model also significantly improves performance. c) Summary of compared methods.}
     \label{performance}
 \end{figure*}
 
 
+    We compared our approach against several baselines which can also learn from observational data, which are described in Figure \ref{performance}c.
+    All policy networks have the same architecture, and all are fed the concatenation of the 20 previous states as input. They all output the parameters of a 2D diagonal Gaussian over action space, from which the next action is sampled.
+
+    The policy cost which we minimize for VG, SVG and \modelnamedrop is given by:
+
+    \begin{equation}
+      C = C_{\text{proximity}} + 0.2 \cdot C_\text{lane}
+    \end{equation}
+
+    where $C_{\text{proximity}}$ and $C_\text{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}.
 
 
-
-Figure \ref{performance} compares performance for the different methods. 
+Table \ref{performance}a compares performance for the different methods, optimized over different rollout lengths.
 The 1-step imitation learner, SVG and VG all perform poorly, and do not beat the simple baseline of performing no action.
 Both \modelnamedrop and \modelnameil significantly outperform the other methods. 
 Videos of the learned policies for both \modelnameil and \modelnamedrop driving in the environment can be found at the URL.
 The policies learn effective behaviors such as braking, accelerating and turning to avoid other cars.
 Figure \ref{trajectories} shows trajectories on the map for different methods. We see that the single-step imitation learner produces divergent trajectories which turn into other lanes, whereas the \modelnamedrop and \modelnameil methods show trajectories which primarily stay within their lanes.
 
-\modelnamedrop become equivalent to VG in the deterministic setting if we remove the uncertainty penalty, and the large difference in performance shows that including this penalty is essential.
-Figure \ref{svg-pred} shows the average predicted policy cost and uncertainty cost of the two methods.
+\modelnamedrop becomes equivalent to VG in the deterministic setting if we remove the uncertainty penalty, and the large difference in performance shows that including this penalty is essential.
+Table \ref{svg-pred} shows the average predicted policy cost and uncertainty cost of the two methods.
 VG produces much lower predicted policy cost, yet very high uncertainty cost. This indicates that the actions the policy produces induce a distribution over states which the forward model is highly uncertain about. The policy trained with \modelnamedrop produces higher policy cost estimates, but lower uncertainty cost, and performs much better when executed in the environment.
 
 The stochastic model trained with a standard Gaussian posterior yields limited improvement over the deterministic model. 
@@ -558,15 +522,14 @@ However, the stochastic model trained with the $z$-dropout parameterization yiel
 %The stochastic model trained with a standard Gaussian posterior yields a relatively minor improvement over the deterministic in the case of \modelnamedrop, but this difference is not statistically significant. 
 %The stochastic model trained with a standard Gaussian posterior yields an improvement over the deterministic model in the case of stochastic \modelnamedrop, despite the improvement in terms of visual quality shown in Figure \ref{prediction-results}. %, and gives much \textit{worse} performance for \modelnameil.
 At the URL we compare action-conditional predictions using both models.
-The stochastic model which uses the standard posterior is less responsive to input actions than the model trained with the modified posterior. 
+The stochastic model which uses the standard posterior is less responsive to input actions than the model trained with the modified posterior, which likely accounts for their difference in performance. 
 %We also found that using the modified $z$-dropout parameterization increases the sensitivity of the forward model to the input actions, as can be seen at the URL. 
 This lack of responsiveness is especially pronounced when the model is given latent variables inferred by the posterior network, as opposed to latent variables which are sampled from the prior.
-%We also include a comparison of predictions of the forward model conditioned on different action sequences, using latent variables inferred or sampled from the prior at the URL.
 We also trained a policy network using \modelnamedrop with inferred rather than sampled latent variables, and observed a large drop in performance (see Appendix \ref{action-sensitivity-appendix}).
 
-A possible explanation is that the forward model encodes some factors of variation of the output due to the actions in its latent variables.
+A possible explanation is that the stochastic forward model uses the latent variables to encodes some factors of variation of the output which are in fact due to the actions.
 The sequence of latent variables sampled from the prior are independent, which may cause these effects to cancel each other over the sequence. However, the latent variables inferred from a sequence of states in the training set are highly dependent, and together they may explain away the effects of the actions.
-Our modified posterior distribution, which samples the latent variable from the prior rather than posterior part of the time, encourages the network to extract as much information as possible from the input actions. This is because factors of variation in the output which are due to the actions cannot be encoded in the latent variables when they are sampled from the prior. 
+Our modified posterior distribution, which samples the latent variable from the prior rather than posterior with some probability, encourages the network to continue to extract as much information as possible from the input actions. This is because factors of variation in the output which are due to the actions cannot be encoded in the latent variables when they are sampled from the prior. 
 
 
 Figure \ref{performance} shows the performance of \modelnamedrop and \modelnameil for different rollout lengths.
@@ -592,7 +555,7 @@ All methods see their performance improve dramatically as we increase the rollou
 
 
 
-\begin{figure*}[t!]
+\begin{table*}[t!]
     \centering
 %    \subfigure[with uncertainty cost]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_reg_prediction-crop.pdf}}
 %    \subfigure[without uncertainty cost]{\includegraphics[width=0.48\textwidth]{figures/driving/svg_no_reg_prediction-crop.pdf}} \\
@@ -609,7 +572,7 @@ All methods see their performance improve dramatically as we increase the rollou
     }
     \caption{Policy and uncertainty costs with and without uncertainty regularization. The policy trained with unregularized VG exploits errors in the forward model to produce actions which yield low predicted cost but high uncertainty. Including the uncertainty cost yields higher predicted cost, but better performance when the policy is executed in the environment.}
     \label{svg-pred}
-\end{figure*}
+\end{table*}
 
 
 %We ran an additional experiment where we trained a forward model which samples the latent variables from the prior, rather than the posterior, with probability $0.5$, in an effort to encourage it to extract more information from the actions.
@@ -695,14 +658,6 @@ We also computed vectors $u_t = (p_t, \Delta p_t)$, where $p_t = (x_t, y_t)$ is 
 
 
 
-%Every vehicle in the simulator is initialised with starting position $\bm{p} = (x, y)$, initial velocity $v \bm{d}$ (where $v$ represents the speed and $\bm{d}$ the direction versor), correct dimensions, and identification (ID) number.
-%At every time step $\Delta t = 0.1\,\text{s}$, we use the tracked trajectories (previously smoothed with a $1.5\,\text{s}$ running average) and a simplified kinematic model of a car to compute the agent actions $(a, b)$, corresponding to acceleration and tangential deviation.
-%Therefore, the vehicle internal state is updated with: $\bm{p} \gets \bm{p} + v \bm{d} \Delta t$, $v \gets v + a \Delta t$, $\bm{d} \gets \bm{d} + v b \bm{d}_\perp \Delta t$, and $\bm{d} \gets \bm{d} / \lVert \bm{d} \rVert$.
-%A longitudinal and transverse inter-vehicle linear proximity cost is computed, which is maximum in case of collision and goes to zero if vehicles are sufficiently spaced.
-%Finally, the vehicles are drawn onto the screen canvas and displayed with their corresponding ID number.
-%\textbf{(d)} Lanes and vehicles are also drawn on a secondary canvas, from which the context states are extracted.
-%Rectangular regions around each vehicle --- oriented according to $\bm{d}$, of length corresponding to twice the space travelled in $1\,\text{s}$ at $130\,\text{km/h}$, of width equal four times the lane width --- scaled by a $0.5$ factor constitute the context states.
-%    At this stage, the lane-crossing cost is computed using a modified morphological distance transform between each vehicle and the lane channel.
 
 
 
@@ -747,6 +702,74 @@ This approach has the advantage that all other cars in the environment maintain 
 The one difference with true human behavior is that the other cars do not react to the car being controlled or try to avoid it, which may cause crashes which would not occur in real life.
 The driving task is thus possibly made more challenging than in a true environment, which we believe is preferable to using a hand-coded policy.
 The interface is set up the same way as environments in OpenAI Gym \citep{OpenAIBaselines}, and can be accessed with a few lines of Python code, as shown in Figure \ref{interface}.
+
+
+
+\section{Bayesian Neural Network Formulation Details}
+\label{bnn-details}
+
+Our approach can be viewed as training a Bayesian neural network (BNN) \citep{Neal1995} with latent variables using variational inference \citep{Jordan1999, VAE}. 
+The distribution over model predictions for $s_{t+1}$ is given by:
+
+\begin{equation*}
+  p(s_{t+1} | s_{1:t}, a, \mathcal{D}) = \int p(s_{t+1} | f_\theta(s_{1:t}, a, z)) p(\theta, z | \mathcal{D}) d\theta dz
+\end{equation*}
+
+The distribution $p(\theta, z | \mathcal{D})$ reflects the posterior over model weights and latent variables given the data, and is intractable to evaluate.
+We instead approximate it with the variational distribution $q$ parameterized by $\eta$:
+
+\begin{align*}
+  q_\eta(z, \theta) = q_\phi(z | s_{1:t}, s_{t+1}) \cdot q_{\theta^*}(\theta)
+\end{align*}
+
+Here $q_\phi$ represents a distribution over latent variables parameterized by $\phi$, which could be a diagonal Gaussian or the mixture distribution described in Section 2.1. 
+%The first term is a diagonal Gaussian whose mean and variance are given by a posterior network $q_\phi(s_{1:t}, s_{t+1}))$ with parameters $\phi$.
+%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
+The distribution $q_{\theta^*}$ is the \textit{dropout approximating distribution} over model parameters described in \citep{Gal16} (Section 3.2 of Supplement). 
+This defines a mixture of two Gaussians with small variances over each row of each weight matrix in the forward model, with the mean of one Gaussian fixed at zero. The parameters of this distribution are the model weights, and samples can be drawn by applying different dropout masks. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$, 
+and can be optimized by minimizing the variational lower bound, which is equivalent to minimizing the Kullback-Leibler divergence between the approximate posterior and true posterior:
+
+
+
+\begin{align}
+  \mathcal{L}_{VLB}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &= -\int \log p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz +  D_{KL}(q_\eta(\theta, z) || p_0(\theta, z))
+  \label{elbo}
+\end{align}
+
+Here $p_0(z, \theta) = p_0(z) \cdot p_0(\theta)$ represents a prior over latent variables and model parameters. By applying the chain rule for KL divergences together with the fact that $z$ and $\theta$ are independent, we obtain:
+
+\begin{align*}
+D_{KL}(q_\eta(\theta, z) || p_0(\theta, z)) &= D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) \cdot q_{\theta^*}(\theta) || p_0(z) \cdot p_0(\theta)) \\
+&= D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) + D_{KL}(q_{\theta^*}(\theta | z) || p_0(\theta | z))  \\
+&= D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) + D_{KL}(q_{\theta^*}(\theta) || p_0(\theta))  \\
+\end{align*}
+%\begin{align}
+%  \mathcal{L}(\eta; s_{1:t}, s_{t+1}, a) = \int p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz + D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) + 
+%  D_{KL}(q_{\theta^*}(\theta) || p_0(\theta))
+%\end{align}
+
+Setting both Gaussians in $p_0(\theta)$ to have zero mean, the second KL term becomes equivalent to scaled $\ell_2$ regularization on the model parameters, and can be set arbitrarily small (Section 4.2 in Supplement of \citep{Gal16}). 
+Ignoring this term and approximating the integral in Equation \ref{elbo} using a single sample, we obtain:
+
+\begin{align*}
+  \mathcal{L}_{VLB}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &\approx -\log p(s_{t+1} | f_{\bar{\theta}}(s_{1:t}, a, z)) + D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) 
+\end{align*}
+
+where $\bar{\theta} \sim q_{\theta^*}(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Assuming a diagonal Gaussian likelihood on the outputs with constant variance $1/\beta$ and scaling by $\beta$, we recover our loss term in Equation \ref{model-loss}: a variational autoencoder trained with dropout. 
+
+Once this model is trained, for a given input we obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ induced by the approximate posterior.
+We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty, using a similar approach as \citep{depeweg18}. 
+Using the conditional covariance formula we can write:
+
+\begin{align}
+  \mbox{cov}(\hat{s}_{t+1} | s_{1:t}, a) &= \mbox{cov}_\theta(\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]) + \mathbb{E}_\theta[\mbox{cov}_z(\hat{s}_{t+1} | s_{1:t}, a, \theta)]
+\end{align}
+
+The first term is the covariance of the random vector $\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]$ when $\theta \sim q_{\theta^*}(\theta)$.
+This term ignores any contribution to the variance from $z$ and only considers the effect of $\theta$. As such it represents the epistemic uncertainty.
+The second term represents the covariance of the predictions obtained by sampling different latent variables $z \sim p(z)$ averaged over different dropout masks, and ignores any contribution to the variance from $\theta$. As such it represents the aleatoric uncertainty.
+Our uncertainty penalty explicitly penalizes the trace of the first matrix where the expectation over $z$ is approximated by a single sample from the prior.
+Note also that the covariance matrix corresponding to the aleatoric uncertainty will change depending on the inputs. This allows our approach to handle heteroscedastic environments, where the aleatoric uncertainty will vary for different inputs.
 
 
 
