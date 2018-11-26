@@ -1,3 +1,4 @@
+# from os import getpid, system
 from os.path import isfile
 
 import torch
@@ -280,6 +281,7 @@ class I80(Simulator):
 
     def reset(self, frame=None, time_slot=None, vehicle_id=None):
         super().reset(control=(frame is None))
+        # print(f'\n > Env on process {os.getpid()} is resetting')
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
@@ -353,7 +355,10 @@ class I80(Simulator):
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.look_ahead = self.look_ahead
-                    print(f'Controlling car {car.id}')
+                    # print(f'Controlling car {car.id}')
+                    # self.dump_folder = f'{self._t_slot}_{car.id}'
+                    # print(f'Creating folder {self.dump_folder}')
+                    # system(f'mkdir -p screen-dumps/{self.dump_folder}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
