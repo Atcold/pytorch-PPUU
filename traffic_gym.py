@@ -671,6 +671,7 @@ class Simulator(core.Env):
         self.normalise_state = normalise_state
         self.return_reward = return_reward
         self.gamma = gamma
+        self.done = None
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -702,6 +703,7 @@ class Simulator(core.Env):
                 'locked': False,
             }
         self.user_is_done = False
+        self.done = False
 
     def policy_imitation(self, observation):
         s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])

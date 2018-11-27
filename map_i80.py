@@ -328,6 +328,8 @@ class I80(Simulator):
 
     def step(self, policy_action=None):
 
+        assert not self.done, 'Trying to step on an exhausted environment!'
+
         if self.normalise_action and policy_action is not None:
             np.multiply(policy_action, self.data_stats['a_std'], policy_action)  # multiply by the std
             np.add(policy_action, self.data_stats['a_mean'], policy_action)  # add the mean
@@ -431,12 +433,12 @@ class I80(Simulator):
         self.frame += int(self.delta_t * 10)
 
         # Run out of frames?
-        done = self.frame >= self.max_frame or self.user_is_done
+        self.done = self.frame >= self.max_frame or self.user_is_done
 
         if self.controlled_car and self.controlled_car['locked']:
             return_ = self.controlled_car['locked'].get_last(
                 n=self.nb_states,
-                done=done,
+                done=self.done,
                 norm_state=self.normalise_state and self.data_stats,
                 return_reward=self.return_reward,
                 gamma=self.gamma,
@@ -444,7 +446,7 @@ class I80(Simulator):
             if return_: return return_
 
         # return observation, reward, done, info
-        return None, None, done, None
+        return None, None, self.done, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
