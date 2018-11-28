@@ -230,6 +230,9 @@ class I80(Simulator):
         pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
         self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
         self.cached_data_frames = dict()
+        self.episode = 0
+        self.train_indx = None
+        self.indx_order = None
 
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
@@ -279,7 +282,26 @@ class I80(Simulator):
         frame = vehicle_data.at[vehicle_data.index[0], 'Frame ID']
         return frame
 
-    def reset(self, frame=None, time_slot=None, vehicle_id=None):
+    def reset(self, frame=None, time_slot=None, vehicle_id=None, train_only=False):
+
+        # train_only = True  # uncomment this if doing RL, to set as default behaviour
+        if train_only:
+            ################################################################################
+            # Looping over training split ONLY
+            ################################################################################
+            if self.train_indx is None:
+                train_indx_file = '/home/atcold/Work/GitHub/pytorch-Traffic-Simulator/train_indx.pkl'
+                assert os.path.isfile(train_indx_file), 'Training indices not found.'
+                print('Loading training indices')
+                with open(train_indx_file, 'rb') as f:
+                    self.train_indx = pickle.load(f)
+                self.indx_order = list(self.train_indx.keys())
+                self.random.shuffle(self.indx_order)
+            assert not(frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
+            time_slot, vehicle_id = self.train_indx[self.indx_order[self.episode % len(self.indx_order)]]
+            self.episode += 1
+            ################################################################################
+
         super().reset(control=(frame is None))
         # print(f'\n > Env on process {os.getpid()} is resetting')
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
