@@ -545,9 +545,10 @@ class Car:
             arrived = self.arrived_to_dst
             collision = self.collisions_per_frame > 0
             done = done or collision  # die if collide
-            max_rew = 2
+            lambda_lane = 0.2
+            max_rew = 1 + lambda_lane
             win = max_rew / (1 - gamma)
-            reward = max_rew - cost['pixel_proximity_cost'] - cost['lane_cost'] + win * arrived
+            reward = max_rew - cost['pixel_proximity_cost'] - lambda_lane * cost['lane_cost'] + win * arrived
 
             # So, observation must be just one damn numpy thingy
             observation = torch.cat((
@@ -555,7 +556,7 @@ class Car:
                 state_images.view(n, -1),
             ), dim=1).numpy()
 
-            return observation, reward, self.off_screen or done, self
+            return observation, reward, self.off_screen or done, dict(v=str(self), a=self.arrived_to_dst)
 
         return observation, cost, self.off_screen or done, self
 
@@ -921,6 +922,7 @@ class Simulator(core.Env):
 
             # # save surface as image, for visualisation only
             # pygame.image.save(self.screen, "screen_surface.png")
+            # pygame.image.save(self.screen, f'screen-dumps/{self.dump_folder}/{self.frame:08d}.png')
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
