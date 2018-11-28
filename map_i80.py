@@ -364,7 +364,8 @@ class I80(Simulator):
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print(f'\r[t={self.frame}]', end='')
+        if self.show_frame_count:
+            print(f'\r[t={self.frame}]', end='')
 
         for v in self.vehicles[:]:
             if v.off_screen:
