@@ -291,7 +291,8 @@ class I80(Simulator):
             ################################################################################
             if self.train_indx is None:
                 train_indx_file = '/home/atcold/Work/GitHub/pytorch-Traffic-Simulator/train_indx.pkl'
-                assert os.path.isfile(train_indx_file), 'Training indices not found.'
+                if not os.path.isfile(train_indx_file):
+                    import get_data_idx
                 print('Loading training indices')
                 with open(train_indx_file, 'rb') as f:
                     self.train_indx = pickle.load(f)
