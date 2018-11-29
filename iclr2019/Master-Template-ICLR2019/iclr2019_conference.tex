@@ -66,10 +66,12 @@ Address \\
 
 \begin{abstract}
   Learning a policy using only observational data is challenging because the distribution of states it induces at execution time may differ from the distribution observed during training.
-  In this work, we propose to train a policy while explicitly penalizing the mismatch between these two distributions over a fixed time horizon.
-  We do this by unrolling a learned model of the environment dynamics over multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory. This cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
+  %  We propose to train a policy using a learned model of the environment dynamics while explicitly penalizing the mismatch between these two distributions over a fixed time horizon,
+  We propose to train a policy by unrolling a learned model of the environment dynamics over multiple time steps while explicitly penalizing two costs: the original cost the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
+%  In this work, we propose to train a policy while explicitly penalizing the mismatch between these two distributions over a fixed time horizon.
+%  We do this by unrolling a learned model of the environment dynamics over multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory. This cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
 %We do this by using a learned model of the environment dynamics which is unrolled for multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory. This cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
-We propose to measure this second cost by using the uncertainty of the dynamics model about its own predictions, using recent ideas from uncertainty estimation for deep networks.
+We measure this second cost by using the uncertainty of the dynamics model about its own predictions, using recent ideas from uncertainty estimation for deep networks.
   We evaluate our approach using a large-scale observational dataset of driving behavior recorded from traffic cameras, and show that we are able to learn effective driving policies from purely observational data, with no environment interaction.
 \end{abstract}
 
@@ -85,7 +87,6 @@ Building a simulator where the agent can safely try out policies without facing 
 Model-based reinforcement learning approaches try to learn a model of the environment dynamics, and then use this model to plan actions or train a parameterized policy.
 A common setting is where an agent alternates between collecting experience by executing actions using its current policy or dynamics model, and then using these experiences to improve its dynamics model.
 This approach has been shown empirically to significantly reduce the required number of environment interactions needed to obtain an effective policy or planner \citep{Atkeson1997, PILCO, Nagabandi2017, Chua2018}.
-%Theoretical results have also shown the model-based approach to offer improved sample complexity in simple settings \citep{LS-LQR, Recht2018}.
 
 Despite these improvements in sample complexity, there exist settings where even a \textit{single} poor action executed by an agent in a real environment can have consequences which are not acceptable.
 At the same time, with data collection becoming increasingly inexpensive, there are many settings where observational data of an environment is abundant.
@@ -93,25 +94,23 @@ This suggests a need for algorithms which can learn policies primarily from obse
 Autonomous driving is an example of such a setting: on one hand, trajectories of human drivers can be easily collected using traffic cameras \citep{NGSIM}, resulting in an abundance of observational data; on the other hand, learning through interaction with the real environment is not a viable solution.
 
 
+However, learning policies from purely observational data is challenging because the data may only cover a small region of the space over which it is defined.
+If the observational data consists of state-action pairs produced by an expert, one option is to use imitation learning \citep{Pomerleau91}.
 \begin{wrapfigure}{r}{0.3\textwidth}
-%  \centering
   \includegraphics[width=0.3\textwidth]{figures/driving/uncertainty_example2-crop.pdf}
   \caption{\label{simple-example}Different models fitted on training points which cover a limited region the function's domain. Models make arbitrary predictions outside of this region.}
 \end{wrapfigure}
-However, learning policies from purely observational data is challenging because the data may only cover a small region of the space over which it is defined.
-If the observational data consists of state-action pairs produced by an expert following an optimal policy, one option is to use imitation learning \citep{Pomerleau91}.
-However, passive imitation learning is well-known to suffer from a mismatch between the states seen at training and execution time \citep{Ross2010EfficientRF}, and may need to be augmented by querying an expert \citep{Dagger}.
-Another option is to learn a dynamics model from observational data, and then use it to train a policy \citep{Nguyen1989}. However, the dynamics model may make arbitrary predictions outside the domain it was trained on, which may wrongly be associated with low cost (or high reward) as shown in Figure \ref{simple-example}. The policy network may then exploit these errors in the dynamics model and produce actions which lead to wrongly optimistic states.
-In the interactive setting, this problem is naturally self-correcting, since states where the model predictions are wrongly optimistic will be more likely to be experienced, and thus will correct the dynamics model. However, the problem persists if the dataset of environment interactions which the model is trained on is fixed.
+However, this is well-known to suffer from a mismatch between the states seen at training and execution time \citep{Ross2010EfficientRF}, and may need to be augmented by querying an expert \citep{Dagger}.
+Another option is to learn a dynamics model from observational data, and then use it to train a policy \citep{Nguyen1989}. However, the dynamics model may make arbitrary predictions outside the domain it was trained on, which may wrongly be associated with low cost (or high reward) as shown in Figure \ref{simple-example}. The policy network may then exploit these errors in the dynamics model and produce actions which lead to wrongly optimistic states. In the interactive setting, this problem is naturally self-correcting, since states where the model predictions are wrongly optimistic will be more likely to be experienced, and thus will correct the dynamics model. However, the problem persists if the dataset of environment interactions which the model is trained on is fixed.
 
 
 In this work, we propose to train a policy while explicitly penalizing the mismatch between the distribution of trajectories it induces and the one reflected in the training data.
-We do this by using a learned dynamics model which is unrolled for multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory.
-This differentiable cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
-We propose to measure this second cost by using the uncertainty of the dynamics model about its own predictions, calculated using dropout.
+We use a learned dynamics model which is unrolled for multiple time steps, and training a policy network to minimize a differentiable cost over this rolled-out trajectory.
+This cost contains two terms: a policy cost which represents the objective the policy seeks to optimize, and an uncertainty cost which represents its divergence from the states it is trained on.
+We measure this second cost by using the uncertainty of the dynamics model about its own predictions, calculated using dropout.
 We evaluate our approach in the context of learning policies to drive an autonomous car in dense traffic, using a large-scale dataset of real-world driving trajectories which we also adapt into an environment for testing learned policies; both dataset and environment will be made public.
-We show in our experiments that model-based control using this additional uncertainty regularizer substantially outperforms unregularized control, and enables learning good driving policies using \emph{only} observational data with no environment interaction or additional labeling by an expert.
-Finally, we show how to effectively leverage an action-conditional stochastic forward model using a modified posterior distribution, which encourages the model to maintain sensitivity to input actions. 
+We show that model-based control using this additional uncertainty regularizer substantially outperforms unregularized control, and enables learning good driving policies using \emph{only} observational data with no environment interaction or additional labeling by an expert.
+We also show how to effectively leverage an action-conditional stochastic forward model using a modified posterior distribution, which encourages the model to maintain sensitivity to input actions. 
 
 
 \section{Model-Predictive Policy Learning with Uncertainty Regularization}
@@ -121,13 +120,15 @@ We first describe our general approach, which consists of two steps: learning an
 
 \subsection{Action-conditional Forward Model}
 
-The dynamics model can be deterministic or stochastic.
-A deterministic model $f_\theta(s_{1:t}, a_t)$ takes as input a sequence of observed or previously predicted states $s_{1:t}$ and an action $a_t$, and produces a prediction of the next state $\hat{s}_{t+1}$. The per-sample loss which it minimizes is given by $\ell(s_{t+1}, \hat{s}_{t+1})$, where $\ell$ is a loss function appropriate for the task at hand.
-A stochastic model additionally takes as input a latent variable $z_t$ which represents the information about the next state $s_{t+1}$ which is not a deterministic function of the input.
-In this work, we consider recent approaches for stochastic prediction based on Variational Autoencoders \citep{VAE, Babaeizadeh2018, Denton2018}. 
-During training, latent variables $z_t$ are sampled from a distribution whose parameters are output by a posterior network $q_\phi(s_{1:t}, s_{t+1})$ conditioned on the past inputs and true targets. This network is trained jointly with the rest of the model using the reparameterization trick, and a term is included in the loss to minimize the KL divergence between the posterior distribution and a fixed prior $p(z)$, which in our case is an isotropic Gaussian.
+%The dynamics model can be deterministic or stochastic.
+%A deterministic model $f_\theta(s_{1:t}, a_t)$ takes as input a sequence of observed or previously predicted states $s_{1:t}$ and an action $a_t$, and produces a prediction of the next state $\hat{s}_{t+1}$. The per-sample loss which it minimizes is given by $\ell(s_{t+1}, \hat{s}_{t+1})$, where $\ell$ is a loss function appropriate for the task at hand.
+%A stochastic model additionally takes as input a latent variable $z_t$ which represents the information about the next state $s_{t+1}$ which is not a deterministic function of the input.
+In this work, we consider recent approaches for stochastic prediction based on Variational Autoencoders \citep{VAE, Babaeizadeh2018, Denton2018}.
+The stochastic model $f_\theta(s_{1:t}, a_t, z_t)$ takes as input a sequence of observed or previously predicted states $s_{1:t}$, an action $a_t$,
+and a latent variable $z_t$ which represents the information about the next state $s_{t+1}$ which is not a deterministic function of the input.
+During training, latent variables are sampled from a distribution whose parameters are output by a posterior network $q_\phi(s_{1:t}, s_{t+1})$ conditioned on the past inputs and true targets. This network is trained jointly with the rest of the model using the reparameterization trick, and a term is included in the loss to minimize the KL divergence between the posterior distribution and a fixed prior $p(z)$, which in our case is an isotropic Gaussian.
 
-In our work, $\ell$ represents the mean-squared error loss, and the per-sample loss used for training the stochastic model is given by:
+The per-sample loss used for training the stochastic model is given by:
 
 \begin{align}
   \label{model-loss}
@@ -136,19 +137,19 @@ In our work, $\ell$ represents the mean-squared error loss, and the per-sample l
 
 After training, different future predictions for a given sequence of frames can be generated by sampling different latent variables from the prior distribution.
 
-Recent models for stochastic video prediction \citep{Babaeizadeh2018, Denton2018} do not use their model for planning or training a policy network, and parameterize the posterior distribution over latent variables using a diagonal Gaussian whose mean and variance are output by $q_\phi$. 
+Recent models for stochastic video prediction \citep{Babaeizadeh2018, Denton2018} do not use their model for planning or training a policy network, and parameterize the posterior distribution over latent variables using a diagonal Gaussian. %whose mean and variance are output by $q_\phi$. 
 In our case, we are training an action-conditional video prediction model which we will later use to train a policy. This leads to an additional requirement: it is important for the prediction model to accurately respond to input actions, and not use the latent variables to encode factors of variation in the outputs which are due to the actions.
 To this end we propose to use a mixture of two Gaussians, with one component fixed to the prior, as our posterior distribution:
 
 
-\begin{alignat}{2}
+\begin{alignat*}{2}
   \label{eq:update-eqn}
   &(\mu_\phi, \sigma_\phi) &&= q_\phi(s_{1:t}, s_{t+1}) \\
   &u &&\sim \mathcal{B}(p_u) \\
   &z_t &&\sim (1-u) \cdot \mathcal{N}(\mu_\phi, \sigma_\phi) + u \cdot p(z)
-\end{alignat}
+\end{alignat*}
 
-This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, which consists of a mixture of two Gaussians with one mean fixed at zero, and can be seen as applying a form of global dropout to the latent variables at training time: with probability $p_u$, the latent variable is sampled from the fixed prior, rather than the learned posterior \footnote{If the variances of both Gaussians are zero, this becomes equivalent to applying a form of dropout to the latent code where all units are either set to zero or unchanged with probability $p_u$.}.
+This is related to the $\textit{dropout approximating distribution}$ described in \citep{Gal16}, and can be seen as applying a form of global dropout to the latent variables at training time \footnote{If the variances of both Gaussians are zero, this becomes equivalent to applying a form of dropout to the latent code where all units are either set to zero or unchanged with probability $p_u$.}.
 This forces the prediction model to extract as much information as possible from the input states and actions by making the latent variable independent of the output with some probability. In our experiments we will refer to this parameterization as $z$-dropout.
 
 
@@ -156,9 +157,17 @@ This forces the prediction model to extract as much information as possible from
 \label{uncertainty-minimization}
 
 Once the forward model is trained, we use it to train a parameterized policy network $\pi_\psi$, which we assume to be stochastic.
-We first sample an initial state sequence $s_{1:t}$ from the training set, unroll the forward model over $T$ time steps, and backpropagate gradients of a differentiable objective function with respect to the parameters of the policy network.
+We first sample an initial state sequence $s_{1:t}$ from the training set, unroll the forward model over $T$ time steps, and backpropagate gradients of a differentiable objective function with respect to the parameters of the policy network (shown in Figure \ref{svg}). 
 During this process the weights of the forward model are fixed, and only the weights of the policy network are optimized.
 This objective function contains two terms: a \textit{policy cost} $C$, which reflects the underlying objective the policy is trying to learn, and an \textit{uncertainty cost} $U$, which reflects how close the predicted state induced by the policy network is to the manifold which the data $\mathcal{D}$ is drawn from.
+
+\begin{figure*}[t!]
+    \centering
+    \subfigure{\includegraphics[width=0.7\textwidth]{figures/driving/svg-crop.pdf}} \\
+    \caption{Training the policy network using the stochastic forward model. Gradients with respect to costs associated with predicted states are passed through the unrolled forward model into a policy network.}
+    \label{svg}
+\end{figure*}
+
 
 Training the policy using a stochastic forward model involves solving the following problem, where latent variables are sampled from the prior and input into the forward model at every time step:
 
@@ -171,15 +180,9 @@ Training the policy using a stochastic forward model involves solving the follow
       \end{cases}
         \end{align*}
 
-\begin{figure*}[t!]
-    \centering
-    \subfigure{\includegraphics[width=0.7\textwidth]{figures/driving/svg-crop.pdf}} \\
-    \caption{Training the policy network using the stochastic forward model. Gradients with respect to costs associated with predicted states are passed through the unrolled forward model into a policy network.}
-    \label{svg}
-\end{figure*}
         
 
-        This is shown in Figure \ref{svg}. The uncertainty cost $U$ is applied to states predicted by the forward model, and could reflect any measure of their likelihood under the distribution the training data is drawn from.
+        The uncertainty cost $U$ is applied to states predicted by the forward model, and could reflect any measure of their likelihood under the distribution the training data is drawn from.
         We propose here a general form based on the uncertainty of the dynamics model, which is calculated using dropout.
         Intuitively, if the dynamics model is given a state-action pair from the same distribution as $\mathcal{D}$ (which it was trained on), it will have low uncertainty about its prediction.
         If it is given a state-action pair which is outside this distribution, it will have high uncertainty.
@@ -192,7 +195,7 @@ Training the policy using a stochastic forward model involves solving the follow
     We note that this uncertainty estimate is the composition of differentiable functions: each of the models induced by applying a different dropout mask is differentiable, as is the covariance operator.
     Furthermore, we can summarize the covariance matrix by taking its trace (which is equal to the sum of its eigenvalues, or equivalently the sum of the variances of the outputs across each dimension), which is also a differentiable operation. This provides a scalar estimate of uncertainty which is differentiable with respect to the input.
 
-    More precisely, let $f_{\theta_1}, ..., f_{\theta_K}$ denote our prediction model with $K$ different dropout masks applied to its hidden units (this can also be viewed as changing its weights). We define our scalar measure of uncertainty $\Omega$ as follows:
+    More precisely, let $f_{\theta_1}, ..., f_{\theta_K}$ denote our prediction model with $K$ different dropout masks applied to its hidden units (this can also be viewed as changing its weights). We define our scalar measure of uncertainty $U$ as follows:
 %    Then for some set of inputs $(s_{1:t}, a_t, z_t)$, the uncertainty of the forward model is given by the covariance matrix of the outputs under the different dropout masks (up to some constants).
 
 %    \begin{align}
@@ -201,7 +204,7 @@ Training the policy using a stochastic forward model involves solving the follow
 
 
     \begin{align*}
-      \Omega(s_{1:t}, a_t, z_t) &= \mbox{tr} \Big[ \mbox{Cov} [\{ f_{\theta_k}(s_{1:t}, a_t, z_t) \}_{k=1}^K] \Big] \\
+      U(\hat{s}_{t+1}) &= \mbox{tr} \Big[ \mbox{Cov} [\{ f_{\theta_k}(s_{1:t}, a_t, z_t) \}_{k=1}^K] \Big] \\
       &= \sum_{j=1}^d \mbox{Var}(\{ f_{\theta_k}(s_{1:t}, a_t, z_t)_j \}_{k=1}^K)
     \end{align*}
 
@@ -210,7 +213,7 @@ Training the policy using a stochastic forward model involves solving the follow
 
 \begin{figure*}[t!]
     \centering
-    \subfigure{\includegraphics[width=0.8\textwidth]{figures/driving/ep_uncertainty_cost-crop.pdf}} \\
+    \subfigure{\includegraphics[width=0.65\textwidth]{figures/driving/ep_uncertainty_cost-crop.pdf}} \\
     \label{planning-methods}
     \caption{Training the policy network using the differentiable uncertainty cost, calculated using dropout.}
 \end{figure*}
@@ -218,18 +221,31 @@ Training the policy using a stochastic forward model involves solving the follow
 
 
 
-where $d$ is the dimensionality of the output. Minimizing this quantity with respect to actions encourages the policy network to produce actions which, when plugged into the forward model, will produce predictions which the forward model is confident about.
-    To compensate for differences in baseline uncertainty across different rollout lengths, we estimate the empirical mean and variance of $\Omega$ for every rollout length $t$ of the forward model over the training set, to obtain $\mu_{\Omega}^t$ and $\sigma_{\Omega}^t$. We then define our uncertainty cost as follows:
+where $d$ is the dimensionality of the output. Minimizing this quantity with respect to actions encourages the policy network to produce actions which, when plugged into the forward model, will produce predictions which the forward model is confident about \footnote{In practice, we apply an additional step to normalize this quantity across different modalities and rollout lengths, which is detailed in Appendix \ref{training-details-appendix}.}.
 
-    \begin{align}
-      U(\hat{s}_{t+1}) = U(s_{1:t}, a_t, z_t) = \Big [ \frac{\Omega(s_{1:t}, a_t, z_t) - \mu_\Omega^t}{\sigma_\Omega^t} \Big]_+
-    \end{align}
-
-    If the uncertainty estimate is lower than the mean uncertainty estimate on the training set for this rollout length, this loss will be zero.
-    These are cases where the model prediction is within normal uncertainty ranges. If the uncertainty estimate is higher, this loss exerts a pull to change the action so that the future state will be predicted with higher confidence by the forward model.
+%If the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, a natural choice would be to set $C(\hat{s}_{t+i}) = U(\hat{s}_{t+i}) = \frac{1}{2} \ell(\hat{s}_{t+k}, s_{t+k})$. This give a model-based imitation learning objective which simultaneously optimizes the policy cost and the uncertainty cost.
 
 
+A simple way to define $U$ given an initial sequence of states $s_{1:t}$ from $\mathcal{D}$ would be to set $U(\hat{s}_{t+k}) = \| \hat{s}_{t+k} - s_{t+k} \|_2$, which would encourage the policy network to output actions which lead to a similar trajectory as the one observed in the dataset.
+%Although this leads to a set of states which the model is presumably confident about, it may not be a trajectory which also satisfies the policy cost $\textit{C}$ unless the dataset consists of \textit{expert} trajectories.
+This leads to a set of states which the model is presumably confident about, but may not be a trajectory which also satisfies the policy cost $\textit{C}$ unless the dataset $\mathcal{D}$ consists of \textit{expert} trajectories.
+If this is the case, setting $C(\hat{s}_{t+i}) = U(\hat{s}_{t+i}) = \frac{1}{2} \| \hat{s}_{t+k} - s_{t+k} \|_2$ gives a model-based imitation learning objective which simultaneously optimizes the policy cost and the uncertainty cost. The problem then becomes:
 
+        \begin{align*}
+    \underset{\psi}{\mbox{ argmin }} \Big[ \sum_{i=1}^{T} \| \hat{s}_{t+i} - s_{t+i} \|_2 \Big],  \mbox{ such that: }
+    \begin{cases}
+      z_{t+i} \sim q_\phi(z | s_{1:t}, s_{t+1}) \\
+      \hat{a}_{t+i} \sim \pi_\psi(\hat{s}_{t+i-1}) \\
+      \hat{s}_{t+i} = f(\hat{s}_{t+i-1}, \hat{a}_{t+i}, z_{t+i}) \\
+      \end{cases}
+        \end{align*}
+
+
+%The advantage of using the more general cost above is that, assuming the dynamics model generalizes well within its training distribution, there will be multiple trajectories which it will be confident about, and the policy network can then choose one which best satisfies the cost it is trying to optimize.
+%However, if the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, a natural choice would be to set $C(\hat{s}_{t+i}) = U(\hat{s}_{t+i}) = \frac{1}{2} \ell(\hat{s}_{t+k}, s_{t+k})$. This give a model-based imitation learning objective which simultaneously optimizes the policy cost and the uncertainty cost.
+
+
+\begin{comment}
 A simple way to define $U$ given an initial sequence of states $s_{1:t}$ from $\mathcal{D}$ would be to set $U(\hat{s}_{t+k}) = \ell(\hat{s}_{t+k}, s_{t+k})$.
 This would encourage the policy network to output actions which lead to a similar trajectory as the one observed in the dataset.
 Although this leads to a set of states which the model is presumably confident about, it may not be a trajectory which also satisfies the policy cost $\textit{C}$.
@@ -245,6 +261,7 @@ However, if the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, 
       \hat{s}_{t+i} = f(\hat{s}_{t+i-1}, \hat{a}_{t+i}, z_{t+i}) \\
       \end{cases}
         \end{align*}
+\end{comment}
 
         We call the first approach \modelnamedrop, for Model-Predictive Policy with Uncertainty Regularization, and the second \modelnameil, for Model-Predictive Policy with Expert Regularization.
         A key feature of both approaches is that we optimize the objective over $T$ time steps, which is made possible by our learned dynamics model.
@@ -252,7 +269,7 @@ However, if the dataset $\mathcal{D}$ consists of \textit{expert} trajectories, 
 
 \subsection{Relationship to Bayesian Neural Networks}
 
-Our approach can be viewed as training a Bayesian neural network (BNN) \citep{Neal1995} with latent variables using variational inference \citep{Jordan1999, VAE}. 
+Our \modelnamedrop approach can be viewed as training a Bayesian neural network (BNN) \citep{Neal1995} with latent variables using variational inference \citep{Jordan1999, VAE}. 
 The distribution over model predictions for $s_{t+1}$ is given by:
 
 \begin{equation*}
@@ -268,7 +285,7 @@ We instead approximate it with the variational distribution $q$ parameterized by
 
 Here $q_\phi$ represents a distribution over latent variables represented using a posterior network with parameters $\phi$, which could be a diagonal Gaussian or the mixture distribution described in Section 2.1.
 The distribution $q_{\theta^*}$ is the \textit{dropout approximating distribution} over forward model parameters described in \citep{Gal16}, a mixture of two Gaussians with one mean fixed at zero.
-We show in Appendix \ref{bnn-details} that training the stochastic forward model with dropout by minimizing the loss function in Equation \ref{model-loss} is approximately minimizing the variational lower bound on the Kullback-Leibler divergence between this approximate posterior and the true posterior.
+We show in Appendix \ref{bnn-details} that training the stochastic forward model with dropout by minimizing the loss function in Equation \ref{model-loss} is approximately minimizing the Kullback-Leibler divergence between this approximate posterior and the true posterior.
 
 \begin{comment}
 This defines a mixture of two Gaussians with small variances over each row of each weight matrix in the forward model, with the mean of one Gaussian fixed at zero. The parameters of this distribution are the model weights, and samples can be drawn by applying different dropout masks. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$, 
@@ -325,9 +342,9 @@ Note also that the covariance matrix corresponding to the aleatoric uncertainty 
 We apply our approach to learn driving policies using a large-scale dataset of driving videos taken from traffic cameras.
 %To begin with, we summarize the dataset and planning environment which we used, with full details provided in Appendix \ref{i80-dataset-prep}.
 The Next Generation Simulation program's Interstate 80 (NGSIM I-80) dataset \citep{NGSIM} consists of 45 minutes of recordings from traffic cameras mounted over a stretch of highway.
-The driver behavior is complex and includes sudden accelerations, lane changes and merges which are difficult to predict; as such the dataset has high enviroment stochasticity.
+The driver behavior is complex and includes sudden accelerations, lane changes and merges which are difficult to predict; as such the dataset has high enviroment (or aleatoric) uncertainty.
 After recording, a viewpoint transformation is applied to rectify the perspective, and vehicles are identified and tracked throughout the video.
-This yields a total 5596 car trajectories, which we split into training ($80\%$), validation ($10\%$) and testing sets ($10\%$). In all, the dataset contains approximately 2 million transitions. 
+This yields a total 5596 car trajectories, which we split into training ($80\%$), validation ($10\%$) and testing sets ($10\%$). In all, the dataset contains approximately 2 million transitions.
 
 \begin{figure}[t]
   \centering
@@ -440,7 +457,8 @@ Additional video results for the model predictions and learned policies can be f
 
     \subsection{Policy Evaluation Results}
 
-    We evaluated several different policies using two measures: whether the controlled car reaches the end of the road segment without colliding into another car or driving off the road, and the distance travelled before the episode ends. Policies which collide quickly will travel shorter distances. All cars are initialized at the beginning of the road segment with the initial speed they were driving at in the dataset, and then are controlled by the policy being measured. We only report performance for cars in the testing trajectories, which were not used when training the forward model or policy network. 
+    We evaluated policies using two measures: whether the controlled car reaches the end of the road segment without colliding into another car or driving off the road, and the distance travelled before the episode ends. Policies which collide quickly will travel shorter distances.
+
 
 \begin{figure*}[t!]
   \centering
@@ -472,14 +490,15 @@ Additional video results for the model predictions and learned policies can be f
     }
     \subfigure[]{
       \begin{tabularx}{\textwidth}{|l| X|}
-    \hline
+        \hline
+        \small
     \textbf{Human} & The human trajectories observed in the testing set, which are all collision-free. \\
     \hline
     \textbf{No action} & A policy which outputs an action of zero, maintaining constant speed and direction.\\
     \hline
-    \textbf{1-step IL} & A policy network trained with single-step imitation learning to minimize the negative log-likelihood of the next human action observed in the dataset. \\
+    \textbf{1-step IL} & A policy network trained with single-step imitation learning. \\
     \hline
-    \textbf{SVG} & A policy network trained with stochastic value gradients, using our stochastic forward model. Here the latent variables are inferred using the posterior network for a state trajectory sampled from the training set. This is the same setup as \citep{SVG}, with the difference that the agent does not interact with the environment and learns from a fixed observational dataset. \\
+    \textbf{SVG} & A policy network trained with stochastic value gradients. This is the same setup as \citep{SVG}, with the difference that the agent does not interact with the environment and learns from a fixed observational dataset. \\
     \hline
     \textbf{VG} & A policy trained with value gradients, using the deterministic forward model. This is similar to SVG, but does not involve latent variables. \\
     \hline
@@ -489,23 +508,15 @@ Additional video results for the model predictions and learned policies can be f
     \hline
   \end{tabularx}
   }
-    \caption{a) Performance of policies learned using different methods, measured in success rate and distance travelled. Including a cost term penalizing the dynamics model's uncertainty is essential for good performance. Using the modified posterior distribution ($z$-dropout) improves performance when using the stochastic forward model. b) Training policies by performing longer rollouts through the environment dynamics model also significantly improves performance. c) Summary of compared methods.}
+    \caption{a) Performance different methods, measured in success rate and distance travelled. Including a cost term penalizing the dynamics model's uncertainty is essential for good performance. Using the modified posterior distribution ($z$-dropout) improves performance when using the stochastic forward model. b) Training policies by performing longer rollouts through the environment dynamics model also significantly improves performance. c) Summary of compared methods.}
     \label{performance}
 \end{figure*}
 
 
-    We compared our approach against several baselines which can also learn from observational data, which are described in Figure \ref{performance}c.
-    All policy networks have the same architecture, and all are fed the concatenation of the 20 previous states as input. They all output the parameters of a 2D diagonal Gaussian over action space, from which the next action is sampled.
-
-    The policy cost which we minimize for VG, SVG and \modelnamedrop is given by:
-
-    \begin{equation}
-      C = C_{\text{proximity}} + 0.2 \cdot C_\text{lane}
-    \end{equation}
-
-    where $C_{\text{proximity}}$ and $C_\text{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}.
+%Details of the training procedure and policy cost used are given in Appendix \ref{training-details-appendix}. 
 
 
+We compared our approach against several baselines which can also learn from observational data, which are described in Figure \ref{performance}c.
 Table \ref{performance}a compares performance for the different methods, optimized over different rollout lengths.
 The 1-step imitation learner, SVG and VG all perform poorly, and do not beat the simple baseline of performing no action.
 Both \modelnamedrop and \modelnameil significantly outperform the other methods. 
@@ -521,19 +532,17 @@ The stochastic model trained with a standard Gaussian posterior yields limited i
 However, the stochastic model trained with the $z$-dropout parameterization yields a significant improvement. 
 %The stochastic model trained with a standard Gaussian posterior yields a relatively minor improvement over the deterministic in the case of \modelnamedrop, but this difference is not statistically significant. 
 %The stochastic model trained with a standard Gaussian posterior yields an improvement over the deterministic model in the case of stochastic \modelnamedrop, despite the improvement in terms of visual quality shown in Figure \ref{prediction-results}. %, and gives much \textit{worse} performance for \modelnameil.
-At the URL we compare action-conditional predictions using both models.
+Comparisons of action-conditional predictions using both models can be seen at the URL.
 The stochastic model which uses the standard posterior is less responsive to input actions than the model trained with the modified posterior, which likely accounts for their difference in performance. 
 %We also found that using the modified $z$-dropout parameterization increases the sensitivity of the forward model to the input actions, as can be seen at the URL. 
 This lack of responsiveness is especially pronounced when the model is given latent variables inferred by the posterior network, as opposed to latent variables which are sampled from the prior.
-We also trained a policy network using \modelnamedrop with inferred rather than sampled latent variables, and observed a large drop in performance (see Appendix \ref{action-sensitivity-appendix}).
-
-A possible explanation is that the stochastic forward model uses the latent variables to encodes some factors of variation of the output which are in fact due to the actions.
-The sequence of latent variables sampled from the prior are independent, which may cause these effects to cancel each other over the sequence. However, the latent variables inferred from a sequence of states in the training set are highly dependent, and together they may explain away the effects of the actions.
-Our modified posterior distribution, which samples the latent variable from the prior rather than posterior with some probability, encourages the network to continue to extract as much information as possible from the input actions. This is because factors of variation in the output which are due to the actions cannot be encoded in the latent variables when they are sampled from the prior. 
+We also trained a policy network using \modelnamedrop with inferred rather than sampled latent variables, and observed a large drop in performance (see Appendix \ref{action-sensitivity-appendix}). A possible explanation is that the stochastic forward model uses the latent variables to encode some factors of variation of the output which are in fact due to the actions.
+The sequence of latent variables sampled from the prior are independent, which may cause these effects to partially cancel each other over the sequence. However, the latent variables inferred from a sequence of states in the training set are highly dependent, and together they may explain away the effects of the actions. 
+Our modified posterior distribution discourages the model from encoding action information in the latent variables, since factors of variation in the output which are due to the actions cannot be encoded in the latent variables when they are sampled from the prior, and the loss can better be lowered by predicting them from the actions instead.
 
 
-Figure \ref{performance} shows the performance of \modelnamedrop and \modelnameil for different rollout lengths.
-All methods see their performance improve dramatically as we increase the rollout length, which encourages the distribution of states the policy induces and the training distribution to match over longer time horizons. We also see that the stochastic model $z$-dropout outperforms the standard stochastic model as well as the deterministic model over most rollout lengths. 
+Figure \ref{performance}b shows the performance of \modelnamedrop and \modelnameil for different rollout lengths.
+All methods see their performance improve dramatically as we increase the rollout length, which encourages the distribution of states the policy induces and the training distribution to match over longer time horizons. We also see that the stochastic model with $z$-dropout outperforms the standard stochastic model as well as the deterministic model over most rollout lengths. 
 %\modelnameil performs similarly to the 1-step imitation learner when given a rollout length of 1.
 %This makes sense as they both optimize similar objectives.
 %However, \modelnameil's performance improves dramatically as we increase the rollout length, which encourages the distribution of states the policy induces and the expert's distribution to match over longer time horizons.
@@ -565,7 +574,7 @@ All methods see their performance improve dramatically as we increase the rollou
     \hline
     Method & Mean Distance (m) & Success Rate (\%) & Total Predicted Cost & $U$ \\
     \hhline{|=====|}
-    VG & 14.9 & 0.0 & 0.03 & 4087.4 \\
+    VG & 14.9 & 0.0 & 0.05 & 1081.2 \\
     \modelnamedrop & 168.8 & 73.5 & 0.13 & 0.4 \\
     \hline
   \end{tabular}
@@ -589,7 +598,7 @@ All methods see their performance improve dramatically as we increase the rollou
 
   \section{Conclusion}
 
-  In this work, we have proposed a general approach for learning policies from purely observational data. A key element is the use of a learned dynamics model which is used to optimize a policy cost over multiple time steps, and an uncertainty term which penalizes the divergence of the trajectories induced by the policy from the manifold it was trained on.
+  In this work, we have proposed a general approach for learning policies from purely observational data. The key elements are: i) a learned stochastic dynamics model, which is used to optimize a policy cost over multiple time steps, ii) an uncertainty term which penalizes the divergence of the trajectories induced by the policy from the manifold it was trained on, and iii) a modified posterior distribution which keeps the stochastic dynamics model responsive to input actions.
   We have applied this approach to a large observational dataset of real-world traffic recordings, and shown it can effectively learn policies for navigating in dense traffic, which outperform other approaches which learn from observational data.
   However, there is still a sizeable gap between the performance of our learned policies and human performance.
   We release both our dataset and environment, and encourage further research in this area to help narrow this gap.
@@ -708,7 +717,7 @@ The interface is set up the same way as environments in OpenAI Gym \citep{OpenAI
 \section{Bayesian Neural Network Formulation Details}
 \label{bnn-details}
 
-Our approach can be viewed as training a Bayesian neural network (BNN) \citep{Neal1995} with latent variables using variational inference \citep{Jordan1999, VAE}. 
+Our \modelnamedrop approach can be viewed as training a Bayesian neural network (BNN) \citep{Neal1995} with latent variables using variational inference \citep{Jordan1999, VAE}. 
 The distribution over model predictions for $s_{t+1}$ is given by:
 
 \begin{equation*}
@@ -723,16 +732,14 @@ We instead approximate it with the variational distribution $q$ parameterized by
 \end{align*}
 
 Here $q_\phi$ represents a distribution over latent variables parameterized by $\phi$, which could be a diagonal Gaussian or the mixture distribution described in Section 2.1. 
-%The first term is a diagonal Gaussian whose mean and variance are given by a posterior network $q_\phi(s_{1:t}, s_{t+1}))$ with parameters $\phi$.
-%The second is the \textit{dropout approximating distribution} described in \citep{Gal16}.
 The distribution $q_{\theta^*}$ is the \textit{dropout approximating distribution} over model parameters described in \citep{Gal16} (Section 3.2 of Supplement). 
 This defines a mixture of two Gaussians with small variances over each row of each weight matrix in the forward model, with the mean of one Gaussian fixed at zero. The parameters of this distribution are the model weights, and samples can be drawn by applying different dropout masks. The parameters of the variational distribution are thus $\eta = \{ \theta^*, \phi \}$, 
-and can be optimized by minimizing the variational lower bound, which is equivalent to minimizing the Kullback-Leibler divergence between the approximate posterior and true posterior:
+and can be optimized by maximizing the evidence lower bound, which is equivalent to minimizing the Kullback-Leibler divergence between the approximate posterior and true posterior:
 
 
 
 \begin{align}
-  \mathcal{L}_{VLB}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &= -\int \log p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz +  D_{KL}(q_\eta(\theta, z) || p_0(\theta, z))
+  \mathcal{L}_{ELBO}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &= \int \log p(s_{t+1} | f_\theta(s_{1:t}, a, z)) q_\eta(\theta, z) d\theta dz -  D_{KL}(q_\eta(\theta, z) || p_0(\theta, z))
   \label{elbo}
 \end{align}
 
@@ -752,24 +759,18 @@ Setting both Gaussians in $p_0(\theta)$ to have zero mean, the second KL term be
 Ignoring this term and approximating the integral in Equation \ref{elbo} using a single sample, we obtain:
 
 \begin{align*}
-  \mathcal{L}_{VLB}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &\approx -\log p(s_{t+1} | f_{\bar{\theta}}(s_{1:t}, a, z)) + D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) 
+  \mathcal{L}_{ELBO}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &\approx \log p(s_{t+1} | f_{\bar{\theta}}(s_{1:t}, a, z)) - D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) 
 \end{align*}
 
-where $\bar{\theta} \sim q_{\theta^*}(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Assuming a diagonal Gaussian likelihood on the outputs with constant variance $1/\beta$ and scaling by $\beta$, we recover our loss term in Equation \ref{model-loss}: a variational autoencoder trained with dropout. 
+where $\bar{\theta} \sim q_{\theta^*}(\theta)$ and $z \sim q_\phi(s_{1:t}, s_{t+1}))$. Assuming a diagonal Gaussian likelihood on the outputs with constant variance $1/\beta$, we can rewrite this as:
 
-Once this model is trained, for a given input we obtain an approximate distribution over outputs $p(\hat{s}_{t+1} | s_{1:t}, a)$ induced by the approximate posterior.
-We now show that the covariance of the outputs $\hat{s}_{t+1}$ can be decomposed into a sum of two covariance matrices which represent the aleatoric and epistemic uncertainty, using a similar approach as \citep{depeweg18}. 
-Using the conditional covariance formula we can write:
+\begin{align*}
+  \mathcal{L}_{ELBO}(\theta^*, \phi; s_{1:t}, s_{t+1}, a) &\approx -\frac{1}{\beta} \cdot \| s_{t+1} - f_{\bar{\theta}}(s_{1:t}, a, z) \| - D_{KL}(q_\phi(z | s_{1:t}, s_{t+1}) || p_0(z)) 
+\end{align*}
 
-\begin{align}
-  \mbox{cov}(\hat{s}_{t+1} | s_{1:t}, a) &= \mbox{cov}_\theta(\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]) + \mathbb{E}_\theta[\mbox{cov}_z(\hat{s}_{t+1} | s_{1:t}, a, \theta)]
-\end{align}
+Multiplying by $\beta$ does not change the maximum. We now see that maximizing this quantity is equivalent to minimizing our loss term in Equation \ref{model-loss}, i.e. training a variational autoencoder with dropout. 
+%this becomes the negative of our loss term in Equation \ref{model-loss}: a variational autoencoder trained with dropout. 
 
-The first term is the covariance of the random vector $\mathbb{E}_z[\hat{s}_{t+1} | s_{1:t}, a, \theta]$ when $\theta \sim q_{\theta^*}(\theta)$.
-This term ignores any contribution to the variance from $z$ and only considers the effect of $\theta$. As such it represents the epistemic uncertainty.
-The second term represents the covariance of the predictions obtained by sampling different latent variables $z \sim p(z)$ averaged over different dropout masks, and ignores any contribution to the variance from $\theta$. As such it represents the aleatoric uncertainty.
-Our uncertainty penalty explicitly penalizes the trace of the first matrix where the expectation over $z$ is approximated by a single sample from the prior.
-Note also that the covariance matrix corresponding to the aleatoric uncertainty will change depending on the inputs. This allows our approach to handle heteroscedastic environments, where the aleatoric uncertainty will vary for different inputs.
 
 
 
@@ -830,25 +831,54 @@ This consists of a 3-layer encoder followed by a two-layer fully connected netwo
 
     \subsection{Policy Models}
 
-    All policy networks have the same architecture: a 3-layer ConvNet with feature maps of size 64-128-256, followed by 3 fully-connected layers with 256 hidden units each, with the last layer outputting the parameters of a 2D Gaussian distribution over actions. All policy networks are trained with Adam with learning rate 0.0001. The \modelnameil and \modelnamedrop policies are trained by backpropagation through the unrolled forward model using the reparamaterization trick \citep{VAE}. The single-step imitation learner is trained to directly minimize the negative log-likelihood of the ground truth action in the dataset under the parameters output by the policy network. All MPUR policies use a weighting of $\lambda=0.5$ for the uncertainty cost. Additionally, we detach gradients of predicted costs coming into the states, to prevent the policy from lowering the predicted cost (which is speed-dependent) by slowing down. We found that not doing this can result in the policy slowing excessively, and then attempting to speed up only when another car gets close. We repeat the policy training with 3 random seeds for each method. 
+    All cars are initialized at the beginning of the road segment with the initial speed they were driving at in the dataset, and then are controlled by the policy being measured. We only report performance for cars in the testing trajectories, which were not used when training the forward model or policy network. 
+    
+
+    
+    All policy networks have the same architecture: a 3-layer ConvNet with feature maps of size 64-128-256 (which takes 20 consecutive frames as input), followed by 3 fully-connected layers with 256 hidden units each, with the last layer outputting the parameters of a 2D Gaussian distribution from which the action is sampled. All policy networks are trained with Adam with learning rate 0.0001. The \modelnameil and \modelnamedrop policies are trained by backpropagation through the unrolled forward model using the reparamaterization trick \citep{VAE}. The single-step imitation learner is trained to directly minimize the negative log-likelihood of the ground truth action in the dataset under the parameters output by the policy network. All MPUR policies use a weighting of $\lambda=0.5$ for the uncertainty cost. Additionally, we detach gradients of predicted costs coming into the states, to prevent the policy from lowering the predicted cost (which is speed-dependent) by slowing down. We found that not doing this can result in the policy slowing excessively, and then attempting to speed up only when another car gets close. We repeat the policy training with 3 random seeds for each method.
+
+        The policy cost which we minimize for VG, SVG and \modelnamedrop is given by:
+
+    \begin{equation}
+      C = C_{\text{proximity}} + 0.2 \cdot C_\text{lane}
+    \end{equation}
+
+    where $C_{\text{proximity}}$ and $C_\text{lane}$ are the proximity and lane costs described in Section \ref{dataset-and-planning}. This puts a higher priority on avoiding other cars while still encouraging the policy to stay within the lanes. \modelnamedrop additionally minimizes $U$, the model uncertainty cost described in Section \ref{uncertainty-minimization}.
+
+
+
+    When computing the uncertainty cost, to compensate for differences in baseline uncertainty across different rollout lengths, we normalize by the empirical mean and variance for every rollout length $t$ of the forward model over the training set, to obtain $\mu_{U}^t$ and $\sigma_{U}^t$. We then define our uncertainty cost as follows:
+
+    \begin{align}
+      U(\hat{s}_{t+1}) \leftarrow \Big [ \frac{U(\hat{s}_{t+1}) - \mu_U^t}{\sigma_U^t} \Big]_+
+    \end{align}
+
+    If the uncertainty estimate is lower than the mean uncertainty estimate on the training set for this rollout length, this loss will be zero.
+    These are cases where the model prediction is within normal uncertainty ranges. If the uncertainty estimate is higher, this loss exerts a pull to change the action so that the future state will be predicted with higher confidence by the forward model.
+    
     
 
 
 
-    \section{Action Sensitivity}
+    \section{Action Sensitivity Experiments}
     \label{action-sensitivity-appendix}
 
+    Here we report additional experiments measuring the effect of sampling from the prior compared to the posterior.
+    We see that there is a large drop in performance when sampling latent variables from the posterior instead of the prior.
+    This is consistent with the videos at the URL, which show that the forward model is less sensitive to actions when the latent variables are sampled from the posterior instead of the prior. Note that the $z$-dropout parameterization reduces this problem somewhat. 
 
 \begin{figure*}[h]
     \centering
     \subfigure{
 
-  \begin{tabular}{|lrr|}
+  \begin{tabular}{|llrr|}
     \hline
-    Method & Mean Distance & Success Rate \\
-    \hhline{|===|}
-    \modelnamedrop, $z_t \sim p(z)$ & 976 & 59.1 \\
-    \modelnamedrop, $z_t \sim q_\phi(s_{1:t}, s_{t+1})$ & 558 & 19.2 \\
+    Method & Sampling & Mean Distance & Success Rate \\
+    \hhline{|====|}
+    \modelnamedrop + $z$-dropout & $z_t \sim p(z)$ & 168.2 & 72.1 \\
+    \modelnamedrop & $z_t \sim p(z)$ & 157.4 & 63.6 \\
+    \modelnamedrop + $z$-dropout & $z_t \sim q_\phi(z | s_{1:t}, s_{t+1})$ & 126.1 & 30.8 \\
+    \modelnamedrop & $z_t \sim q_\phi(z | s_{1:t}, s_{t+1})$ & 86.0 & 19.2 \\
     \hline
   \end{tabular}
     }
