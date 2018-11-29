@@ -545,9 +545,10 @@ class Car:
             arrived = self.arrived_to_dst
             collision = self.collisions_per_frame > 0
             done = done or collision  # die if collide
-            max_rew = 2
+            lambda_lane = 0.2
+            max_rew = 1 + lambda_lane
             win = max_rew / (1 - gamma)
-            reward = max_rew - cost['pixel_proximity_cost'] - cost['lane_cost'] + win * arrived
+            reward = max_rew - cost['pixel_proximity_cost'] - lambda_lane * cost['lane_cost'] + win * arrived
 
             # So, observation must be just one damn numpy thingy
             observation = torch.cat((
@@ -555,7 +556,7 @@ class Car:
                 state_images.view(n, -1),
             ), dim=1).numpy()
 
-            return observation, reward, self.off_screen or done, self
+            return observation, reward, self.off_screen or done, dict(v=str(self), a=self.arrived_to_dst)
 
         return observation, cost, self.off_screen or done, self
 
@@ -621,7 +622,7 @@ class Simulator(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
-                 return_reward=False, gamma=0.99):
+                 return_reward=False, gamma=0.99, show_frame_count=True):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -671,6 +672,8 @@ class Simulator(core.Env):
         self.normalise_state = normalise_state
         self.return_reward = return_reward
         self.gamma = gamma
+        self.done = None
+        self.show_frame_count = show_frame_count
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -702,6 +705,7 @@ class Simulator(core.Env):
                 'locked': False,
             }
         self.user_is_done = False
+        self.done = False
 
     def policy_imitation(self, observation):
         s_mean = torch.Tensor([891.5662, 116.9270, 39.2255, -0.2574])
@@ -918,6 +922,7 @@ class Simulator(core.Env):
 
             # # save surface as image, for visualisation only
             # pygame.image.save(self.screen, "screen_surface.png")
+            # pygame.image.save(self.screen, f'screen-dumps/{self.dump_folder}/{self.frame:08d}.png')
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():

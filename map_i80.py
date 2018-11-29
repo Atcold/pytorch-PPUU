@@ -1,3 +1,4 @@
+# from os import getpid, system
 from os.path import isfile
 
 import torch
@@ -229,6 +230,9 @@ class I80(Simulator):
         pth = 'traffic-data/state-action-cost/data_i80_v0/data_stats.pth'
         self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
         self.cached_data_frames = dict()
+        self.episode = 0
+        self.train_indx = None
+        self.indx_order = None
 
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
@@ -278,8 +282,29 @@ class I80(Simulator):
         frame = vehicle_data.at[vehicle_data.index[0], 'Frame ID']
         return frame
 
-    def reset(self, frame=None, time_slot=None, vehicle_id=None):
+    def reset(self, frame=None, time_slot=None, vehicle_id=None, train_only=False):
+
+        # train_only = True  # uncomment this if doing RL, to set as default behaviour
+        if train_only:
+            ################################################################################
+            # Looping over training split ONLY
+            ################################################################################
+            if self.train_indx is None:
+                train_indx_file = '/home/atcold/Work/GitHub/pytorch-Traffic-Simulator/train_indx.pkl'
+                if not os.path.isfile(train_indx_file):
+                    import get_data_idx
+                print('Loading training indices')
+                with open(train_indx_file, 'rb') as f:
+                    self.train_indx = pickle.load(f)
+                self.indx_order = list(self.train_indx.keys())
+                self.random.shuffle(self.indx_order)
+            assert not(frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
+            time_slot, vehicle_id = self.train_indx[self.indx_order[self.episode % len(self.indx_order)]]
+            self.episode += 1
+            ################################################################################
+
         super().reset(control=(frame is None))
+        # print(f'\n > Env on process {os.getpid()} is resetting')
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
@@ -326,6 +351,8 @@ class I80(Simulator):
 
     def step(self, policy_action=None):
 
+        assert not self.done, 'Trying to step on an exhausted environment!'
+
         if self.normalise_action and policy_action is not None:
             np.multiply(policy_action, self.data_stats['a_std'], policy_action)  # multiply by the std
             np.add(policy_action, self.data_stats['a_mean'], policy_action)  # add the mean
@@ -353,11 +380,15 @@ class I80(Simulator):
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.look_ahead = self.look_ahead
-                    print(f'Controlling car {car.id}')
+                    # print(f'Controlling car {car.id}')
+                    # self.dump_folder = f'{self._t_slot}_{car.id}'
+                    # print(f'Creating folder {self.dump_folder}')
+                    # system(f'mkdir -p screen-dumps/{self.dump_folder}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
-        print(f'\r[t={self.frame}]', end='')
+        if self.show_frame_count:
+            print(f'\r[t={self.frame}]', end='')
 
         for v in self.vehicles[:]:
             if v.off_screen:
@@ -426,12 +457,12 @@ class I80(Simulator):
         self.frame += int(self.delta_t * 10)
 
         # Run out of frames?
-        done = self.frame >= self.max_frame or self.user_is_done
+        self.done = self.frame >= self.max_frame or self.user_is_done
 
         if self.controlled_car and self.controlled_car['locked']:
             return_ = self.controlled_car['locked'].get_last(
                 n=self.nb_states,
-                done=done,
+                done=self.done,
                 norm_state=self.normalise_state and self.data_stats,
                 return_reward=self.return_reward,
                 gamma=self.gamma,
@@ -439,7 +470,7 @@ class I80(Simulator):
             if return_: return return_
 
         # return observation, reward, done, info
-        return None, None, done, None
+        return None, None, self.done, None
 
     def _draw_lanes(self, surface, mode='human', offset=0):
 
