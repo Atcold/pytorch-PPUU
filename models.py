@@ -1244,9 +1244,13 @@ class FwdCNN_VAE(nn.Module):
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
-        ploss = Variable(torch.zeros(1))
-        ploss2 = Variable(torch.zeros(1))
-        if self.use_cuda:
+        if self.opt.alpha == 0:
+            ploss = Variable(torch.zeros(1))
+            ploss2 = Variable(torch.zeros(1))
+        elif self.opt.alpha > 0:
+            ploss = None
+            ploss2 = None
+        if self.use_cuda and ploss is not None:
             ploss = ploss.cuda()
             ploss2 = ploss2.cuda()
 
@@ -1271,15 +1275,21 @@ class FwdCNN_VAE(nn.Module):
                     z = self.reparameterize(mu, logvar, True)
                     logvar = torch.clamp(logvar, max = 4) # this can go to inf when taking exp(), so clamp it
                     if self.opt.model == 'fwd-cnn-vae-fp':
-                        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-                        kld /= bsize
+                        if self.opt.alpha == 0.0:
+                            kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+                            kld /= bsize
+                        elif self.opt.alpha > 0:
+                            kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
                     elif self.opt.model == 'fwd-cnn-vae-lp':
                         mu_logvar_prior = self.z_network_prior(h_x.view(bsize, -1)).view(bsize, 2, self.opt.nz)
                         mu_prior = mu_logvar_prior[:, 0]
                         logvar_prior = mu_logvar_prior[:, 1]
                         logvar_prior = torch.clamp(logvar_prior, max = 4) # this can go to inf when taking exp(), so clamp it
                         kld = utils.kl_criterion(mu, logvar, mu_prior, logvar_prior)
-                    ploss += kld
+                    if ploss is None:
+                        ploss = kld
+                    else:
+                        ploss += kld
             else:
                 if z_seq is not None:
                     z = z_seq[t]

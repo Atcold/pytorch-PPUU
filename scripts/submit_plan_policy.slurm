@@ -14,5 +14,5 @@
 #SBATCH --mail-user=mbh305@nyu.edu
 
 cd ../
-srun python plan_with_uncertainty.py -method $1 -model_dir $2 -policy_model_svg $3
+srun python plan_with_uncertainty.py -method $1 -model_dir $2 -policy_model_tm $3
 

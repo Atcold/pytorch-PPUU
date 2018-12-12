@@ -55,7 +55,7 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
-opt.save_dir = opt.model_dir + '/planning_results2/'
+opt.save_dir = opt.model_dir + '/planning_results5/'
 opt.height = 117
 opt.width = 24
 opt.h_height = 14

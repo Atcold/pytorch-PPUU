@@ -16,5 +16,5 @@
 module load python-3.6
 cd ../
 
-srun python train_mb_il.py -nfeature $1 -n_hidden $2 -seed $3 -npred $4 -lambda_c $5 -targetprop $6 -gamma $7 -batch_size $8 -curriculum_length $9 -actions_subsample ${10} -lambda_h ${11} -context_dim ${12}
+srun python train_mb_il.py -nfeature $1 -n_hidden $2 -seed $3 -npred $4 -lambda_c $5 -targetprop $6 -gamma $7 -batch_size $8 -curriculum_length $9 -actions_subsample ${10} -lambda_h ${11} -context_dim ${12} 
 

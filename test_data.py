@@ -38,11 +38,12 @@ def get_data_stats(targets, costs, min_dist, speed):
             
 
 dataloader = DataLoader(None, opt, dataset='i80')
+'''
 costs, min_dist, speed = [], [], []
 for i in range(500):
     inputs, actions, targets = dataloader.get_batch_fm('train')
     costs, min_dist, speed = get_data_stats(targets, costs, min_dist, speed)
-
+'''
 
 #fig = plt.figure()
 #ax = fig.add_subplot(111, projection='3d')

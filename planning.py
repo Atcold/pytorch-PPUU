@@ -50,8 +50,16 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     else:
         pred_images = torch.stack(pred_images, 1)[:, 0]
         pred_states = torch.stack(pred_states, 1)[:, 0]
+
+    if hasattr(model, 'cost'):
+        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), Variable(pred_states.data).view(-1, 4))
+        pred_costs = pred_costs.view(n_models, bsize, npred, 2)
+        pred_costs = pred_costs[:, :, :, 0] + model.opt.lambda_l*pred_costs[:, :, :, 1]
+        if detach:
+            pred_costs = Variable(pred_costs.data)
         
-    pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+#    pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
     pred_states = pred_states.view(n_models, bsize, npred, -1)
@@ -302,11 +310,16 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     else:
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+
+    _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
         
-
-    _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
-
-    return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
+    '''
+    if opt.depeweg == 1:
+        _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+    else:
+        _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+    '''
+    return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss, c_mean, c_var], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
 

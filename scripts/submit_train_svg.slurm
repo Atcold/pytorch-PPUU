@@ -16,5 +16,5 @@
 module load python-3.6
 cd ../
 
-srun python train_svg.py -npred $1 -u_reg $2 -lrt_z $3 -z_updates $4 -batch_size $5 -lambda_l $6 -infer_z $7 -lambda_a $8
+srun python train_svg.py -npred $1 -u_reg $2 -lrt_z $3 -z_updates $4 -batch_size $5 -lambda_l $6 -infer_z $7 -lambda_a $8 -seed $9
 

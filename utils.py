@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 
+
+
 def printnorm(x):
     print(x.norm())
 
@@ -271,10 +273,11 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     del pred_right, _
 
 
-def save_movie(dirname, images, states, costs, actions=None, mu=None, std=None, pytorch=True):
+def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=None, pytorch=True):
     images = images.data if hasattr(images, 'data') else images
     states = states.data if hasattr(states, 'data') else states
-    costs = costs.data if hasattr(costs, 'data') else costs
+    if costs is not None:
+        costs = costs.data if hasattr(costs, 'data') else costs
     if actions is not None:
         actions = actions.data if hasattr(actions, 'data') else actions
 

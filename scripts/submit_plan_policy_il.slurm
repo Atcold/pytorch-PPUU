@@ -14,5 +14,5 @@
 #SBATCH --mail-user=mbh305@nyu.edu
 
 cd ../
-srun python plan_with_uncertainty.py -method policy-il -npred 20 
+srun python plan_with_uncertainty.py -method policy-il -npred 1
 

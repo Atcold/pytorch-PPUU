@@ -54,7 +54,7 @@ os.system('mkdir -p ' + opt.model_dir)
 
 dataloader = DataLoader(None, opt, opt.dataset)
 
-opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}'
+opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}-seed={opt.seed}'
 
 if 'vae' in opt.model or '-ten-' in opt.model:
     opt.model_file += f'-nz={opt.nz}-beta={opt.beta}'

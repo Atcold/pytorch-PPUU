@@ -41,14 +41,16 @@ parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-learned_cost', type=int, default=1)
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
+parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
+#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-test_only', type=int, default=0)
 parser.add_argument('-save_movies', type=int, default=0)
+parser.add_argument('-depeweg', type=int, default=0)
+parser.add_argument('-l2reg', type=float, default=0.0)
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -60,7 +62,7 @@ opt.h_width = 3
 opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 
-os.system('mkdir -p ' + opt.model_dir + '/policy_networks/')
+os.system('mkdir -p ' + opt.model_dir + '/policy_networks2/')
 
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
@@ -77,6 +79,7 @@ opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
 model = torch.load(opt.model_dir + opt.mfile)
 if type(model) is dict: model = model['model']
 model.disable_unet=False
+model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
 if opt.value_model != '':
     value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
@@ -113,6 +116,7 @@ opt.model_file += f'-lrtz={opt.lrt_z}'
 opt.model_file += f'-updatez={opt.z_updates}'
 opt.model_file += f'-inferz={opt.infer_z}'
 opt.model_file += f'-learnedcost={opt.learned_cost}'
+opt.model_file += f'-depeweg={opt.depeweg}'
 opt.model_file += f'-seed={opt.seed}'
 
 if opt.value_model == '':
@@ -146,11 +150,20 @@ def train(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates, infer_z=(opt.infer_z==1))
-        loss_c = pred[2]
-        loss_l = pred[3]
-        loss_u = pred[4]
-        loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l + opt.lambda_a * loss_a
+        if opt.depeweg == 1:
+            c_mean = pred[5].squeeze().mean()
+            c_var = pred[6].squeeze().mean()
+            loss_c = c_mean
+            loss_u = c_var
+            loss_policy = loss_c + opt.u_reg*loss_u
+            loss_a = torch.zeros(1)
+            loss_l = torch.zeros(1)
+        else:
+            loss_c = pred[2]
+            loss_l = pred[3]
+            loss_u = pred[4]
+            loss_a = (actions.norm(2, 2)**2).mean()
+            loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l + opt.lambda_a * loss_a
         if not math.isnan(loss_policy.item()):
             loss_policy.backward()
             grad_norm += utils.grad_norm(model.policy_net).item()
@@ -238,6 +251,14 @@ for i in range(500):
                 'npred': npred, 
                 'n_iter': n_iter}, 
                opt.model_file + '.model')
+    if i % 100 == 0:
+        torch.save({'model': model, 
+                    'optimizer': optimizer.state_dict(),
+                    'opt': opt, 
+                    'npred': npred, 
+                    'n_iter': n_iter}, 
+                   opt.model_file + f'step{i}.model')
+
     model.intype('gpu')
     log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}, p: {valid_losses[4]:.4f}]'
     print(log_string)
