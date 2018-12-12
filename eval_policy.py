@@ -275,11 +275,6 @@ for j in range(n_test):
         mu_list, std_list = None, None
     if len(images) > 3:
         utils.save_movie('{}/real/'.format(movie_dir), images.float() / 255.0, states, costs, actions=actions, mu=mu_list, std=std_list, pytorch=True)
-    '''
-    if 'ten' in opt.mfile and ('mbil' not in opt.mfile):
-        for i in range(opt.n_rollouts):
-            utils.save_movie('{}/imagined/rollout{}/'.format(movie_dir, i), pred[0][i].data, pred[1][i].data, pred[2][i].data, pytorch=True)
-    '''
 
 mean_time_to_collision = torch.Tensor(times_to_collision).mean()
 median_time_to_collision = torch.Tensor(times_to_collision).median()
