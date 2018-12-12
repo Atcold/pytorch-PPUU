@@ -25,18 +25,15 @@ parser.add_argument('-ncond', type=int, default=20, help='number of conditioning
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=8)
 parser.add_argument('-nfeature', type=int, default=256)
-parser.add_argument('-beta', type=float, default=0.0, help='weight coefficient of prior loss')
+parser.add_argument('-beta', type=float, default=0.0, help='coefficient for KL term in VAE')
 parser.add_argument('-ploss', type=str, default='hinge')
 parser.add_argument('-z_dropout', type=float, default=0.0, help='set z=0 with this probability')
 parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
-parser.add_argument('-alpha', type=float, default=1.0, help='for alpha-divergence training')
-parser.add_argument('-l2reg', type=float, default=0.0, help='weight decay')
-parser.add_argument('-mc_samples', type=int, default=10, help='MC samples for alpha-divergence training')
 parser.add_argument('-nz', type=int, default=32)
 parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
-parser.add_argument('-warmstart', type=int, default=0)
+parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', type=int, default=0)
 opt = parser.parse_args()
 
@@ -52,33 +49,20 @@ dataloader = DataLoader(None, opt, opt.dataset)
 # define model file name
 opt.model_file = f'{opt.model_dir}/model={opt.model}-layers={opt.layers}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nfeature={opt.nfeature}-dropout={opt.dropout}'
 
-if ('vae' in opt.model) or ('fwd-cnn-ten' in opt.model):
+if 'vae' in opt.model:
     opt.model_file += f'-nz={opt.nz}'
     opt.model_file += f'-beta={opt.beta}'
     opt.model_file += f'-zdropout={opt.z_dropout}'
 
-if ('fwd-cnn-ten' in opt.model) and opt.beta > 0:
-    if opt.ploss == 'pdf':
-        opt.model_file += f'-nmix={opt.n_mixture}'
-
-
 if opt.grad_clip != -1:
     opt.model_file += f'-gclip={opt.grad_clip}'
-
-
-if opt.alpha > 0:
-    opt.model_file += f'-alpha={opt.alpha}'
-    opt.model_file += f'-mcsamp={opt.mc_samples}'
-
-if opt.l2reg > 0:
-    opt.model_file += f'-l2reg={opt.l2reg}'
 
 opt.model_file += f'-warmstart={opt.warmstart}'
 opt.model_file += f'-seed={opt.seed}'
 print(f'[will save model as: {opt.model_file}]')
 
 
-# specific to the I-80 dataset
+# parameters specific to the I-80 dataset
 opt.n_inputs = 4
 opt.n_actions = 2
 opt.height = 117
@@ -92,6 +76,8 @@ elif opt.layers == 4:
 opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 mfile = opt.model_file + '.model'
+
+# load previous checkpoint or create new model
 if os.path.isfile(mfile):
     print(f'[loading previous checkpoint: {mfile}]')
     checkpoint = torch.load(mfile)
@@ -102,31 +88,20 @@ if os.path.isfile(mfile):
     n_iter = checkpoint['n_iter']
     utils.log(opt.model_file + '.log', '[resuming from checkpoint]')
 else:
-    # create new model
     # specify deterministic model we use to initialize parameters with
     if opt.warmstart == 1:
         prev_model = f'{opt.model_dir}/model=fwd-cnn-layers={opt.layers}-bsize=8-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-dropout={opt.dropout}-gclip=5.0'
-
-        if opt.alpha > 0:
-            prev_model += f'-alpha={opt.alpha}'
-            prev_model += f'-mcsamp={opt.mc_samples}'
-
-        if opt.l2reg > 0:
-            prev_model += f'-l2reg={opt.l2reg}'
-
         prev_model += '-warmstart=0-seed=1.step200000.model'
     else:
         prev_model = ''
 
     if opt.model == 'fwd-cnn':
+        # deterministic model
         model = models.FwdCNN(opt, mfile=prev_model)
-    elif opt.model == 'fwd-cnn-ten':
-        model = models.FwdCNN_TEN(opt, mfile=prev_model)
     elif opt.model == 'fwd-cnn-vae-fp':
+        # stochastic VAE model
         model = models.FwdCNN_VAE(opt, mfile=prev_model)
-    elif opt.model == 'fwd-cnn-vae-lp':
-        model = models.FwdCNN_VAE(opt, mfile=prev_model)
-    optimizer = optim.Adam(model.parameters(), opt.lrt, weight_decay = opt.l2reg)
+    optimizer = optim.Adam(model.parameters(), opt.lrt)
     n_iter = 0
 
 model.intype('gpu')
@@ -174,27 +149,10 @@ def train(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        if opt.alpha > 0:
-            inputs_ = expand(inputs, None, opt.mc_samples)
-            targets_, actions_ = expand(targets, actions, opt.mc_samples)
-            pred, loss_p = model(inputs_, actions_, targets_, z_dropout=opt.z_dropout)
-            loss_i, loss_s = compute_loss(targets_, pred, reduction = 'none')
-            loss_i = loss_i.mean(4).mean(3).mean(2).mean(1).view(opt.mc_samples, -1)
-            loss_s = loss_s.mean(2).mean(1).view(opt.mc_samples, -1)
-            loss = loss_i + loss_s 
-            if opt.beta > 0:
-                loss = loss + opt.beta*loss_p[0].view(opt.mc_samples, -1)
-            loss = (-1.0/opt.alpha)*utils.log_sum_exp(-opt.alpha*loss, dim=0)
-            loss = loss.mean() 
-            loss_i = loss_i.mean()
-            loss_s = loss_s.mean()
-            loss_p = loss_p[0].mean()
-#            loss = loss_i + loss_s + opt.beta*loss_p[0]
-        else:
-            pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
-            loss_p = loss_p[0]
-            loss_i, loss_s = compute_loss(targets, pred)
-            loss = loss_i + loss_s + opt.beta*loss_p
+        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        loss_p = loss_p[0]
+        loss_i, loss_s = compute_loss(targets, pred)
+        loss = loss_i + loss_s + opt.beta*loss_p
 
         # VAEs get NaN loss sometimes, so check for it
         if not math.isnan(loss.item()):
@@ -223,31 +181,11 @@ def test(nbatches):
         targets = utils.make_variables(targets)
         actions = Variable(actions)
 
-        if opt.alpha > 0:
-            inputs_ = expand(inputs, None, opt.mc_samples)
-            targets_, actions_ = expand(targets, actions, opt.mc_samples)
-            pred, loss_p = model(inputs_, actions_, targets_, z_dropout=opt.z_dropout)
-            loss_i, loss_s = compute_loss(targets_, pred, reduction = 'none')
-            loss_i = loss_i.mean(4).mean(3).mean(2).mean(1).view(opt.mc_samples, -1)
-            loss_s = loss_s.mean(2).mean(1).view(opt.mc_samples, -1)
-            loss = loss_i + loss_s
-            if opt.beta > 0:
-                loss = loss + opt.beta*loss_p[0].view(opt.mc_samples, -1)
-            loss = (-1.0/opt.alpha)*utils.log_sum_exp(-opt.alpha*loss, dim=0)
-            loss = loss.mean() 
-            loss_i = loss_i.mean()
-            loss_s = loss_s.mean()
-            loss_p = loss_p[0].mean()
-        else:
-            pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
-            loss_p = loss_p[0]
-            loss_i, loss_s = compute_loss(targets, pred)
-            loss = loss_i + loss_s + opt.beta*loss_p
+        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        loss_p = loss_p[0]
+        loss_i, loss_s = compute_loss(targets, pred)
+        loss = loss_i + loss_s + opt.beta*loss_p
 
-
-
-#        pred, loss_p = model(inputs, actions, targets, z_dropout=0)
-#        loss_i, loss_s = compute_loss(targets, pred)
         total_loss_i += loss_i.item()
         total_loss_s += loss_s.item()
         total_loss_p += loss_p.item()
