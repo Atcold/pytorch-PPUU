@@ -9,7 +9,7 @@ import importlib
 
 
 #################################################
-# Train an action-conditional forward model
+# Train a policy / controller
 #################################################
 
 parser = argparse.ArgumentParser()
@@ -69,15 +69,13 @@ torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
 
 
-
 opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
-
 
 
 # load the model
 model = torch.load(opt.model_dir + opt.mfile)
 if type(model) is dict: model = model['model']
-model.disable_unet=False
+model.disable_unet = False
 model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
 if opt.value_model != '':
@@ -125,14 +123,11 @@ if opt.learned_cost == 1:
 print(f'[will save as: {opt.model_file}]')
 
 
-
-
 dataloader = DataLoader(None, opt, opt.dataset)
 model.train()
 model.opt.u_hinge = opt.u_hinge
 planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred) 
 model.eval()
-
 
 
 def train(nbatches, npred):
@@ -174,7 +169,6 @@ def train(nbatches, npred):
                 if pred_adv[0] is not None:
                     utils.save_movie(opt.model_file + f'.mov/adversarial/mov{b}', pred_adv[0][b], pred_adv[1][b], None, actions[b])
 
-
         del inputs, actions, targets, pred
 
     total_loss_c /= n_updates
@@ -184,6 +178,7 @@ def train(nbatches, npred):
     total_loss_policy /= n_updates
     print(f'[avg grad norm: {grad_norm / n_updates}]')
     return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
+
 
 def test(nbatches, npred):
     model.train()
@@ -220,10 +215,6 @@ def test(nbatches, npred):
     return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
 
 
-
-
-
-
 print('[training]')
 utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
 npred = opt.npred if opt.npred != -1 else 16
@@ -251,4 +242,3 @@ for i in range(500):
     log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}, p: {valid_losses[4]:.4f}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
-
