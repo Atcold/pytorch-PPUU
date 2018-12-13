@@ -2,16 +2,18 @@
 
 ## Usage
 
-The first step is to train the forward dynamics model (`fm`) on the observational dataset. This can be done by running:
+The first step is to train the forward dynamics model (`fm`) on the observational dataset.
+This can be done by running:
 
 ```
 python train_fm.py -model_dir <fm_save_path>
 ```
 
-Once the dynamics model is trained, it can be used to train the policy network. This is done by running:
+Once the dynamics model is trained, it can be used to train the policy network, using `MPUR`, `MPER`, or `IL`.
+This is done by running:
 
 ```
-python train_policy_net.py -model_dir <fm_load_path> -mfile <fm_filename>
+python train_{MPUR,MPER,IL}.py -model_dir <fm_load_path> -mfile <fm_filename>
 ```
 
 To evaluate a trained policy, run the script `eval_policy.py`. 
