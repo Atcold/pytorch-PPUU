@@ -40,8 +40,11 @@ parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-learned_cost', type=int, default=1)
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model', help='dynamics model used to train the policy network')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
+M1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+     'beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model'
+M2 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
+     'warmstart=0-seed=1.step200000.model'
+parser.add_argument('-mfile', type=str, default=M1, help='dynamics model used to train the policy network')
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
@@ -136,7 +139,10 @@ def train(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z, n_updates_z = opt.z_updates, infer_z=(opt.infer_z==1))
+        pred, actions, pred_adv = planning.train_policy_net_svg(
+            model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
+            n_updates_z = opt.z_updates, infer_z=(opt.infer_z == 1)
+        )
         loss_c = pred[2]
         loss_l = pred[3]
         loss_u = pred[4]
@@ -163,7 +169,9 @@ def train(nbatches, npred):
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
                 if pred_adv[0] is not None:
-                    utils.save_movie(opt.model_file + f'.mov/adversarial/mov{b}', pred_adv[0][b], pred_adv[1][b], None, actions[b])
+                    utils.save_movie(
+                        opt.model_file + f'.mov/adversarial/mov{b}', pred_adv[0][b], pred_adv[1][b], None, actions[b]
+                    )
 
         del inputs, actions, targets, pred
 
@@ -185,7 +193,8 @@ def test(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, _ = planning.train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, lrt_z=1.0, n_updates_z = 0)
+        pred, actions, _ = planning.train_policy_net_svg(model, inputs, targets, car_sizes,
+                                                         n_models=10, lrt_z=1.0, n_updates_z=0)
         loss_c = pred[2]
         loss_l = pred[3]
         loss_u = pred[4]
@@ -235,6 +244,9 @@ for i in range(500):
                    opt.model_file + f'step{i}.model')
 
     model.intype('gpu')
-    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, a: {valid_losses[3]:.4f}, p: {valid_losses[4]:.4f}]'
+    log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, ' + \
+                 f'u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | ' + \
+                 f'test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, ' + \
+                 f'a: {valid_losses[3]:.4f}, p: {valid_losses[4]:.4f}]'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
