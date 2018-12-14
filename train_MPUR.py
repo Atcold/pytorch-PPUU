@@ -1,7 +1,6 @@
 import torch, numpy, argparse, pdb, os, time, math, random
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import models, planning
@@ -58,8 +57,7 @@ opt.height = 117
 opt.width = 24
 opt.h_height = 14
 opt.h_width = 3
-opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
-
+opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
 
 os.system('mkdir -p ' + opt.model_dir + '/policy_networks2/')
 
@@ -68,9 +66,7 @@ numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
 
-
 opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
-
 
 # load the model
 model = torch.load(opt.model_dir + opt.mfile)
@@ -83,11 +79,11 @@ if opt.value_model != '':
     model.value_function = value_function
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
 n_iter = 0
-stats = torch.load('/home/mbhenaff/scratch/data/data_i80_v4/data_stats.pth')
-model.stats=stats
+stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/data_stats.pth')
+model.stats = stats
 if 'ten' in opt.mfile:
-    pzfile = opt.model_dir + opt.mfile + '.pz'
-    p_z = torch.load(pzfile)
+    p_z_file = opt.model_dir + opt.mfile + '.pz'
+    p_z = torch.load(p_z_file)
     model.p_z = p_z
 model.intype('gpu')
 model.cuda()

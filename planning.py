@@ -3,19 +3,17 @@ import torch.nn as nn
 import torch.legacy.nn as lnn
 import torch.nn.functional as F
 import torch.optim as optim
-#import torchvision
-from torch.autograd import Variable
 import random, pdb, copy, os, math, numpy, copy, time
 import utils
+
 
 ##################################################################################
 # functions for planning and training policy networks using the forward model
 ##################################################################################
 
-
-
 # estimate prediction uncertainty using dropout
-def compute_uncertainty_batch(model, input_images, input_states, actions, targets, car_sizes, npred=200, n_models=10, Z=None, dirname=None, detach=True, compute_total_loss = False):
+def compute_uncertainty_batch(model, input_images, input_states, actions, targets, car_sizes, npred=200, n_models=10,
+                              Z=None, dirname=None, detach=True, compute_total_loss=False):
     bsize = input_images.size(0)
     input_images = input_images.unsqueeze(0).expand(n_models, bsize, model.opt.ncond, 3, model.opt.height, model.opt.width)
     input_states = input_states.unsqueeze(0).expand(n_models, bsize, model.opt.ncond, 4)
@@ -36,8 +34,8 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         z = Z_rep[:, t]
         pred_image, pred_state = model.forward_single_step(input_images, input_states, actions[:, t], z)
         if detach:
-            pred_image = Variable(pred_image.data)
-            pred_state = Variable(pred_state.data)
+            pred_image = pred_image.data
+            pred_state = pred_state.data
             
         input_images = torch.cat((input_images[:, 1:], pred_image), 1)
         input_states = torch.cat((input_states[:, 1:], pred_state.unsqueeze(1)), 1)
@@ -52,14 +50,15 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         pred_states = torch.stack(pred_states, 1)[:, 0]
 
     if hasattr(model, 'cost'):
-        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), Variable(pred_states.data).view(-1, 4))
+        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), pred_states.data.view(-1, 4))
         pred_costs = pred_costs.view(n_models, bsize, npred, 2)
-        pred_costs = pred_costs[:, :, :, 0] + model.opt.lambda_l*pred_costs[:, :, :, 1]
+        pred_costs = pred_costs[:, :, :, 0] + model.opt.lambda_l * pred_costs[:, :, :, 1]
         if detach:
-            pred_costs = Variable(pred_costs.data)
+            pred_costs = pred_costs.data
         
-#    pred_costs, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
-
+    # pred_costs, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes.unsqueeze(0).expand(
+    # n_models, bsize, 2).contiguous().view(n_models*bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'],
+    # s_std=model.stats['s_std'])
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
     pred_states = pred_states.view(n_models, bsize, npred, -1)
@@ -73,15 +72,16 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     pred_states = pred_states.view(n_models*bsize, npred, 4)
 
     if hasattr(model, 'value_function'):
-        pred_v = model.value_function(pred_images[:, -model.value_function.opt.ncond:], Variable(pred_states[:, -model.value_function.opt.ncond:].data))
+        pred_v = model.value_function(pred_images[:, -model.value_function.opt.ncond:],
+                                      pred_states[:, -model.value_function.opt.ncond:].data)
         if detach:
-            pred_v = Variable(pred_v.data)
+            pred_v = pred_v.data
         pred_v = pred_v.view(n_models, bsize)
         pred_v_var = torch.var(pred_v, 0).mean()
         pred_v_mean = torch.mean(pred_v, 0)
     else:
-        pred_v_mean = Variable(torch.zeros(bsize).cuda())
-        pred_v_var = Variable(torch.zeros(bsize).cuda())
+        pred_v_mean = torch.zeros(bsize).cuda()
+        pred_v_var = torch.zeros(bsize).cuda()
 
     if compute_total_loss:
         # this is the uncertainty loss of different terms together. We don't include the uncertainty
@@ -95,6 +95,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
 
     return pred_images_var, pred_states_var, pred_costs_var, pred_v_var, pred_costs_mean, pred_v_mean, total_u_loss
 
+
 # compute uncertainty estimates for the ground truth actions in the training set. 
 # this will give us an idea of what normal ranges are using actions the forward model 
 # was trained on
@@ -105,18 +106,20 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
     for i in range(n_batches):
         print('[estimating normal uncertainty ranges: {:2.1%}]'.format(float(i)/n_batches), end="\r")
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
-        pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = compute_uncertainty_batch(model, inputs[0], inputs[1], actions, targets, car_sizes, npred=npred, n_models=10, detach=True)
+        pred_images_var, pred_states_var, pred_costs_var, pred_v_var, _, _, _ = compute_uncertainty_batch(
+            model, inputs[0], inputs[1], actions, targets, car_sizes, npred=npred, n_models=10, detach=True
+        )
         u_images.append(pred_images_var)
         u_states.append(pred_states_var)
         u_costs.append(pred_costs_var)
         u_values.append(pred_v_var)
-        speeds.append(inputs[1][:, :, 2:].norm(2, 2))
+        # speeds.append(inputs[1][:, :, 2:].norm(2, 2))
         
     u_images = torch.stack(u_images).view(-1, npred)
     u_states = torch.stack(u_states).view(-1, npred)
     u_costs = torch.stack(u_costs).view(-1, npred)
     u_values = torch.stack(u_values)
-    speeds = torch.stack(speeds)
+    # speeds = torch.stack(speeds)
 
     model.u_images_mean = u_images.mean(0)
     model.u_states_mean = u_states.mean(0)
@@ -130,25 +133,21 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
     dataloader.opt.batch_size = data_bsize
 
 
-
-
-
-
-
-
-def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True, bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10, save_opt_stats=True, nexec=1, lambda_l = 0.0):
+def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True,
+                          bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10,
+                          save_opt_stats=True, nexec=1, lambda_l = 0.0):
 
     if use_action_buffer:
-        actions = Variable(torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda())
+        actions = torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda()
     elif actions is None:
-        actions = Variable(torch.zeros(npred, model.opt.n_actions).cuda())
+        actions = torch.zeros(npred, model.opt.n_actions).cuda()
 
     if normalize:
         input_images = input_images.clone().float().div_(255.0)
         input_states -= model.stats['s_mean'].view(1, 4).expand(input_states.size())
         input_states /= model.stats['s_std'].view(1, 4).expand(input_states.size())
-        input_images = Variable(input_images.cuda()).unsqueeze(0)
-        input_states = Variable(input_states.cuda()).unsqueeze(0)
+        input_images = input_images.cuda().unsqueeze(0)
+        input_states = input_states.cuda().unsqueeze(0)
         
     input_images = input_images.expand(n_futures, model.opt.ncond, 3, model.opt.height, model.opt.width)
     input_states = input_states.expand(n_futures, model.opt.ncond, 4)
@@ -168,7 +167,9 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         print('loading opt stats')
         optimizer_a.load_state_dict(model.optimizer_a_stats)
 
-    gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred + 1)])).float().cuda()).unsqueeze(0).expand(n_futures, npred + 1)
+    gamma_mask = torch.from_numpy(
+        numpy.array([0.99**t for t in range(npred + 1)])
+    ).float().cuda().unsqueeze(0).expand(n_futures, npred + 1)
 
     for i in range(bprop_niter):
         optimizer_a.zero_grad()
@@ -178,29 +179,37 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         model.eval()
         pred, _ = model.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
         pred_images, pred_states = pred[0], pred[1]
-        proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes.expand(n_futures, 2), unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
-
+        proximity_cost, _ = utils.proximity_cost(
+            pred_images, pred_states.data, car_sizes.expand(n_futures, 2),
+            unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
+        )
 
         if hasattr(model, 'value_function'):
-            v = model.value_function(pred[0][:, -model.value_function.opt.ncond:].contiguous(), Variable(pred[1][:, -model.value_function.opt.ncond:].contiguous().data))
+            v = model.value_function(pred[0][:, -model.value_function.opt.ncond:].contiguous(),
+                                     pred[1][:, -model.value_function.opt.ncond:].contiguous().data)
         else:
-            v = Variable(torch.zeros(n_futures, 1).cuda())
+            v = torch.zeros(n_futures, 1).cuda()
         proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
         loss = proximity_loss
 
         if u_reg > 0.0:
             model.train()
-            _, _, _, _, _, _, uncertainty_loss = compute_uncertainty_batch(model, input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models, Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True)
+            _, _, _, _, _, _, uncertainty_loss = compute_uncertainty_batch(
+                model, input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models,
+                Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True
+            )
             loss = loss + u_reg * uncertainty_loss
         else:
-            uncertainty_loss = Variable(torch.zeros(1))
+            uncertainty_loss = torch.zeros(1)
         
         lane_loss = torch.mean(utils.lane_cost(pred_images, car_sizes.expand(n_futures, 2)) * gamma_mask[:, :npred])
-#        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
-#        lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
+        # lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
+        # lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
         loss = loss + lambda_l * lane_loss
         loss.backward()
-        print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())) 
+        print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(
+            i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())
+        )
         torch.nn.utils.clip_grad_norm([actions], 1)
         optimizer_a.step()
 
@@ -217,14 +226,8 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
     return a.cpu().numpy()
 
 
-
-
-
-
-
-
-
-def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1, n_updates_z = 10, infer_z = False):
+def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
+                         n_updates_z = 10, infer_z=False):
     
     input_images_orig, input_states_orig = inputs
     target_images, target_states, target_costs = targets
@@ -236,7 +239,7 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
     pred_images_adv, pred_states_adv, pred_costs_adv, pred_actions_adv = None, None, None, None
     
-    total_ploss = Variable(torch.zeros(1).cuda())
+    # total_ploss = torch.zeros(1).cuda()
     # sample futures
     Z = model.sample_z(npred * bsize, method=sampling_method)
     if type(Z) is list: Z = Z[0]
@@ -268,38 +271,45 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
     input_images = input_images_orig.clone()
     input_states = input_states_orig.clone()
     if n_updates_z > 0:
-        Z_adv = Variable(Z.data.clone())
+        Z_adv = Z.data.clone()
         # optimize z vectors to be more difficult
-#        pred_actions = Variable(pred_actions.data.clone())
+        # pred_actions = pred_actions.data.clone()
         Z_adv.requires_grad = True
         optimizer_z = optim.Adam([Z_adv], lrt_z)
         for k in range(n_updates_z + 1):
             optimizer_z.zero_grad()
-            pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False, z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
-            pred_cost_adv, _ = utils.proximity_cost(pred[0], Variable(pred[1].data), car_sizes, unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+            pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
+                                    z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
+            pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
+                                                    s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 
             if k < n_updates_z + 1:
-                _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z_adv.permute(1, 0, 2), compute_total_loss=True)
+                _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
+                    model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
+                    detach=False, Z=Z_adv.permute(1, 0, 2), compute_total_loss=True
+                )
 
-                loss_z = -pred_cost_adv.mean() #+ total_u_loss.mean()
+                loss_z = -pred_cost_adv.mean()  # + total_u_loss.mean()
                 loss_z.backward(retain_graph=True)
                 torch.nn.utils.clip_grad_norm_([Z_adv], 1)
                 optimizer_z.step()
-#                print(f'[z opt | iter: {k} | pred cost: {pred_cost_adv.mean().item()}]')
+                # print(f'[z opt | iter: {k} | pred cost: {pred_cost_adv.mean().item()}]')
                 print(f'[z opt | iter: {k} | pred cost: {pred_cost_adv.mean().item()} | u_cost: {total_u_loss.mean().item()}]')
 
-    gamma_mask = Variable(torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda()).unsqueeze(0)
+    gamma_mask = torch.from_numpy(numpy.array([0.99**t for t in range(npred+1)])).float().cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
-        proximity_cost, _ = utils.proximity_cost(pred_images, Variable(pred_states.data), car_sizes, unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
+                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if n_updates_z > 0:
-            proximity_cost = 0.5*proximity_cost + 0.5*pred_cost_adv.squeeze()
+            proximity_cost = 0.5*proximity_cost + 0.5 * pred_cost_adv.squeeze()
         if hasattr(model, 'value_function'):
-            v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(), Variable(pred_states[:, -model.value_function.opt.ncond:].contiguous().data))
+            v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(),
+                                     pred_states[:, -model.value_function.opt.ncond:].contiguous().data)
         else:
-            v = Variable(torch.zeros(bsize, 1).cuda())
+            v = torch.zeros(bsize, 1).cuda()
         lane_cost = utils.lane_cost(pred_images, car_sizes)
     else:
-        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), Variable(pred_states.data).view(-1, 4))
+        pred_costs = model.cost(pred_images.view(-1, 3, 117, 24), pred_states.data.view(-1, 4))
         pred_costs = pred_costs.view(bsize, npred, 2)
         proximity_cost = pred_costs[:, :, 0]
         lane_cost = pred_costs[:, :, 1]
@@ -311,19 +321,27 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
 
-    _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+    _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(
+        model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
+        detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
+    )
         
     '''
     if opt.depeweg == 1:
-        _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+        _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states,
+        pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2),
+        compute_total_loss=True)
     else:
-        _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True)
+        _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
+            model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
+            detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
+        )
     '''
-    return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss, c_mean, c_var], pred_actions, [pred_images_adv, pred_states_adv, pred_costs_adv]
+    return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss, c_mean, c_var], pred_actions,\
+           [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
-
-def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type = 'vae'):
+def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
     input_images, input_states = inputs
     target_images, target_states, target_costs = targets
     bsize = input_images.size(0)
@@ -331,7 +349,7 @@ def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_m
     pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
 
     z = None
-    total_ploss = Variable(torch.zeros(1).cuda())
+    total_ploss = torch.zeros(1).cuda()
     z_list = []
     for t in range(npred):
         actions, _, _, _ = model.policy_net(input_images, input_states)

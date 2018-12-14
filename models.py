@@ -22,9 +22,9 @@ class encoder(nn.Module):
         # frame encoder
         if opt.layers == 3:
             assert(opt.nfeature % 4 == 0)
-            self.feature_maps = [int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
+            self.feature_maps = (opt.nfeature / 4, opt.nfeature / 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3*self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True), 
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -34,9 +34,9 @@ class encoder(nn.Module):
             )
         elif opt.layers == 4:
             assert(opt.nfeature % 8 == 0)
-            self.feature_maps = [int(opt.nfeature/8), int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
+            self.feature_maps = (opt.nfeature / 8, opt.nfeature / 4, opt.nfeature / 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3*self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True), 
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -52,7 +52,7 @@ class encoder(nn.Module):
             n_hidden = self.feature_maps[-1]
             # state encoder
             self.s_encoder = nn.Sequential(
-                nn.Linear(state_input_size*self.n_inputs, n_hidden),
+                nn.Linear(state_input_size * self.n_inputs, n_hidden),
                 nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(n_hidden, n_hidden),
@@ -76,7 +76,7 @@ class encoder(nn.Module):
 
     def forward(self, images, states=None, actions=None):
         bsize = images.size(0)
-        h = self.f_encoder(images.view(bsize, self.n_inputs*3, self.opt.height, self.opt.width))
+        h = self.f_encoder(images.view(bsize, self.n_inputs * 3, self.opt.height, self.opt.width))
         if states is not None:
             h = h + self.s_encoder(states.contiguous().view(bsize, -1)).view(h.size())
         if actions is not None:
@@ -88,7 +88,7 @@ class encoder(nn.Module):
 class stn(nn.Module):
     def __init__(self):
         super(stn, self).__init__()
-        self.theta_net = None # TODO
+        self.theta_net = None  # TODO
 
     def forward(self, images, theta=None):
         images_padded = F.pad(images, (20, 20, 20, 20), "constant", 0)
@@ -1339,16 +1339,14 @@ class CostPredictor(nn.Module):
         return h
 
 
-# Stochastic Policy, output is a diagonal Gaussian and learning
-# uses the re-parametrization trick.
+# Stochastic Policy, output is a diagonal Gaussian and learning uses the re-parametrization trick.
 class StochasticPolicy(nn.Module):
     def __init__(self, opt, context_dim=0, actor_critic=False, output_dim=None):
-        super(StochasticPolicy, self).__init__()
+        super().__init__()
         self.opt = opt
-        self.encoder = encoder(opt, 0, opt.ncond)
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
-        self.proj = nn.Linear(self.hsize, opt.n_hidden)
+        self.proj = nn.Linear(opt.hidden_size, opt.n_hidden)
         self.context_dim = context_dim
 
         self.fc = nn.Sequential(
@@ -1378,14 +1376,15 @@ class StochasticPolicy(nn.Module):
             self.saved_actions = []
             self.rewards = []
 
-    def forward(self, state_images, states, context=None, sample=True, normalize_inputs=False, normalize_outputs=False, n_samples=1, std_mult=1.0):
+    def forward(self, state_images, states, context=None, sample=True,
+                normalize_inputs=False, normalize_outputs=False, n_samples=1, std_mult=1.0):
 
         if normalize_inputs:
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())
-            state_images = Variable(state_images.cuda()).unsqueeze(0)
-            states = Variable(states.cuda()).unsqueeze(0)
+            state_images = state_images.cuda().unsqueeze(0)
+            states = states.cuda().unsqueeze(0)
 
         bsize = state_images.size(0)
 
@@ -1397,14 +1396,14 @@ class StochasticPolicy(nn.Module):
         h = self.fc(h)
         mu = self.mu_net(h).view(bsize, self.n_outputs)
         logvar = self.logvar_net(h).view(bsize, self.n_outputs)
-        logvar = torch.clamp(logvar, max = 4.0)
+        logvar = torch.clamp(logvar, max=4.0)
         std = logvar.mul(0.5).exp_()
-        eps = Variable(torch.randn(bsize, n_samples, self.n_outputs).cuda())
+        eps = torch.randn(bsize, n_samples, self.n_outputs).cuda()
         a = eps * std.view(bsize, 1, self.n_outputs) * std_mult
         a = a + mu.view(bsize, 1, self.n_outputs)
-        # a = 3*torch.tanh(a)
+        # a = 3 * torch.tanh(a)
 
-        if normalize_outputs:
+        if normalize_outputs:  # done only at inference time, if only "volatile" was still a thing...
             a = a.data
             a.clamp_(-3, 3)
             a *= self.stats['a_std'].view(1, 1, 2).expand(a.size()).cuda()
