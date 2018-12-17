@@ -52,6 +52,7 @@ parser.add_argument('-debug', type=int, default=0)
 parser.add_argument('-test_only', type=int, default=0)
 parser.add_argument('-save_movies', type=int, default=0)
 parser.add_argument('-l2reg', type=float, default=0.0)
+parser.add_argument('-use_cuda', action='store_true')
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -67,27 +68,35 @@ os.system('mkdir -p ' + opt.model_dir + '/policy_networks2/')
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
-torch.cuda.manual_seed(opt.seed)
+torch.cuda.manual_seed(opt.seed)  # I think it's no longer required
 
-opt.model_file = f'{opt.model_dir}/policy_networks/svg-{opt.policy}'
+# Define default device
+opt.device = torch.device("cuda" if torch.cuda.is_available() and opt.use_cuda else "cpu")
+if torch.cuda.is_available() and not opt.use_cuda:
+    print("WARNING: You have a CUDA device, so you should probably run with -use_cuda")
+
+opt.model_file = os.path.join(opt.model_dir, 'policy_networks', 'svg-' + opt.policy)
 
 # load the model
-model = torch.load(opt.model_dir + opt.mfile)
+model = torch.load(os.path.join(opt.model_dir, opt.mfile))
 if type(model) is dict: model = model['model']
 model.disable_unet = False
 model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
 if opt.value_model != '':
-    value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
+    value_function = torch.load(os.path.join(opt.model_dir, 'value_functions', opt.value_model)).to(opt.device)
     model.value_function = value_function
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)  # POLICY optimiser ONLY!
-stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/data_stats.pth')
+# Have traffic-data point to /misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/
+stats = torch.load('traffic-data/data_stats.pth')
 model.stats = stats
 if 'ten' in opt.mfile:
     p_z_file = opt.model_dir + opt.mfile + '.pz'
     p_z = torch.load(p_z_file)
     model.p_z = p_z
-model.to('cuda')
+
+# Send to GPU if possible
+model.to(opt.device)
 
 
 if 'vae' in opt.mfile:
@@ -114,7 +123,7 @@ if opt.value_model == '':
     opt.model_file += '-novalue'
 
 if opt.learned_cost == 1:
-    model.cost = torch.load(opt.model_dir + f'/{opt.mfile}.cost.model')['model']
+    model.cost = torch.load(os.path.join(opt.model_dir, opt.mfile + '.cost.model'))['model']
 
 
 print(f'[will save as: {opt.model_file}]')
@@ -244,7 +253,7 @@ for i in range(500):
             n_iter=n_iter,
         ), opt.model_file + f'step{i}.model')
 
-    model.to('cuda')
+    model.to(opt.device)
     log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, ' + \
                  f'u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | ' + \
                  f'test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, ' + \
