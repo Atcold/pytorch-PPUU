@@ -80,16 +80,14 @@ model.create_policy_net(opt)
 if opt.value_model != '':
     value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
     model.value_function = value_function
-optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)
-n_iter = 0
+optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)  # POLICY optimiser ONLY!
 stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/data_stats.pth')
 model.stats = stats
 if 'ten' in opt.mfile:
     p_z_file = opt.model_dir + opt.mfile + '.pz'
     p_z = torch.load(p_z_file)
     model.p_z = p_z
-model.intype('gpu')
-model.cuda()
+model.to('cuda')
 
 
 if 'vae' in opt.mfile:
@@ -134,37 +132,37 @@ def train(nbatches, npred):
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates, grad_norm = 0, 0, 0, 0, 0, 0
     total_loss_policy = 0
-    for i in range(nbatches):
+    for j in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         pred, actions, pred_adv = planning.train_policy_net_svg(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
-            n_updates_z = opt.z_updates, infer_z=(opt.infer_z == 1)
+            n_updates_z=opt.z_updates, infer_z=(opt.infer_z == 1)
         )
-        loss_c = pred[2]
-        loss_l = pred[3]
-        loss_u = pred[4]
-        loss_a = (actions.norm(2, 2)**2).mean()
-        loss_policy = loss_c + opt.u_reg * loss_u  + opt.lambda_l * loss_l + opt.lambda_a * loss_a
+        loss_c = pred[2]  # proximity cost
+        loss_l = pred[3]  # lane cost
+        loss_u = pred[4]  # uncertainty cost
+        loss_a = (actions.norm(2, 2)**2).mean()  # action regularisation
+        loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
 
         if not math.isnan(loss_policy.item()):
-            loss_policy.backward()
+            loss_policy.backward()  # back-propagation through time!
             grad_norm += utils.grad_norm(model.policy_net).item()
             torch.nn.utils.clip_grad_norm_(model.policy_net.parameters(), opt.grad_clip)
             optimizer.step()
-            total_loss_c += loss_c.item()
-            total_loss_u += loss_u.item()
-            total_loss_a += loss_a.item()
-            total_loss_l += loss_l.item()
-            total_loss_policy += loss_policy.item()
+            total_loss_c += loss_c.item()  # proximity cost
+            total_loss_u += loss_u.item()  # uncertainty (reg.)
+            total_loss_a += loss_a.item()  # action (reg.)
+            total_loss_l += loss_l.item()  # lane cost
+            total_loss_policy += loss_policy.item()  # overall total cost
             n_updates += 1
         else:
-            print('warning, NaN')
+            print('warning, NaN')  # Oh no... Something got quite fucked up!
             pdb.set_trace()
 
-        if i == 0 and opt.save_movies == 1:  
+        if j == 0 and opt.save_movies == 1:
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
@@ -223,27 +221,30 @@ def test(nbatches, npred):
 print('[training]')
 utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
 npred = opt.npred if opt.npred != -1 else 16
-             
+n_iter = 0
+
 for i in range(500):
     train_losses = train(opt.epoch_size, npred)
-    valid_losses = test(int(opt.epoch_size / 2), npred)
+    valid_losses = test(opt.epoch_size // 2, npred)
     n_iter += opt.epoch_size
-    model.intype('cpu')
-    torch.save({'model': model, 
-                'optimizer': optimizer.state_dict(),
-                'opt': opt, 
-                'npred': npred, 
-                'n_iter': n_iter}, 
-               opt.model_file + '.model')
+    model.to('cpu')
+    torch.save(dict(
+        model=model,
+        optimizer=optimizer.state_dict(),
+        opt=opt,
+        npred=npred,
+        n_iter=n_iter,
+    ), opt.model_file + '.model')
     if i % 100 == 0:
-        torch.save({'model': model, 
-                    'optimizer': optimizer.state_dict(),
-                    'opt': opt, 
-                    'npred': npred, 
-                    'n_iter': n_iter}, 
-                   opt.model_file + f'step{i}.model')
+        torch.save(dict(
+            model=model,
+            optimizer=optimizer.state_dict(),
+            opt=opt,
+            npred=npred,
+            n_iter=n_iter,
+        ), opt.model_file + f'step{i}.model')
 
-    model.intype('gpu')
+    model.to('cuda')
     log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, ' + \
                  f'u: {train_losses[2]:.4f}, a: {train_losses[3]:.4f}, p: {train_losses[4]:.4f} ] | ' + \
                  f'test: [c: {valid_losses[0]:.4f}, l:{valid_losses[1]:.4f}, u: {valid_losses[2]:.4f}, ' + \
