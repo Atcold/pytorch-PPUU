@@ -233,7 +233,7 @@ class I80(Simulator):
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'../../../traffic-data/xy-trajectories/{time_slot}'
+        file_name = f'../../nvidia-collab/traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
             print(f'Loading trajectories from {file_name}')
@@ -353,7 +353,6 @@ class I80(Simulator):
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.look_ahead = self.look_ahead
-                    print(f'Controlling car {car.id}')
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
