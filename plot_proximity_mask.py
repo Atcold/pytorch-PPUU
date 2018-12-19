@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-batch_size', type=int, default=32)
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 parser.add_argument('-seed', type=int, default=9999)
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=200)

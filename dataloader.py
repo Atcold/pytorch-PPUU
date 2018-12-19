@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 class DataLoader():
     def __init__(self, fname, opt, dataset='simulator', single_shard=False):
-        if opt.debug == 1:
+        if opt.debug:
             single_shard = True
         self.opt = opt
         self.random = random.Random()
@@ -129,7 +129,7 @@ class DataLoader():
     # a sequence of ncond given states, a sequence of npred actions,
     # and a sequence of npred states to be predicted
     def get_batch_fm(self, split, npred=-1, cuda=True):
-        if self.opt.debug == 1 and False:
+        if self.opt.debug and False:
             self.opt.height = 117
             self.opt.width = 24
             self.opt.n_actions = 2
@@ -153,7 +153,7 @@ class DataLoader():
         images, states, actions, costs, ids, sizes = [], [], [], [], [], []
         nb = 0
         while nb < self.opt.batch_size:
-            if self.opt.debug == 1:
+            if self.opt.debug:
                 s = self.random.choice(range(0, len(self.images)))
             else:
                 s = self.random.choice(indx)
@@ -181,7 +181,7 @@ class DataLoader():
         actions = torch.stack(actions)
         sizes = torch.tensor(sizes)
 
-        if self.opt.debug == 0:
+        if not self.opt.debug:
             actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).cuda()
             actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).cuda()
             states -= self.s_mean.view(1, 1, 4).expand(states.size()).cuda()

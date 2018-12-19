@@ -34,7 +34,7 @@ parser.add_argument('-lrt', type=float, default=0.0001)
 parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)

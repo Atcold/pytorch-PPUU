@@ -52,7 +52,7 @@ parser.add_argument('-gamma', type=float, default=1.0)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 parser.add_argument('-test_only', type=int, default=0)
 opt = parser.parse_args()
 

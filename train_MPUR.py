@@ -48,7 +48,7 @@ parser.add_argument('-mfile', type=str, default=M1, help='dynamics model used to
 parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 parser.add_argument('-save_movies', action='store_true')
 parser.add_argument('-l2reg', type=float, default=0.0)
 parser.add_argument('-use_cuda', action='store_true')

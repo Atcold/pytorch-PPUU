@@ -36,7 +36,7 @@ parser.add_argument('-warmstart', type=int, default=0)
 parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-grad_clip', type=float, default=50)
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 opt = parser.parse_args()
 
 

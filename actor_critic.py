@@ -31,7 +31,7 @@ parser.add_argument('-lrt', type=float, default=0.00001)
 parser.add_argument('-grad_clip', type=float, default=50.0)
 parser.add_argument('-epoch_size', type=int, default=500)
 parser.add_argument('-gamma', type=float, default=0.99)
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 parser.add_argument('-n_env', type=int, default=8)
 opt = parser.parse_args()
 

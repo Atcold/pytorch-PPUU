@@ -15,7 +15,7 @@ parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 
 opt = parser.parse_args()
 

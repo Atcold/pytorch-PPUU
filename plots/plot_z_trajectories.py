@@ -17,7 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-debug', type=int, default=0)
+parser.add_argument('-debug', action='store_true')
 parser.add_argument('-batch_size', type=int, default=1)
 parser.add_argument('-v', type=int, default=1)
 parser.add_argument('-display', type=int, default=0)
