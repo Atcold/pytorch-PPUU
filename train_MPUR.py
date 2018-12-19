@@ -88,7 +88,7 @@ if opt.value_model != '':
     model.value_function = value_function
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)  # POLICY optimiser ONLY!
 # Have traffic-data point to /misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/
-stats = torch.load('traffic-data/data_stats.pth')
+stats = torch.load('traffic-data/state-action-cost/data_i80_v0/data_stats.pth')
 model.stats = stats
 if 'ten' in opt.mfile:
     p_z_file = opt.model_dir + opt.mfile + '.pz'

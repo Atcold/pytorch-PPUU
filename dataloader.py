@@ -11,7 +11,7 @@ class DataLoader():
         self.random.seed(12345) # use this so that the same batches will always be picked
 
         if dataset == 'i80':
-            data_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0'
+            data_dir = 'traffic-data/state-action-cost/data_i80_v0'
             if single_shard:
                 # quick load for debugging
                 data_files = ['trajectories-0500-0515.txt/']
