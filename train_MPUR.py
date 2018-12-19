@@ -19,7 +19,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=20)
 parser.add_argument('-layers', type=int, default=3)
@@ -41,7 +41,7 @@ parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
 parser.add_argument('-learned_cost', type=int, default=1)
 M1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
-     'beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model'
+     'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
 M2 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
      'warmstart=0-seed=1.step200000.model'
 parser.add_argument('-mfile', type=str, default=M1, help='dynamics model used to train the policy network')
@@ -63,7 +63,7 @@ opt.h_height = 14
 opt.h_width = 3
 opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
 
-os.system('mkdir -p ' + opt.model_dir + '/policy_networks2/')
+os.system('mkdir -p ' + opt.model_dir + '/policy_networks/')
 
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
@@ -101,7 +101,7 @@ model.to(opt.device)
 
 if 'vae' in opt.mfile:
     opt.model_file += f'-model=vae'
-if 'zdropout=0.5' in opt.mfile: 
+if 'zdropout=0.5' in opt.mfile:
     opt.model_file += '-zdropout=0.5'
 elif 'zdropout=0.0' in opt.mfile:
     opt.model_file += '-zdropout=0.0'
@@ -132,7 +132,7 @@ print(f'[will save as: {opt.model_file}]')
 dataloader = DataLoader(None, opt, opt.dataset)
 model.train()
 model.opt.u_hinge = opt.u_hinge
-planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred) 
+planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)
 model.eval()
 
 

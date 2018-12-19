@@ -1356,6 +1356,7 @@ class StochasticPolicy(nn.Module):
         self.opt = opt
         self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
+        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(opt.hidden_size, opt.n_hidden)
         self.context_dim = context_dim
 
@@ -1552,7 +1553,7 @@ class DeterministicPolicy(nn.Module):
         super(DeterministicPolicy, self).__init__()
         self.opt = opt
         self.encoder = encoder(opt, 0, opt.ncond)
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
         self.context_dim = context_dim
@@ -1599,7 +1600,7 @@ class ValueFunction(nn.Module):
         super().__init__()
         self.opt = opt
         self.encoder = encoder(opt, 0, opt.ncond)
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.n_outputs = 1
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
 
@@ -1640,7 +1641,7 @@ class PolicyMDN(nn.Module):
         if not hasattr(opt, 'n_mixture'):
             self.opt.n_mixture = n_mixture
         self.encoder = encoder(opt, 0, opt.ncond)
-        self.hsize = opt.nfeature*self.opt.h_height*self.opt.h_width
+        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.n_outputs = self.npred*opt.n_actions
         self.fc = nn.Sequential(
             nn.Linear(self.hsize, opt.n_hidden),

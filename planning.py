@@ -1,8 +1,6 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import random, pdb, copy, os, math, numpy, copy, time
+import numpy
 import utils
 
 
@@ -11,7 +9,7 @@ import utils
 ##################################################################################
 
 # estimate prediction uncertainty using dropout
-def compute_uncertainty_batch(model, input_images, input_states, actions, targets, car_sizes, npred=200, n_models=10,
+def compute_uncertainty_batch(model, input_images, input_states, actions, targets=None, car_sizes=None, npred=200, n_models=10,
                               Z=None, dirname=None, detach=True, compute_total_loss=False):
     """
     Compute variance over n_models prediction per input + action
@@ -143,21 +141,23 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
         u_costs.append(pred_costs_var)
         u_values.append(pred_v_var)
         # speeds.append(inputs[1][:, :, 2:].norm(2, 2))
+
+    print()  # so that we don't overwrite the last print statement
         
     u_images = torch.stack(u_images).view(-1, npred)
     u_states = torch.stack(u_states).view(-1, npred)
-    u_costs = torch.stack(u_costs).view(-1, npred)
+    u_costs  = torch.stack(u_costs). view(-1, npred)
     u_values = torch.stack(u_values)
     # speeds = torch.stack(speeds)
 
     model.u_images_mean = u_images.mean(0)
     model.u_states_mean = u_states.mean(0)
-    model.u_costs_mean = u_costs.mean(0)
+    model.u_costs_mean  = u_costs. mean(0)
     model.u_values_mean = u_values.mean()
 
     model.u_images_std = u_images.std(0)
     model.u_states_std = u_states.std(0)
-    model.u_costs_std = u_costs.std(0)
+    model.u_costs_std  = u_costs. std(0)
     model.u_values_std = u_values.std()
     dataloader.opt.batch_size = data_bsize
 
@@ -356,17 +356,16 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
         detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
     )
         
-    '''
-    if opt.depeweg == 1:
-        _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states,
-        pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2),
-        compute_total_loss=True)
-    else:
-        _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
-            model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
-            detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
-        )
-    '''
+    # if opt.depeweg == 1:
+    #     _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(model, input_images, input_states,
+    #     pred_actions, targets, car_sizes, npred=npred, n_models=n_models, detach=False, Z=Z.permute(1, 0, 2),
+    #     compute_total_loss=True)
+    # else:
+    #     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
+    #         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
+    #         detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
+    #     )
+
     return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss, c_mean, c_var], pred_actions,\
            [pred_images_adv, pred_states_adv, pred_costs_adv]
 
