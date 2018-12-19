@@ -142,7 +142,7 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
         u_values.append(pred_v_var)
         # speeds.append(inputs[1][:, :, 2:].norm(2, 2))
 
-    print()  # so that we don't overwrite the last print statement
+    print('[estimating normal uncertainty ranges: 100.0%]')  # done :)
         
     u_images = torch.stack(u_images).view(-1, npred)
     u_states = torch.stack(u_states).view(-1, npred)

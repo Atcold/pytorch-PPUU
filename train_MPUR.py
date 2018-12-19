@@ -49,8 +49,7 @@ parser.add_argument('-value_model', type=str, default='')
 parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', type=int, default=0)
-parser.add_argument('-test_only', type=int, default=0)
-parser.add_argument('-save_movies', type=int, default=0)
+parser.add_argument('-save_movies', action='store_true')
 parser.add_argument('-l2reg', type=float, default=0.0)
 parser.add_argument('-use_cuda', action='store_true')
 opt = parser.parse_args()
@@ -171,7 +170,7 @@ def train(nbatches, npred):
             print('warning, NaN')  # Oh no... Something got quite fucked up!
             pdb.set_trace()
 
-        if j == 0 and opt.save_movies == 1:
+        if j == 0 and opt.save_movies:
             # save videos of normal and adversarial scenarios
             for b in range(opt.batch_size):
                 utils.save_movie(opt.model_file + f'.mov/sampled/mov{b}', pred[0][b], pred[1][b], None, actions[b])
@@ -205,7 +204,7 @@ def test(nbatches, npred):
         loss_c = pred[2]
         loss_l = pred[3]
         loss_u = pred[4]
-        loss_a = (actions.norm(2, 2)**2).mean()
+        loss_a = actions.norm(2, 2).pow(2).mean()
         loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
@@ -234,7 +233,8 @@ n_iter = 0
 
 for i in range(500):
     train_losses = train(opt.epoch_size, npred)
-    valid_losses = test(opt.epoch_size // 2, npred)
+    with torch.no_grad():  # Torch, please please please, do not track computations :)
+        valid_losses = test(opt.epoch_size // 2, npred)
     n_iter += opt.epoch_size
     model.to('cpu')
     torch.save(dict(
