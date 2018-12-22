@@ -25,23 +25,18 @@
 % as long as the \iclrfinalcopy macro remains commented out below.
 % Non-anonymous submissions will be rejected without review.
 
-\author{Mikael Henaff, Alfredo Canziani \& Yann LeCun \thanks{ Use footnote for providing further information
-about author (webpage, alternative address)---\emph{not} for acknowledging
-funding agencies.  Funding acknowledgements go at the end of the paper.} \\
-Department of Computer Science\\
-New York University\\
-\texttt{\{mbh305\}@nyu.edu} \\
+\author{Mikael Henaff \thanks{Now at Microsoft Research.}\\
+Courant Institute, New York University\\
+\texttt{mbh305@nyu.edu} \\
 \And
-Ji Q. Ren \& Yevgeny LeNet \\
-Department of Computational Neuroscience \\
-University of the Witwatersrand \\
-Joburg, South Africa \\
-\texttt{\{robot,net\}@wits.ac.za} \\
-\AND
-Coauthor \\
-Affiliation \\
-Address \\
-\texttt{email}
+Alfredo Canziani \\
+Courant Institute, New York University\\
+\texttt{canziani@nyu.edu} \\
+\And
+Yann LeCun \\
+Courant Institute, New York University\\
+Facebook AI Research \\
+\texttt{yann@cs.nyu.edu} \\
 }
 
 % The \author macro works with any number of authors. There are two commands
@@ -56,7 +51,7 @@ Address \\
 \newcommand{\new}{\marginpar{NEW}}
 
 
-%\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
 \begin{document}
 
 \newcommand{\modelnamedrop}{MPUR }
@@ -423,6 +418,7 @@ Several works have applied deep learning methods in the context of autonomous dr
 
 We now report experimental results. We designed a deterministic and stochastic forward model to model the state and action representations described in Section \ref{dataset-and-planning}, using convolutional layers to process the images $i_t$ and fully-connected layers to process the vectors $u_t$ and actions $a_t$. All model details can be found in Appendix \ref{model-details} and training details can be found in Appendix \ref{training-details-appendix}.
 Additional video results for the model predictions and learned policies can be found at the following URL: \url{https://sites.google.com/view/model-predictive-driving/home}.
+Code can be found at \url{https://github.com/Atcold/pytorch-Traffic-Simulator}.
 
 
     \subsection{Prediction Results}
