@@ -2,6 +2,7 @@
   <dictionary name="atcold">
     <words>
       <w>backprop</w>
+      <w>cuda</w>
       <w>lankershim</w>
       <w>mkdir</w>
       <w>npred</w>
