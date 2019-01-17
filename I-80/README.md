@@ -1,17 +1,16 @@
-# Peachtree section
+# I-80 section
 
 Pictures extracted at time 100s.\
-? lanes in total.
+6 lanes in total.
 
 ```
-cam1.png 640x344
-cam2.png 624x344
-cam3.png 472x340
-cam4.png 688x340
-cam5.png 456x344
-cam6.png 472x364
-cam7.png 752x344
-cam8.png 280x344
+cam1.png  828x240
+cam2.png  932x240
+cam3.png  340x216
+cam4.png  360x192
+cam5.png  388x196
+cam6.png  532x216
+cam7.png 1756x216
 ```
 
 ```python
@@ -30,12 +29,6 @@ names = (
     'Vehicle Velocity',
     'Vehicle Acceleration',
     'Lane Identification',
-    'Origin Zone',
-    'Destination Zone',
-    'Intersection',
-    'Section',
-    'Direction',
-    'Movement',
     'Preceding Vehicle',
     'Following Vehicle',
     'Spacing',

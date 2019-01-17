@@ -1,13 +1,15 @@
 # Lankershim section
 
-Pictures extracted at time 100s.
+Pictures extracted at time 100s.\
 8 lanes in total.
 
+```
 cam1.png 560x400
 cam2.png 760x400
 cam3.png 648x404
 cam4.png 912x404
 cam5.png 328x404
+```
 
 ```python
 names = (

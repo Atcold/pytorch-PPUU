@@ -188,14 +188,16 @@ class I80(Simulator):
 
         self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
         # self.photos = (
-        #     pygame.image.load('vlcsnap-2018-02-22-14h40m23s503.png'),
-        #     pygame.image.load('vlcsnap-2018-02-23-10h55m01s517.png'),
-        #     pygame.image.load('vlcsnap-2018-03-08-16h22m49s299.png')
+        #     pygame.image.load('I-80/cam2.png'),
+        #     pygame.image.load('I-80/cam3.png'),
+        #     pygame.image.load('I-80/cam4.png'),
+        #     pygame.image.load('I-80/cam5.png'),
         # )
         # self.photos_rect = (
         #     self.photos[0].get_rect().move([0, 22]),
-        #     self.photos[1].get_rect().move([928, 22 + 4]),
-        #     self.photos[2].get_rect().move([1258, 22 + 5])
+        #     self.photos[1].get_rect().move([932, 22 + 2]),
+        #     self.photos[2].get_rect().move([932 + 340, 22 + 2]),
+        #     self.photos[3].get_rect().move([932 + 340 + 360, 22 - 2]),
         # )
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
