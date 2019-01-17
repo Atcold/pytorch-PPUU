@@ -1,4 +1,5 @@
-# Model-Predictive Policy Learning with Uncertainty Regularization for Driving in Dense Traffic
+# Prediction and Planning Under Uncertainty (PPUU)
+Implementing [Model-Predictive Policy Learning with Uncertainty Regularization for Driving in Dense Traffic](http://bit.ly/PPUU-article) in [PyTorch](https://pytorch.org).
 
 ## Usage
 
