@@ -6,7 +6,7 @@ import random
 import numpy as np
 import scipy.misc
 import sys, pickle
-from matplotlib.image import imsave
+# from matplotlib.image import imsave
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core, spaces
 import os

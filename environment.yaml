@@ -1,0 +1,14 @@
+name: PPUU
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - imageio
+  - pandas
+  - python=3.7
+  - pytorch
+  - pip:
+    - gym
+    - pygame
+prefix: /usr/local/miniconda3/envs/PPUU
+
