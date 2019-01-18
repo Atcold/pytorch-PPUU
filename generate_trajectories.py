@@ -20,6 +20,7 @@ parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-co
 parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
 parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-delta_t', type=float, default=0.1)
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -31,15 +32,16 @@ torch.manual_seed(opt.seed)
 
 os.system("mkdir -p " + opt.data_dir)
 
-kwargs = {
-    'display': opt.display,
-    'state_image': opt.state_image,
-    'store': opt.store,
-    'fps': opt.fps,
-    'nb_lanes': opt.lanes,
-    'traffic_rate': opt.traffic_rate,
-    'data_dir': opt.data_dir,
-}
+kwargs = dict(
+    display=opt.display,
+    state_image=opt.state_image,
+    store=opt.store,
+    fps=opt.fps,
+    nb_lanes=opt.lanes,
+    traffic_rate=opt.traffic_rate,
+    data_dir=opt.data_dir,
+    delta_t=opt.delta_t,
+)
 
 register(
     id='Traffic-v0',
