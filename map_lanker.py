@@ -46,7 +46,7 @@ class Lankershim(I80):
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 1
         kwargs['delta_t'] = 1/10
-        super(I80, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.screen_size = (560 + 760 + 648 + 912 + 328, 20 * self.LANE_W)
         # self.photos = (

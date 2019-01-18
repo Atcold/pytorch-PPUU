@@ -44,7 +44,7 @@ class US101(I80):
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 5
         kwargs['delta_t'] = 1/10
-        super(I80, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.screen_size = (125 * self.LANE_W, self.nb_lanes * self.LANE_W + 4 * self.LANE_W)
         # self.photos = (

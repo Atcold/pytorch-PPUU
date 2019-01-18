@@ -42,7 +42,7 @@ class Peachtree(I80):
     def __init__(self, **kwargs):
         kwargs['nb_lanes'] = 1
         kwargs['delta_t'] = 1/10
-        super(I80, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         w = (640, 624, 472, 688, 456, 472, 752, 280)
         self.screen_size = (sum(w[-8:]) - 270, 315)
