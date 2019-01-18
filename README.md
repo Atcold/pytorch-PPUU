@@ -149,12 +149,14 @@ traffic-data/
 > The `actions` is a collection of 2D vectors, encoding the positive and negative acceleration in both *x* and *y* directions.
 > The `lane_cost` and `pixel_proximity_cost` are the task specific costs (see [slides](http://bit.ly/alf-PPUU) for details).
 > The `states` encode position and velocity of the current vehicle and the most closest 6 ones: left/current/right lanes, front/back.
-> Finally, `frames` tells us the snapshot time stamp, so that we can go back to the simulator, and inspect strange situations observed in the observations.
+> Finally, `frames` tells us the snapshot time stamp, so that we can go back to the simulator, and inspect strange situations present in the observations.
 
 ## Training the world model
 
 As we have stated above, we need to start by learning how the real world evolve.
 To do so, we train a neural net, which tries to predict what happens next, given that we start in a given *state*, and a specific *action* is performed.
+More precisely, we are going to train an *action conditional variational predictive net*, which resembles much a variational autoencoder (VAE) that has three inputs (concatenated sequence of `states`, `images`, `action`) and its output is set to be the next item in the sequence (`states`, `images`).  
+
 In the code, the world model is shortened as `fm`, which stands for *forward dynamics model*.
 So, let's train the forward dynamics model (`fm`) on the observational dataset.
 This can be done by running:
@@ -163,31 +165,42 @@ This can be done by running:
 python train_fm.py -model_dir <fm_save_path>
 ```
 
-Once the dynamics model is trained, it can be used to train the policy network, using `MPUR`, `MPER`, or `IL`.
+## Training the agent
+
+![agent training](doc/agent_train.png)
+
+Once the dynamics model is trained, it can be used to train the policy network, using *MPUR*, *MPER*, or *IL*.
+These corresponds to:
+
+- *MPUR*: Model-based Policy learning with Uncertainty Regularisation (shown in the figure above)
+- *MPER*: Model-based Policy learning with Expert Regularisation (model-based IL)
+- *IL*: Imitation Learning (copying the expert actions given the past observations)
+
 This is done by running:
 
-```
+```bash
 python train_{MPUR,MPER,IL}.py -model_dir <fm_load_path> -mfile <fm_filename>
 ```
 
-To evaluate a trained policy, run the script `eval_policy.py`. 
+## Evaluating the agent
 
-If you are evaluating a `MPUR` model, run:
+To evaluate a trained policy, run the script `eval_policy.py` in one of the three following modes.
+Type `-h` to see other options and details. 
 
-```
+### *MPUR* evaluation
+
+```bash
 python eval_policy.py -model_dir <load_path> -policy_model_svg <policy_filename> -method policy-svg
 ```
 
-If you are evaluating a `MPER` model, run:
+### *MPER* evaluation
 
-```
+```bash
 python eval_policy.py -model_dir <load_path> -policy_model_tm <policy_filename> -method policy-tm
 ```
 
-If you are evaluating an `IL` model, run:
+### *IL* evaluation
 
-```
+```bash
 python eval_policy.py -model_dir <load_path> -policy_model_il <policy_filename> -method policy-il
 ```
-
-See the options for details. 
