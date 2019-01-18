@@ -10,7 +10,6 @@ import numpy as np
 import pdb, random
 import bisect
 import pdb, pickle, os
-from tqdm import tqdm
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
