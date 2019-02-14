@@ -158,7 +158,7 @@ class DataLoader():
             else:
                 s = self.random.choice(indx)
             T = self.states[s].size(0)
-            if T > (self.opt.ncond + npred + 1):
+            if T > (self.opt.ncond + npred + 1):  # (Alf) I think all these "+1"s are wrong
                 t = self.random.randint(0, T - (self.opt.ncond+npred + 1))
                 images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
@@ -189,14 +189,19 @@ class DataLoader():
 
         costs = torch.stack(costs)
 
-        actions = actions[:, (self.opt.ncond-1):(self.opt.ncond+npred-1)].float().contiguous()
-        input_images = images[:, :self.opt.ncond].float().contiguous()
-#        input_actions = actions[:, :(self.opt.ncond-1)].float().contiguous()
-        input_states = states[:, :self.opt.ncond].float().contiguous()
-        target_images = images[:, self.opt.ncond:(self.opt.ncond+npred)].float().contiguous()
-        target_states = states[:, self.opt.ncond:(self.opt.ncond+npred)].float().contiguous()
-        target_costs = costs[:, self.opt.ncond:(self.opt.ncond+npred)].float().contiguous()
-
+        # |-----ncond-----||------------npred------------||
+        # ^                ^                              ^
+        # 0               t0                             t1
+        t0 = self.opt.ncond
+        t1 = t0 + npred
+        input_images  = images [:,   :t0].float().contiguous()
+        input_states  = states [:,   :t0].float().contiguous()
+        target_images = images [:, t0:t1].float().contiguous()
+        target_states = states [:, t0:t1].float().contiguous()
+        target_costs  = costs  [:, t0:t1].float().contiguous()
+        t0 -= 1; t1 -= 1
+        actions       = actions[:, t0:t1].float().contiguous()
+        # input_actions = actions[:, :t0].float().contiguous()
 
         if not cuda:
             input_images = input_images.cpu()
@@ -204,4 +209,3 @@ class DataLoader():
             target_images = target_images.cpu()
 
         return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
-
