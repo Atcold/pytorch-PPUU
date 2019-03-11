@@ -13,6 +13,7 @@ class ControlledI80Car(I80Car):
         self.buffer_size = 0
         self.lanes = None
         self.arrived_to_dst = False  # arrived to destination
+        self.frames = list()
 
     @property
     def current_lane(self):

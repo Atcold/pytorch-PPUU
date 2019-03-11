@@ -260,6 +260,8 @@ class Car:
             return draw_rect(surface, colours['g'], rectangle, d)
         if mode == 'ego-car':
             return draw_rect(surface, colours['b'], rectangle, d)
+        if mode == 'ghost':
+            return draw_rect(surface, colours['y'], rectangle, d)
 
     def step(self, action):  # takes also the parameter action = state temporal derivative
         """
@@ -622,7 +624,7 @@ class Simulator(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
-                 return_reward=False, gamma=0.99, show_frame_count=True):
+                 return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -674,6 +676,8 @@ class Simulator(core.Env):
         self.gamma = gamma
         self.done = None
         self.show_frame_count = show_frame_count
+        self.ghost = None
+        self.store_sim_video = store_simulator_video
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -957,7 +961,7 @@ class Simulator(core.Env):
             # vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
 
             # extract states
-            ego_surface  = pygame.Surface(machine_screen_size)
+            ego_surface = pygame.Surface(machine_screen_size)
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
                     # For every vehicle we want to extract the state, start with a black surface
@@ -974,6 +978,11 @@ class Simulator(core.Env):
                     # Add me on top of others without shadowing
                     vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
+                    # Store whole history, if requested
+                    if self.store_sim_video:
+                        if self.ghost:
+                            self.ghost.draw(vehicle_surface, mode='ghost', offset=max_extension)
+                        v.frames.append(pygame.surfarray.array3d(vehicle_surface).transpose(1, 0, 2))  # flip x and y
 
             # # save surface as image, for visualisation only
             # pygame.image.save(vehicle_surface, "vehicle_surface.png")

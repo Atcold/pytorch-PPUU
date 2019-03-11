@@ -107,7 +107,7 @@ class I80Car(Car):
     #     assert 0.99 < np.linalg.norm(self._direction) < 1.01
     #     assert self._direction[0] > 0
 
-    def policy(self, observation, **kwargs):
+    def policy(self, *args, **kwargs):
         self._frame += 1
         self.off_screen = self._frame >= self._max_t
 
@@ -386,6 +386,9 @@ class I80(Simulator):
                     # self.dump_folder = f'{self._t_slot}_{car.id}'
                     # print(f'Creating folder {self.dump_folder}')
                     # system(f'mkdir -p screen-dumps/{self.dump_folder}')
+                    if self.store_sim_video:
+                        self.ghost = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f,
+                                                 self.smoothing_window, dt=self.delta_t)
             self.vehicles_history |= vehicles  # union set operation
 
         self.lane_occupancy = [[] for _ in range(7)]
@@ -424,7 +427,7 @@ class I80(Simulator):
             state = left_vehicles, mid_vehicles, right_vehicles
 
             # Sample an action based on the current state
-            action = v.policy(state) if not v.is_autonomous else policy_action
+            action = v.policy() if not v.is_autonomous else policy_action
 
             # Perform such action
             v.step(action)
@@ -455,6 +458,11 @@ class I80(Simulator):
         # if self.frame == self.accident['frame']:
         #     print('Colliding vehicles:', self.accident['cars'])
         #     self.accident = self.get_next_accident()
+
+        # Keep the ghost updated
+        if self.store_sim_video:
+            if self.ghost and self.ghost.off_screen: self.ghost = None
+            if self.ghost: self.ghost.step(self.ghost.policy())
 
         self.frame += int(self.delta_t * 10)
 
@@ -527,4 +535,3 @@ class I80(Simulator):
 
             self._lane_surfaces[mode] = surface.copy()
             # pygame.image.save(surface, "i80-machine.png")
-

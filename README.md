@@ -187,20 +187,8 @@ python train_{MPUR,MPER,IL}.py -model_dir <fm_load_path> -mfile <fm_filename>
 To evaluate a trained policy, run the script `eval_policy.py` in one of the three following modes.
 Type `-h` to see other options and details. 
 
-### *MPUR* evaluation
-
 ```bash
-python eval_policy.py -model_dir <load_path> -policy_model_svg <policy_filename> -method policy-svg
+python eval_policy.py -model_dir <load_path> -policy_model <policy_filename> -method policy-{MPUR,MPER,IL}
 ```
 
-### *MPER* evaluation
-
-```bash
-python eval_policy.py -model_dir <load_path> -policy_model_tm <policy_filename> -method policy-tm
-```
-
-### *IL* evaluation
-
-```bash
-python eval_policy.py -model_dir <load_path> -policy_model_il <policy_filename> -method policy-il
-```
+You can also specify `-method bprop` to perform "brute force" planning, which will be computationally expensive.

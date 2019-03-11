@@ -3,51 +3,53 @@ import random
 import torch
 import numpy
 import gym
-import pdb
-import importlib
-import models
+from os import path
 import planning
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
+from imageio import imwrite
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-map', type=str, default='i80')
-parser.add_argument('-v', type=str, default='3')
-parser.add_argument('-seed', type=int, default=333333)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-map', type=str, default='i80', help=' ')
+parser.add_argument('-v', type=str, default='3', help=' ')
+parser.add_argument('-seed', type=int, default=333333, help=' ')
 # planning params
-parser.add_argument('-method', type=str, default='bprop')
-parser.add_argument('-batch_size', type=int, default=1)
-parser.add_argument('-n_batches', type=int, default=200)
-parser.add_argument('-lrt', type=float, default=0.01)
-parser.add_argument('-ncond', type=int, default=20)
-parser.add_argument('-npred', type=int, default=20)
-parser.add_argument('-nexec', type=int, default=1)
-parser.add_argument('-n_rollouts', type=int, default=10)
-parser.add_argument('-rollout_length', type=int, default=1)
-parser.add_argument('-bprop_niter', type=int, default=5)
-parser.add_argument('-bprop_lrt', type=float, default=0.1)
-parser.add_argument('-bprop_buffer', type=int, default=1)
-parser.add_argument('-bprop_save_opt_stats', type=int, default=1)
-parser.add_argument('-n_dropout_models', type=int, default=10)
-parser.add_argument('-opt_z', type=int, default=0)
-parser.add_argument('-opt_a', type=int, default=1)
-parser.add_argument('-u_reg', type=float, default=0.0)
-parser.add_argument('-u_hinge', type=float, default=1.0)
-parser.add_argument('-lambda_l', type=float, default=0.0)
-parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-display', type=int, default=0)
-parser.add_argument('-debug', action='store_true')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model')
-#parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
-parser.add_argument('-value_model', type=str, default='')
-parser.add_argument('-policy_model_il', type=str, default='')
-parser.add_argument('-policy_model_svg', type=str, default='')
-parser.add_argument('-policy_model_tm', type=str, default='')
-#parser.add_argument('-mfile', type=str, default='model=policy-cnn-mdn-bsize=64-ncond=20-npred=1-lrt=0.0001-nhidden=256-nfeature=256-nmixture=1-gclip=10.model')
+parser.add_argument('-method', type=str, default='bprop', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
+parser.add_argument('-batch_size', type=int, default=1, help=' ')
+parser.add_argument('-n_batches', type=int, default=200, help=' ')
+parser.add_argument('-lrt', type=float, default=0.01, help=' ')
+parser.add_argument('-ncond', type=int, default=20, help=' ')
+parser.add_argument('-npred', type=int, default=30, help=' ')
+parser.add_argument('-nexec', type=int, default=1, help=' ')
+parser.add_argument('-n_rollouts', type=int, default=10, help=' ')
+parser.add_argument('-rollout_length', type=int, default=1, help=' ')
+parser.add_argument('-bprop_niter', type=int, default=5, help=' ')
+parser.add_argument('-bprop_lrt', type=float, default=0.1, help=' ')
+parser.add_argument('-bprop_buffer', type=int, default=1, help=' ')
+parser.add_argument('-bprop_save_opt_stats', type=int, default=1, help=' ')
+parser.add_argument('-n_dropout_models', type=int, default=10, help=' ')
+parser.add_argument('-opt_z', type=int, default=0, help=' ')
+parser.add_argument('-opt_a', type=int, default=1, help=' ')
+parser.add_argument('-u_reg', type=float, default=0.0, help=' ')
+parser.add_argument('-u_hinge', type=float, default=1.0, help=' ')
+parser.add_argument('-lambda_l', type=float, default=0.0, help=' ')
+parser.add_argument('-graph_density', type=float, default=0.001, help=' ')
+parser.add_argument('-display', type=int, default=0, help=' ')
+parser.add_argument('-debug', action='store_true', help=' ')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/', help=' ')
+M1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+     'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
+M2 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+     'beta=1e-06-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model'
+M3 = 'model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-' + \
+     'zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model'
+M4 = 'model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-' + \
+     'zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
+parser.add_argument('-mfile', type=str, default=M1, help=' ')
+parser.add_argument('-value_model', type=str, default='', help=' ')
+parser.add_argument('-policy_model', type=str, default='', help=' ')
+parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
 
 opt = parser.parse_args()
 
@@ -55,7 +57,7 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
-opt.save_dir = opt.model_dir + '/planning_results5/'
+opt.save_dir = path.join(opt.model_dir, 'planning_results')
 opt.height = 117
 opt.width = 24
 opt.h_height = 14
@@ -63,41 +65,45 @@ opt.h_width = 3
 opt.opt_z = (opt.opt_z == 1)
 opt.opt_a = (opt.opt_a == 1)
 
-def load_models():
-    stats = torch.load('/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/data_stats.pth')
-    forward_model = torch.load(opt.model_dir + opt.mfile)
-    if type(forward_model) is dict: forward_model = forward_model['model']
-    forward_model.disable_unet=False
-    value_function, policy_network_il, policy_network_mbil = None, None, None
-    if opt.value_model != '':
-        value_function = torch.load(opt.model_dir + f'/value_functions/{opt.value_model}').cuda()
-        forward_model.value_function = value_function
-    if opt.policy_model_il != '':
-        policy_network_il = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_il}').cuda()
-        policy_network_il.stats = stats
-    if opt.policy_model_tm != '':
-        policy_network_mbil = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_tm}')['model']
-        policy_network_mbil.stats = stats
-        forward_model.policy_net = policy_network_mbil.policy_net
-        forward_model.policy_net.stats = stats
-        forward_model.policy_net.actor_critic=False
-    if opt.policy_model_svg != '':
-        policy_network_svg = torch.load(opt.model_dir + f'/policy_networks/{opt.policy_model_svg}')['model']
-        policy_network_svg.stats = stats
-        forward_model.policy_net = policy_network_svg.policy_net
-        forward_model.policy_net.stats = stats
-        forward_model.policy_net.actor_critic=False
-    
-    forward_model.intype('gpu')
-    forward_model.stats=stats
-    if 'ten' in opt.mfile:
-        forward_model.p_z = torch.load(opt.model_dir + opt.mfile + '.pz')
-    return forward_model, value_function, policy_network_il, policy_network_mbil, stats
+data_path = 'traffic-data/state-action-cost/data_i80_v0'
 
-forward_model, value_function, policy_network_il, policy_network_mbil, data_stats = load_models()
+
+def load_models():
+    stats = torch.load(path.join(data_path, 'data_stats.pth'))
+    forward_model = torch.load(path.join(opt.model_dir, opt.mfile))
+    if type(forward_model) is dict: forward_model = forward_model['model']
+    forward_model.disable_unet = False
+    value_function, policy_network_il, policy_network_mper = None, None, None
+    model_path = path.join(opt.model_dir, f'policy_networks/{opt.policy_model}')
+    if opt.value_model != '':
+        value_function = torch.load(path.join(opt.model_dir, f'value_functions/{opt.value_model}')).cuda()
+        forward_model.value_function = value_function
+    if opt.method == 'policy-IL':
+        policy_network_il = torch.load(model_path).cuda()
+        policy_network_il.stats = stats
+    if opt.method == 'policy-MPER':
+        policy_network_mper = torch.load(model_path)['model']
+        policy_network_mper.stats = stats
+        forward_model.policy_net = policy_network_mper.policy_net
+        forward_model.policy_net.stats = stats
+        forward_model.policy_net.actor_critic = False
+    if opt.method == 'policy-MPUR':
+        policy_network_mpur = torch.load(model_path)['model']
+        policy_network_mpur.stats = stats
+        forward_model.policy_net = policy_network_mpur.policy_net
+        forward_model.policy_net.stats = stats
+        forward_model.policy_net.actor_critic = False
+
+    forward_model.intype('gpu')
+    forward_model.stats = stats
+    if 'ten' in opt.mfile:
+        forward_model.p_z = torch.load(path.join(opt.model_dir, f'{opt.mfile}.pz'))
+    return forward_model, value_function, policy_network_il, policy_network_mper, stats
+
 
 dataloader = DataLoader(None, opt, 'i80')
-splits = torch.load('/home/mbhenaff/scratch/traffic-data-atcold/data_i80_v0/splits.pth')
+forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
+splits = torch.load(path.join(data_path, 'splits.pth'))
 
 
 if opt.u_reg > 0.0:
@@ -107,14 +113,16 @@ if opt.u_reg > 0.0:
         forward_model.value_function.train()
     planning.estimate_uncertainty_stats(forward_model, dataloader, n_batches=50, npred=opt.npred)
 
-    
-
-
-
 gym.envs.registration.register(
     id='I-80-v1',
     entry_point='map_i80_ctrl:ControlledI80',
-    kwargs={'fps': 10, 'nb_states': opt.ncond, 'display': 0, 'delta_t': 0.1},
+    kwargs=dict(
+        fps=10,
+        nb_states=opt.ncond,
+        display=False,
+        delta_t=0.1,
+        store_simulator_video=opt.save_sim_video,
+    )
 )
 
 print('Building the environment (loading data, if any)')
@@ -131,7 +139,7 @@ if 'bprop' in opt.method:
         plan_file += f'-model=vae'
     elif 'ten3' in opt.mfile:
         plan_file += f'-model=ten'
-    if 'zdropout=0.5' in opt.mfile: 
+    if 'zdropout=0.5' in opt.mfile:
         plan_file += '-zdropout=0.5'
     elif 'zdropout=0.0' in opt.mfile:
         plan_file += '-zdropout=0.0'
@@ -139,13 +147,13 @@ if 'bprop' in opt.method:
         plan_file += '-inferz=0'
     elif 'inferz=1' in opt.mfile:
         plan_file += '-inferz=1'
-    if ('deterministic' in opt.policy_model_svg) or ('deterministic' in opt.policy_model_tm):
+    if 'deterministic' in opt.policy_model:
         plan_file += '-deterministic'
-    if 'learnedcost=1' in opt.policy_model_svg:
+    if 'learnedcost=1' in opt.policy_model:
         plan_file += '-learnedcost=1'
-    elif 'learnedcost=0' in opt.policy_model_svg:
+    elif 'learnedcost=0' in opt.policy_model:
         plan_file += '-learnedcost=0'
-    
+
     plan_file += f'-rollouts={opt.n_rollouts}'
     plan_file += f'-rollout_length={opt.npred}'
     plan_file += f'-lrt={opt.bprop_lrt}'
@@ -159,66 +167,65 @@ if 'bprop' in opt.method:
     if opt.value_model != '':
         plan_file += f'-vmodel'
 
-if 'policy-tm' in opt.method:
-    plan_file += f'-{opt.policy_model_tm}'
+plan_file += f'-{opt.policy_model}'
 
-if 'policy-il' in opt.method:
-    plan_file += f'-{opt.policy_model_il}'
-
-if 'policy-svg' in opt.method:
-    plan_file += f'-{opt.policy_model_svg}'
-
-
-
-print('[saving to {}/{}]'.format(opt.save_dir, plan_file))
+print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
 n_test = len(splits['test_indx'])
 for j in range(n_test):
-    movie_dir = '{}/videos_simulator/{}/ep{}/'.format(opt.save_dir, plan_file, j)
-    print('[new episode, will save to: {}]'.format(movie_dir))
+    movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
+    print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
-    inputs=env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
-    inputs, done, mu, std = None, None, None, None
+    done, mu, std = False, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
     cntr = 0
-    inputs, cost, done, info = env.step(numpy.zeros((2,)))
+    # inputs, cost, done, info = env.step(numpy.zeros((2,)))
     input_state_t0 = inputs['state'].contiguous()[-1]
     action_sequences.append([])
     state_sequences.append([])
-    while not done: 
-        '''
-        if inputs is None:
-            print('[finding valid input]')
-            while inputs is None:
-                inputs, cost, done, info = env.step(numpy.zeros((2,)))
-            print('[done]')
-        '''
+    while not done:
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
-        car_size = torch.Tensor([info._width / (0.3048 * 24 / 3.7), info._length / (0.3048 * 24 / 3.7)]).view(1, 2).cuda()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
         elif opt.method == 'bprop':
-            a = planning.plan_actions_backprop(forward_model, input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, u_reg=opt.u_reg, use_action_buffer=(opt.bprop_buffer==1), n_models=opt.n_dropout_models, save_opt_stats=(opt.bprop_save_opt_stats==1), nexec=opt.nexec, lambda_l = opt.lambda_l)
-        elif opt.method == 'policy-il':
-            _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
+            # TODO: car size is provided by the dataloader!! This lines below should be removed!
+            # TODO: Namely, dataloader.car_sizes[timeslot][car_id]
+            car_size = torch.Tensor([info._width / (0.3048 * 24 / 3.7),
+                                     info._length / (0.3048 * 24 / 3.7)]).view(1, 2).cuda()
+            a = planning.plan_actions_backprop(
+                forward_model, input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts,
+                normalize=True, bprop_niter=opt.bprop_niter, bprop_lrt=opt.bprop_lrt, u_reg=opt.u_reg,
+                use_action_buffer=(opt.bprop_buffer == 1), n_models=opt.n_dropout_models,
+                save_opt_stats=(opt.bprop_save_opt_stats == 1), nexec=opt.nexec, lambda_l=opt.lambda_l
+            )
+        elif opt.method == 'policy-IL':
+            _, _, _, a = policy_network_il(input_images, input_states, sample=True,
+                                           normalize_inputs=True, normalize_outputs=True)
             a = a.squeeze().cpu().view(1, 2).numpy()
-        elif opt.method == 'policy-tm':
-            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
+        elif opt.method == 'policy-MPER':
+            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
+                                                           normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
-        elif opt.method == 'policy-svg':
-            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=True)
+        elif opt.method == 'policy-MPUR':
+            a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
+                                                           normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
-        elif opt.method == 'bprop+policy-il':
-            _, _, _, a = policy_network_il(input_images, input_states, sample=True, normalize_inputs=True, normalize_outputs=False)
+        elif opt.method == 'bprop+policy-IL':
+            _, _, _, a = policy_network_il(input_images, input_states, sample=True,
+                                           normalize_inputs=True, normalize_outputs=False)
             a = a[0]
-            a = forward_model.plan_actions_backprop(input_images, input_states, npred=opt.npred, n_futures=opt.n_rollouts, normalize=True, bprop_niter = opt.bprop_niter, bprop_lrt = opt.bprop_lrt, actions=a, u_reg=opt.u_reg, nexec=opt.nexec)
+            a = forward_model.plan_actions_backprop(input_images, input_states, npred=opt.npred,
+                                                    n_futures=opt.n_rollouts, normalize=True,
+                                                    bprop_niter=opt.bprop_niter, bprop_lrt=opt.bprop_lrt,
+                                                    actions=a, u_reg=opt.u_reg, nexec=opt.nexec)
 
         action_sequences[-1].append(a)
         state_sequences[-1].append(input_states)
@@ -231,7 +238,9 @@ for j in range(n_test):
             if info.collisions_per_frame > 0:
                 print(f'[collision after {cntr} frames, ending]')
                 done = True
-            print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost']))
+            print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(
+                a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'])
+            )
 
             images.append(input_images[-1])
             states.append(input_states[-1])
@@ -241,7 +250,7 @@ for j in range(n_test):
                 mu_list.append(mu)
                 std_list.append(std)
             else:
-                actions.append(((a[t]-data_stats['a_mean'].numpy())/data_stats['a_std']))
+                actions.append(((torch.tensor(a[t]) - data_stats['a_mean']) / data_stats['a_std']))
                 if mu is not None:
                     mu_list.append(mu.data.cpu().numpy())
                     std_list.append(std.data.cpu().numpy())
@@ -251,33 +260,37 @@ for j in range(n_test):
     time_travelled.append(len(images))
     distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
     road_completed.append(1 if cost['arrived_to_dst'] else 0)
-    log_string = 'ep: {} | time: {} | mean time: {} | mean distance: {} | mean success: {}'.format(j, len(images), torch.Tensor(time_travelled).mean(), torch.Tensor(distance_travelled).mean(), torch.Tensor(road_completed).mean())
+    log_string = ' | '.join((
+        f'ep: {j + 1:3d}/{n_test}',
+        f'time: {time_travelled[-1]}',
+        f'distance: {distance_travelled[-1]:.0f}',
+        f'success: {road_completed[-1]:d}',
+        f'mean time: {torch.Tensor(time_travelled).mean():.0f}',
+        f'mean distance: {torch.Tensor(distance_travelled).mean():.0f}',
+        f'mean success: {torch.Tensor(road_completed).mean():.3f}',
+    ))
     print(log_string)
-    utils.log(opt.save_dir + '/' + plan_file + '.log', log_string)
-    torch.save(action_sequences, opt.save_dir + '/' + plan_file + '.actions')
-    torch.save(state_sequences, opt.save_dir + '/' + plan_file + '.states')
+    utils.log(path.join(opt.save_dir, f'{plan_file}.log'), log_string)
+    torch.save(action_sequences, path.join(opt.save_dir, f'{plan_file}.actions'))
+    torch.save(state_sequences, path.join(opt.save_dir, f'{plan_file}.states'))
 
-    images = torch.stack(images)
-    states = torch.stack(states)
-    costs = torch.tensor(costs)
+    images  = torch.stack(images)
+    states  = torch.stack(states)
+    costs   = torch.tensor(costs)
     actions = torch.stack(actions)
-    '''
-    images = numpy.stack(images).transpose(0, 2, 3, 1)
-    states = numpy.stack(states)
-    costs = numpy.stack(costs)
-    actions = numpy.stack(actions)
-    '''
 
     if mu is not None:
         mu_list = numpy.stack(mu_list)
         std_list = numpy.stack(std_list)
     else:
         mu_list, std_list = None, None
-    if len(images) > 3:
-        utils.save_movie('{}/real/'.format(movie_dir), images.float() / 255.0, states, costs, actions=actions, mu=mu_list, std=std_list, pytorch=True)
 
-mean_time_to_collision = torch.Tensor(times_to_collision).mean()
-median_time_to_collision = torch.Tensor(times_to_collision).median()
-utils.log(opt.save_dir + '/' + plan_file + '.log', 'mean: {}'.format(mean_time_to_collision.item()))
-utils.log(opt.save_dir + '/' + plan_file + '.log', 'median: {}'.format(median_time_to_collision.item()))
-torch.save(torch.Tensor(times_to_collision), opt.save_dir + '/' + plan_file + '.pth')
+    if len(images) > 3:
+        utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
+                         actions=actions, mu=mu_list, std=std_list, pytorch=True)
+        if opt.save_sim_video:
+            sim_path = path.join(movie_dir, 'sim')
+            print(f'[saving simulator movie to {sim_path}]')
+            os.mkdir(sim_path)
+            for n, img in enumerate(info.frames):
+                imwrite(path.join(sim_path, f'im{n:05d}.png'), img)
