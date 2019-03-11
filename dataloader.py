@@ -2,13 +2,14 @@ import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
 from torch.autograd import Variable
 
-class DataLoader():
+
+class DataLoader:
     def __init__(self, fname, opt, dataset='simulator', single_shard=False):
         if opt.debug:
             single_shard = True
         self.opt = opt
         self.random = random.Random()
-        self.random.seed(12345) # use this so that the same batches will always be picked
+        self.random.seed(12345)  # use this so that the same batches will always be picked
 
         if dataset == 'i80':
             data_dir = 'traffic-data/state-action-cost/data_i80_v0'
@@ -52,7 +53,10 @@ class DataLoader():
                         # if not(Ta == Tp == Tl): pdb.set_trace()
                         images.append(fd['images'])
                         actions.append(fd['actions'])
-                        costs.append(torch.cat((fd.get('pixel_proximity_cost')[:Ta].view(-1,1), fd.get('lane_cost')[:Ta].view(-1,1)), 1),)
+                        costs.append(torch.cat((
+                            fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
+                            fd.get('lane_cost')[:Ta].view(-1, 1),
+                        ), 1),)
                         states.append(fd['states'])
 
                     print(f'Saving {combined_data_path} to disk')
@@ -88,9 +92,13 @@ class DataLoader():
             numpy.random.seed(0)
             perm = numpy.random.permutation(self.n_episodes)
             self.train_indx = perm[0:self.n_train]
-            self.valid_indx = perm[self.n_train+1:self.n_train+self.n_valid]
-            self.test_indx = perm[self.n_train+self.n_valid+1:]
-            torch.save({'train_indx': self.train_indx, 'valid_indx': self.valid_indx, 'test_indx': self.test_indx}, splits_path)
+            self.valid_indx = perm[self.n_train + 1:self.n_train + self.n_valid]
+            self.test_indx = perm[self.n_train + self.n_valid + 1:]
+            torch.save(dict(
+                train_indx=self.train_indx,
+                valid_indx=self.valid_indx,
+                test_indx=self.test_indx,
+            ), splits_path)
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
@@ -123,7 +131,6 @@ class DataLoader():
         car_sizes_path = data_dir + '/car_sizes.pth'
         print('[loading car sizes: {}]'.format(car_sizes_path))
         self.car_sizes = torch.load(car_sizes_path)
-        
 
     # get batch to use for forward modeling
     # a sequence of ncond given states, a sequence of npred actions,
@@ -144,8 +151,6 @@ class DataLoader():
             indx = self.valid_indx
         elif split == 'test':
             indx = self.test_indx
-            self.current_indx = 0
-            t = 0
 
         if npred == -1:
             npred = self.opt.npred
