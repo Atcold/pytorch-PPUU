@@ -1,20 +1,25 @@
-import torch
-import os, json, pdb, math, numpy, random, re, glob
+import glob
+import json
+import math
+import numpy
+import os
+import pdb
+import re
 from datetime import datetime
-import scipy
-from sklearn import decomposition
-import sklearn.manifold as manifold
-from torch.autograd import Variable
-from PIL import Image, ImageDraw
+from os import path
+
 import matplotlib.pyplot as plt
+import scipy
+import sklearn.manifold as manifold
+import torch
 import torch.nn.functional as F
-
-
+from PIL import Image, ImageDraw
+from sklearn import decomposition
+from torch.autograd import Variable
 
 
 def printnorm(x):
     print(x.norm())
-
 
 
 def printgradnorm(self, grad_input, grad_output):
@@ -31,13 +36,6 @@ def printgradnorm(self, grad_input, grad_output):
     print('grad_input norm:', grad_input[0].norm())
 
 
-
-
-
-
-
-
-
 def read_images(dirname, pytorch=True):
     imgs = []
     for f in glob.glob(dirname + '*.png'):
@@ -48,28 +46,24 @@ def read_images(dirname, pytorch=True):
     if pytorch:
         imgs = torch.stack(imgs).permute(0, 3, 1, 2).clone()
     return imgs
-    
-
 
 
 def lane_cost(images, car_size):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(3), images.size(4)
-    images = images.view(bsize*npred, nchannels, crop_h, crop_w)
-
+    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
+        3), images.size(4)
+    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
 
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels 
 
-
     # Create separable proximity mask
-    width.fill_(24*SCALE/2)
-
+    width.fill_(24 * SCALE / 2)
 
     max_x = torch.ceil((crop_h - length) / 2)
-#    max_y = torch.ceil((crop_w - width) / 2)
+    #    max_y = torch.ceil((crop_w - width) / 2)
     max_y = torch.ceil(torch.zeros(width.size()).fill_(crop_w) / 2)
     max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
@@ -78,14 +72,14 @@ def lane_cost(images, car_size):
     min_y = torch.tensor(min_y)
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-    
+
     x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
     x_filter = torch.min(x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size()))
-    x_filter= (x_filter==max_x.unsqueeze(1).expand(x_filter.size())).float()
-    
+    x_filter = (x_filter == max_x.unsqueeze(1).expand(x_filter.size())).float()
+
     y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
     y_filter = y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
-#    y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
+    #    y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
     y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
     y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (max_y.view(bsize * npred, 1) - min_y.view(bsize * npred, 1))
     x_filter = x_filter.cuda()
@@ -97,15 +91,13 @@ def lane_cost(images, car_size):
     return costs.view(bsize, npred)
 
 
-
-
-
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(3), images.size(4)
-    images = images.view(bsize*npred, nchannels, crop_h, crop_w)
-    states = states.view(bsize*npred, 4).clone()
+    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
+        3), images.size(4)
+    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
+    states = states.view(bsize * npred, 4).clone()
 
     if unnormalize:
         states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
@@ -150,9 +142,8 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-#    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
-
-#    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0] 
+    #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
+    #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
 
 
@@ -209,11 +200,11 @@ def combine(x, y, method):
 
 def format_losses(loss_i, loss_s, loss_p=None, split='train'):
     log_string = ' '
-    log_string += '{} loss ['.format(split)
-    log_string += 'i: {:.5f}, '.format(loss_i)
-    log_string += 's: {:.5f}, '.format(loss_s)
+    log_string += f'{split} loss ['
+    log_string += f'i: {loss_i:.5f}, '
+    log_string += f's: {loss_s:.5f}, '
     if loss_p is not None:
-        log_string += ', p: {:.5f}'.format(loss_p)
+        log_string += f', p: {loss_p:.5f}'
     log_string += ']'
     return log_string
 
@@ -229,7 +220,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
             p.detach()
     model.zero_grad()
     for b in range(min(actions.size(0), 10)):
-        movie_dir = '{}/pred_speed/mov{}/'.format(mdir, b)
+        movie_dir = f'{mdir}/pred_speed/mov{b}/'
         save_movie(movie_dir, pred_speed[0][b].data, pred_speed[1][b].data, pred_speed[2][b].data, actions[b].data)
     del pred_speed, _
 
@@ -242,7 +233,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
             p.detach()
     model.zero_grad()
     for b in range(min(actions.size(0), 10)):
-        movie_dir = '{}/pred_brake/mov{}/'.format(mdir, b)
+        movie_dir = f'{mdir}/pred_brake/mov{b}/'
         save_movie(movie_dir, pred_brake[0][b].data, pred_brake[1][b].data, pred_brake[2][b].data, actions[b].data)
     del pred_brake, _
 
@@ -255,7 +246,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
             p.detach()
     model.zero_grad()
     for b in range(min(actions.size(0), 10)):
-        movie_dir = '{}/pred_left/mov{}/'.format(mdir, b)
+        movie_dir = f'{mdir}/pred_left/mov{b}/'
         save_movie(movie_dir, pred_left[0][b].data, pred_left[1][b].data, pred_left[2][b].data, actions[b].data)
     del pred_left, _
 
@@ -268,12 +259,12 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
             p.detach()
     model.zero_grad()
     for b in range(min(actions.size(0), 10)):
-        movie_dir = '{}/pred_right/mov{}/'.format(mdir, b)
+        movie_dir = f'{mdir}/pred_right/mov{b}/'
         save_movie(movie_dir, pred_right[0][b].data, pred_right[1][b].data, pred_right[2][b].data, actions[b].data)
     del pred_right, _
 
 
-def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=None, pytorch=True):
+def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=None, pytorch=True, raw=False):
     images = images.data if hasattr(images, 'data') else images
     states = states.data if hasattr(states, 'data') else states
     if costs is not None:
@@ -282,7 +273,7 @@ def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=N
         actions = actions.data if hasattr(actions, 'data') else actions
 
     os.system('mkdir -p ' + dirname)
-    print('[saving movie to {}]'.format(dirname))
+    print(f'[saving movie to {dirname}]')
     if mu is not None:
         mu = mu.squeeze()
         std = std.squeeze()
@@ -290,23 +281,29 @@ def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=N
         mu = actions
     if pytorch:
         images = images.permute(0, 2, 3, 1).cpu().numpy() * 255
+    if raw:
+        for t in range(images.shape[0]):
+            img = images[t]
+            img = numpy.uint8(img)
+            Image.fromarray(img).save(path.join(dirname, f'im{t:05d}.png'))
+        return
     for t in range(images.shape[0]):
         img = images[t]
         img = numpy.concatenate((img, numpy.zeros((24, 24, 3)).astype('float')), axis=0)
-        img = scipy.misc.imresize(img, 5.0)
         img = numpy.uint8(img)
-        pil = Image.fromarray(img)
+        pil = Image.fromarray(img).resize((img.shape[1] * 5, img.shape[0] * 5), Image.NEAREST)
         draw = ImageDraw.Draw(pil)
+
+        text = ''
         if states is not None:
-            text = 'x: [{:.2f}, {:.2f} \n'.format(states[t][0], states[t][1])
-            text += 'dx: {:.2f}, {:.2f}]\n'.format(states[t][2], states[t][3])
+            text += f'x: [{states[t][0]:.2f}, {states[t][1]:.2f} \n'
+            text += f'dx: {states[t][2]:.2f}, {states[t][3]:.2f}]\n'
         if costs is not None:
-            text += 'c: [{:.2f}, {:.2f}]\n'.format(costs[t][0], costs[t][1])
+            text += f'c: [{costs[t][0]:.2f}, {costs[t][1]:.2f}]\n'
         if actions is not None:
-            text += 'a: [{:.2f}, {:.2f}]\n'.format(actions[t][0], actions[t][1])
+            text += f'a: [{actions[t][0]:.2f}, {actions[t][1]:.2f}]\n'
             x = int(images[t].shape[1] * 5 / 2 - mu[t][1] * 30)
             y = int(images[t].shape[0] * 5 / 2 - mu[t][0] * 30)
-
             if std is not None:
                 ex = max(3, int(std[t][1] * 100))
                 ey = max(3, int(std[t][0] * 100))
@@ -314,9 +311,9 @@ def save_movie(dirname, images, states, costs=None, actions=None, mu=None, std=N
                 ex, ey = 3, 3
             bbox = (x - ex, y - ey, x + ex, y + ey)
             draw.ellipse(bbox, fill=(200, 200, 200))
+
         draw.text((10, 130 * 5 - 10), text, (255, 255, 255))
-        img = numpy.asarray(pil)
-        scipy.misc.imsave(dirname + '/im{:05d}.png'.format(t), img)
+        pil.save(dirname + f'/im{t:05d}.png')
 
 
 def grad_norm(net):
@@ -345,7 +342,7 @@ def log_pdf(z, mu, sigma):
 
 def log_gaussian_distribution(y, mu, sigma):
     Z = 1.0 / ((2.0 * numpy.pi) ** (
-                mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
+            mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
     result += torch.log(2 * math.pi * torch.prod(sigma, 2))
@@ -356,7 +353,7 @@ def log_gaussian_distribution(y, mu, sigma):
 
 def gaussian_distribution(y, mu, sigma):
     oneDivSqrtTwoPI = 1.0 / ((2.0 * numpy.pi) ** (
-                mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
+            mu.size(2) / 2))  # normalization factor for Gaussians (!!can be numerically unstable)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = -0.5 * torch.sum(result * result, 2)
     result = torch.exp(result) / (1e-6 + torch.sqrt(torch.prod(sigma, 2)))
@@ -418,7 +415,7 @@ def log_sum_exp(value, dim=None, keepdim=False):
 # y: points to evaluate the negative-log-likelihood of, under the model determined by these parameters
 def mdn_loss_fn(pi, sigma, mu, y, avg=True):
     minsigma = sigma.min().item()
-    assert minsigma >= 0, f'{minsigma} < 0'.format()
+    assert minsigma >= 0, f'{minsigma} < 0'
     c = mu.size(2)
     result = (y.unsqueeze(1).expand_as(mu) - mu) * torch.reciprocal(sigma)
     result = 0.5 * torch.sum(result * result, 2)
