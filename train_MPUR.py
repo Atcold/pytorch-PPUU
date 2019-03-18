@@ -1,11 +1,17 @@
-import torch, numpy, argparse, pdb, os, time, math, random
-import utils
-from dataloader import DataLoader
+import argparse
+import math
+import numpy
+import os
+import pdb
+import random
+import torch
 import torch.nn.functional as F
 import torch.optim as optim
-import models, planning
-import importlib
+from os import path
 
+import planning
+import utils
+from dataloader import DataLoader
 
 #################################################
 # Train a policy / controller
@@ -21,9 +27,9 @@ parser.add_argument('-policy', type=str, default='policy-gauss')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/')
 parser.add_argument('-ncond', type=int, default=20)
-parser.add_argument('-npred', type=int, default=20)
+parser.add_argument('-npred', type=int, default=30)
 parser.add_argument('-layers', type=int, default=3)
-parser.add_argument('-batch_size', type=int, default=16)
+parser.add_argument('-batch_size', type=int, default=12)
 parser.add_argument('-nfeature', type=int, default=256)
 parser.add_argument('-n_hidden', type=int, default=256)
 parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
@@ -31,11 +37,11 @@ parser.add_argument('-lrt', type=float, default=0.0001, help='learning rate')
 parser.add_argument('-grad_clip', type=float, default=50.0)
 parser.add_argument('-epoch_size', type=int, default=500)
 parser.add_argument('-n_futures', type=int, default=10)
-parser.add_argument('-u_reg', type=float, default=1.0, help='coefficient of uncertainty regularization term')
+parser.add_argument('-u_reg', type=float, default=0.05, help='coefficient of uncertainty regularization term')
 parser.add_argument('-u_hinge', type=float, default=0.5)
 parser.add_argument('-lambda_a', type=float, default=0.0, help='l2 regularization on actions')
-parser.add_argument('-lambda_l', type=float, default=0.1, help='coefficient of lane cost')
-parser.add_argument('-lrt_z', type=float, default=1.0)
+parser.add_argument('-lambda_l', type=float, default=0.2, help='coefficient of lane cost')
+parser.add_argument('-lrt_z', type=float, default=0.0)
 parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
@@ -51,7 +57,7 @@ parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-save_movies', action='store_true')
 parser.add_argument('-l2reg', type=float, default=0.0)
-parser.add_argument('-use_cuda', action='store_true')
+parser.add_argument('-no_cuda', action='store_true')
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -62,7 +68,7 @@ opt.h_height = 14
 opt.h_width = 3
 opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
 
-os.system('mkdir -p ' + opt.model_dir + '/policy_networks/')
+os.system('mkdir -p ' + path.join(opt.model_dir, 'policy_networks'))
 
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
@@ -70,20 +76,20 @@ torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)  # I think it's no longer required
 
 # Define default device
-opt.device = torch.device("cuda" if torch.cuda.is_available() and opt.use_cuda else "cpu")
-if torch.cuda.is_available() and not opt.use_cuda:
-    print("WARNING: You have a CUDA device, so you should probably run with -use_cuda")
+opt.device = torch.device("cuda" if torch.cuda.is_available() and not opt.no_cuda else "cpu")
+if torch.cuda.is_available() and opt.no_cuda:
+    print("WARNING: You have a CUDA device, so you should probably run without -no_cuda")
 
-opt.model_file = os.path.join(opt.model_dir, 'policy_networks', 'svg-' + opt.policy)
+opt.model_file = path.join(opt.model_dir, 'policy_networks', 'MPUR-' + opt.policy)
 
 # load the model
-model = torch.load(os.path.join(opt.model_dir, opt.mfile))
+model = torch.load(path.join(opt.model_dir, opt.mfile))
 if type(model) is dict: model = model['model']
 model.disable_unet = False
 model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
 if opt.value_model != '':
-    value_function = torch.load(os.path.join(opt.model_dir, 'value_functions', opt.value_model)).to(opt.device)
+    value_function = torch.load(path.join(opt.model_dir, 'value_functions', opt.value_model)).to(opt.device)
     model.value_function = value_function
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)  # POLICY optimiser ONLY!
 # Have traffic-data point to /misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/
@@ -107,6 +113,7 @@ elif 'zdropout=0.0' in opt.mfile:
 if 'model=fwd-cnn-layers' in opt.mfile:
     opt.model_file += '-deterministic'
 opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
+opt.model_file += f'-bsize={opt.batch_size}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'
 opt.model_file += f'-lambdal={opt.lambda_l}'
@@ -122,7 +129,7 @@ if opt.value_model == '':
     opt.model_file += '-novalue'
 
 if opt.learned_cost == 1:
-    model.cost = torch.load(os.path.join(opt.model_dir, opt.mfile + '.cost.model'))['model']
+    model.cost = torch.load(path.join(opt.model_dir, opt.mfile + '.cost.model'))['model']
 
 
 print(f'[will save as: {opt.model_file}]')
@@ -244,14 +251,14 @@ for i in range(500):
         npred=npred,
         n_iter=n_iter,
     ), opt.model_file + '.model')
-    if i % 100 == 0:
+    if (n_iter / opt.epoch_size) % 10 == 0:
         torch.save(dict(
             model=model,
             optimizer=optimizer.state_dict(),
             opt=opt,
             npred=npred,
             n_iter=n_iter,
-        ), opt.model_file + f'step{i}.model')
+        ), opt.model_file + f'step{n_iter}.model')
 
     model.to(opt.device)
     log_string = f'step {n_iter} | train: [c: {train_losses[0]:.4f}, l: {train_losses[1]:.4f}, ' + \
