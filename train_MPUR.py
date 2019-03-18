@@ -152,14 +152,14 @@ def train(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, pred_adv = planning.train_policy_net_svg(
+        pred, actions, pred_adv = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
             n_updates_z=opt.z_updates, infer_z=(opt.infer_z == 1)
         )
         loss_c = pred[2]  # proximity cost
         loss_l = pred[3]  # lane cost
         loss_u = pred[4]  # uncertainty cost
-        loss_a = (actions.norm(2, 2)**2).mean()  # action regularisation
+        loss_a = actions.norm(2, 2).pow(2).mean()  # action regularisation
         loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
 
         if not math.isnan(loss_policy.item()):
@@ -206,8 +206,8 @@ def test(nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
-        pred, actions, _ = planning.train_policy_net_svg(model, inputs, targets, car_sizes,
-                                                         n_models=10, lrt_z=1.0, n_updates_z=0)
+        pred, actions, _ = planning.train_policy_net_mpur(model, inputs, targets, car_sizes,
+                                                          n_models=10, lrt_z=1.0, n_updates_z=0)
         loss_c = pred[2]
         loss_l = pred[3]
         loss_u = pred[4]

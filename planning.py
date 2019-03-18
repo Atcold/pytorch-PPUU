@@ -255,8 +255,8 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
     return a.cpu().numpy()
 
 
-def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
-                         n_updates_z=10, infer_z=False):
+def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
+                          n_updates_z=10, infer_z=False):
     
     input_images_orig, input_states_orig = inputs
     target_images, target_states, target_costs = targets
@@ -370,7 +370,7 @@ def train_policy_net_svg(model, inputs, targets, car_sizes, n_models=10, samplin
            [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
-def train_policy_net_mbil(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
+def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
     input_images, input_states = inputs
     target_images, target_states, target_costs = targets
     bsize = input_images.size(0)

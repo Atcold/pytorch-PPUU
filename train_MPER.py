@@ -160,7 +160,7 @@ def train(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, _ = planning.train_policy_net_mbil(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
+        pred, _ = planning.train_policy_net_mper(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
 #        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
 #        proximity_cost = proximity_cost * Variable(gamma_mask)
@@ -200,7 +200,7 @@ def test(nbatches, npred):
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
         actions = Variable(actions)
-        pred, pred_actions = planning.train_policy_net_mbil(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)            
+        pred, pred_actions = planning.train_policy_net_mper(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         loss_policy = loss_i + loss_s 
         if opt.loss_c == 1:
