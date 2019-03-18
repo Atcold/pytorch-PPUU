@@ -32,9 +32,9 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         if type(Z) is list: Z = Z[0]
         Z = Z.view(bsize, npred, -1)
 
-    input_images.unsqueeze_(0)
-    input_states.unsqueeze_(0)
-    actions.     unsqueeze_(0)
+    input_images = input_images.unsqueeze(0)
+    input_states = input_states.unsqueeze(0)
+    actions      = actions.     unsqueeze(0)
     Z_rep = Z.   unsqueeze(0)
     input_images = input_images.expand(n_models, bsize, model.opt.ncond, 3, model.opt.height, model.opt.width)
     input_states = input_states.expand(n_models, bsize, model.opt.ncond, 4)
