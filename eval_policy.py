@@ -37,7 +37,7 @@ parser.add_argument('-lambda_l', type=float, default=0.0, help=' ')
 parser.add_argument('-graph_density', type=float, default=0.001, help=' ')
 parser.add_argument('-display', type=int, default=0, help=' ')
 parser.add_argument('-debug', action='store_true', help=' ')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/', help=' ')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/', help=' ')
 M1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
      'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
 M2 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
@@ -132,9 +132,10 @@ env_names = {
 
 env = gym.make(env_names[opt.map])
 
-plan_file = opt.method
+plan_file = ''
 
 if 'bprop' in opt.method:
+    plan_file += opt.method
     if 'vae3' in opt.mfile:
         plan_file += f'-model=vae'
     elif 'ten3' in opt.mfile:
@@ -166,8 +167,9 @@ if 'bprop' in opt.method:
     plan_file += f'-lambdal={opt.lambda_l}'
     if opt.value_model != '':
         plan_file += f'-vmodel'
+    plan_file += '-'
 
-plan_file += f'-{opt.policy_model}'
+plan_file += f'{opt.policy_model}'
 
 print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 
