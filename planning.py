@@ -35,11 +35,11 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     input_images = input_images.unsqueeze(0)
     input_states = input_states.unsqueeze(0)
     actions      = actions.     unsqueeze(0)
-    Z_rep = Z.   unsqueeze(0)
+    Z_rep        = Z.           unsqueeze(0)
     input_images = input_images.expand(n_models, bsize, model.opt.ncond, 3, model.opt.height, model.opt.width)
     input_states = input_states.expand(n_models, bsize, model.opt.ncond, 4)
     actions      = actions.     expand(n_models, bsize, npred, 2)
-    Z_rep        = Z_rep.expand(n_models, bsize, npred, -1)
+    Z_rep        = Z_rep.       expand(n_models, bsize, npred, -1)
     input_images = input_images.contiguous()
     input_states = input_states.contiguous()
     actions      = actions.     contiguous()
@@ -96,7 +96,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         pred_v = model.value_function(pred_images[:, -model.value_function.opt.ncond:],
                                       pred_states[:, -model.value_function.opt.ncond:].data)
         if detach:
-            pred_v = pred_v.data
+            pred_v.detach_()
         pred_v = pred_v.view(n_models, bsize)
         pred_v_var = torch.var(pred_v, 0).mean()
         pred_v_mean = torch.mean(pred_v, 0)
