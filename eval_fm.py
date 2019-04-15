@@ -145,7 +145,7 @@ for i in range(opt.n_batches):
             if i < 10 and s < 20 and opt.save_video:
                 for b in range(opt.batch_size):
                     dirname_movie = f'{dirname}/videos/sampled_z/true_actions/x{i * opt.batch_size + b:d}/z{s:d}/'
-                    print('[saving video: {}]'.format(dirname_movie), end="\r")
+                    print(f'[saving video: {dirname_movie}]', end="\r")
                     utils.save_movie(dirname_movie, pred[0][b], pred[1][b])  # , pred_[2][b])
                     #                                    ^ images    ^ position and velocity
 
