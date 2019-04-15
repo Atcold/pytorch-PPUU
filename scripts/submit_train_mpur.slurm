@@ -15,14 +15,14 @@
 
 cd ../
 
-srun python train_MPUR.py #\
-#    -npred $npred \
-#    -u_reg $u_reg \
-#    -lrt_z $lrt_z \
-#    -z_updates $z_updates \
-#    -batch_size $batch_size \
-#    -lambda_l $lambda_l \
-#    -infer_z $infer_z \
-#    -lambda_a $lambda_a \
-#    -seed $seed
+srun python train_MPUR.py \
+    -npred $npred \
+    -u_reg $u_reg \
+    -lrt_z $lrt_z \
+    -z_updates $z_updates \
+    -batch_size $batch_size \
+    -lambda_l $lambda_l \
+    -infer_z $infer_z \
+    -lambda_a $lambda_a \
+    -seed $seed
 

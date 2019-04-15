@@ -1,15 +1,15 @@
 # Allows named arguments
 set -k
 
-for npred in 3; do
-    for batch_size in 12; do
+for npred in 30; do
+    for batch_size in 6; do
         for u_reg in 0.05; do
             for lambda_a in 0.0; do
                 for z_updates in 0; do
                     for lrt_z in 0; do
                         for lambda_l in 0.2; do
                             for infer_z in 0; do
-                                for seed in 2 3; do
+                                for seed in 1 2 3; do
                                     sbatch submit_train_mpur.slurm \
                                         npred=$npred \
                                         u_reg=$u_reg \
