@@ -105,7 +105,7 @@ In order to train both the *world* and *agent models*, we need to create the obs
 This can be done with the following command:
 
 ```bash
-python generate_trajectories.py -map i80
+for t in 0 1 2; do python generate_trajectories.py -map i80 -time_slot $t; done
 # to dump the triple for the i80 map, otherwise replace i80 with the map you want
 ```
 
@@ -151,6 +151,12 @@ traffic-data/
 > The `states` encode position and velocity of the current vehicle and the most closest 6 ones: left/current/right lanes, front/back.
 > Finally, `frames` tells us the snapshot time stamp, so that we can go back to the simulator, and inspect strange situations present in the observations.
 
+Finally (this will likely be automated soon, and made avaiable for every map), extract the car sizes for the *I-80* map with:
+
+```python
+python extract_car_size.py
+```
+
 ## Training the world model
 
 As we have stated above, we need to start by learning how the real world evolve.
@@ -192,3 +198,8 @@ python eval_policy.py -model_dir <load_path> -policy_model <policy_filename> -me
 ```
 
 You can also specify `-method bprop` to perform "brute force" planning, which will be computationally expensive.
+
+## Pre-trained models
+
+[Here](https://drive.google.com/file/d/1XahspfgFlBVF6ne479LCJgBr0luZGQt7/) you can download the predictive model and the policy we've trained on our servers (they are bundled together in the `model` field of this *Python* dictionary). The agent achieves 82% of success rate.
+[Here](https://drive.google.com/file/d/1di7hGnyzUiCADfxOhq6zGnRX0AwhEdLo/), instead, you can download only the predictive models (one for the state and one for the cost), and try to train the policy by your own. I'll provide the seed for the best results after the next hyperparameter search.
