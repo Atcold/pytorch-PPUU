@@ -13,6 +13,9 @@ import planning
 import utils
 from dataloader import DataLoader
 
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 #################################################
 # Train a policy / controller
 #################################################

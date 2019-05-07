@@ -7,6 +7,8 @@ import torch.optim as optim
 import models, planning
 import importlib
 
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 #################################################
 # Train an action-conditional forward model
@@ -86,7 +88,7 @@ elif 'ten' in opt.mfile:
 elif 'model=fwd-cnn-layers' in opt.mfile:
     model_type = 'det'
     opt.model_file += '-deterministic'
-if 'zdropout=0.5' in opt.mfile: 
+if 'zdropout=0.5' in opt.mfile:
     opt.model_file += '-zdropout=0.5'
 elif 'zdropout=0.0' in opt.mfile:
     opt.model_file += '-zdropout=0.0'
@@ -94,7 +96,7 @@ elif 'zdropout=0.0' in opt.mfile:
 
 print(f'[will save as: {opt.model_file}]')
 
-if os.path.isfile(opt.model_file + '.model') and False: 
+if os.path.isfile(opt.model_file + '.model') and False:
     print('[found previous checkpoint, loading]')
     checkpoint = torch.load(opt.model_file + '.model')
     model = checkpoint['model']
@@ -202,7 +204,7 @@ def test(nbatches, npred):
         actions = Variable(actions)
         pred, pred_actions = planning.train_policy_net_mper(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
-        loss_policy = loss_i + loss_s 
+        loss_policy = loss_i + loss_s
         if opt.loss_c == 1:
             loss_policy += loss_c_
         if not math.isnan(loss_policy.item()):
@@ -219,7 +221,7 @@ def test(nbatches, npred):
     total_loss_policy /= n_updates
     total_loss_p /= n_updates
     return total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p
-        
+
 
 # set by hand to fit on 12gb GPU
 def get_batch_size(npred):
@@ -237,7 +239,7 @@ def get_batch_size(npred):
         return 2
     else:
         return 1
-    
+
 
 if opt.test_only == 1:
     print('[testing]')
@@ -246,7 +248,7 @@ else:
     print('[training]')
     utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
     npred = opt.npred if opt.npred != -1 else 16
-             
+
     for i in range(500):
         bsize = get_batch_size(npred)
         dataloader.opt.batch_size = bsize
@@ -254,11 +256,11 @@ else:
         valid_losses = test(int(opt.epoch_size / 2), npred)
         n_iter += opt.epoch_size
         model.intype('cpu')
-        torch.save({'model': model, 
+        torch.save({'model': model,
                     'optimizer': optimizer.state_dict(),
-                    'opt': opt, 
-                    'npred': npred, 
-                    'n_iter': n_iter}, 
+                    'opt': opt,
+                    'npred': npred,
+                    'n_iter': n_iter},
                    opt.model_file + '.model')
         model.intype('gpu')
         log_string = f'step {n_iter} | npred {npred} | bsize {bsize} | esize {opt.epoch_size} | '
