@@ -6,7 +6,7 @@ dependencies:
   - imageio
   - pandas
   - python=3.7
-  - pytorch
+  - pytorch=1.0.1
   - pip:
     - gym
     - pygame
