@@ -514,24 +514,61 @@ class I80(Simulator):
             draw_line(s, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
             draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
 
+            # pygame.Surface.fill(s,colours['r'],pygame.Rect(0,lanes[0]['min']-35,sw,34))
+            # pygame.draw.polygon(s,colours['r'],[
+            #     (0, bottom+2),
+            #     (0, bottom + 29-1),
+            #     (18 * LANE_W, bottom + 29-1 - slope * 18 * LANE_W),
+            #     (18 * LANE_W, bottom+2)
+            # ])
+            # pygame.draw.polygon(s, colours['r'], [
+            #     (0, bottom + 54),
+            #     (0, bottom + 54+30),
+            #     (60 * LANE_W, bottom + 54+30),
+            #     (60 * LANE_W, bottom + 54 - slope * 60 * LANE_W)
+            # ])
+            # pygame.Surface.fill(
+            #     s,
+            #     colours['r'],
+            #     pygame.Rect(60 * LANE_W, bottom + 5, sw-60*LANE_W, 54+30-5))
+
             # pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['r']  # colour white
+            wl = colours['rl']  # colour white
             sw = self.screen_size[0]  # screen width
             m = offset
 
             for lane in lanes:
-                draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
+                draw_line(s, wl, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
 
             bottom = lanes[-1]['max'] + m
-            draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
-            draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
-            draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
-            draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
-            draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
+            draw_line(s, wl, (0, bottom), (m + 18 * LANE_W, bottom), 1)
+            draw_line(s, wl, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
+            draw_line(s, wl, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
+            draw_line(s, wl, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
+            draw_line(s, wl, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
+
+            pygame.Surface.fill(s,w,pygame.Rect(0,lanes[0]['min']-35,sw,34))
+            pygame.draw.polygon(s,w,[
+                (0, bottom+2),
+                (0, bottom + 29-1),
+                (18 * LANE_W, bottom + 29-1 - slope * 18 * LANE_W),
+                (18 * LANE_W, bottom+2)
+            ])
+            pygame.draw.polygon(s, w, [
+                (0, bottom + 54),
+                (0, bottom + 54+30),
+                (60 * LANE_W, bottom + 54+30),
+                (60 * LANE_W, bottom + 54 - slope * 60 * LANE_W)
+            ])
+            pygame.Surface.fill(
+                s,
+                w,
+                pygame.Rect(60 * LANE_W, bottom + 5, sw-60*LANE_W, 54+30-5))
 
             self._lane_surfaces[mode] = surface.copy()
             # pygame.image.save(surface, "i80-machine.png")

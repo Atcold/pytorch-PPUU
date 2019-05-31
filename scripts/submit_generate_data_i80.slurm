@@ -8,7 +8,9 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
+#SBATCH --mail-user=serkan@nyu.edu
+
+source /data/sk7685/pytorch_11/bin/activate pytorch_11
 
 cd ../
 srun python -u generate_trajectories.py -time_slot $1 -map i80

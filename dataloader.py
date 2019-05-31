@@ -171,8 +171,8 @@ class DataLoader:
                 costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
-                timeslot = splits[4]
-                car_id = int(re.findall('car(\d+).pkl', splits[5])[0])
+                timeslot = splits[3]
+                car_id = int(re.findall('car(\d+).pkl', splits[4])[0])
                 size = self.car_sizes[timeslot][car_id]
                 sizes.append([size[0], size[1]])
                 nb += 1

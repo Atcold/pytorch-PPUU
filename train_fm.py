@@ -19,8 +19,8 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3, help='layers in frame encoder/decoders')
-parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-data_dir', type=str, default='traffic-data/xy-trajectories/i80/')
+parser.add_argument('-model_dir', type=str, default='/data/sk7685/PPUU/modeldir/')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=8)
@@ -35,6 +35,8 @@ parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-alpha', type=int, default=0, help='1 for getting losses of each sample separately')
+
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)
@@ -112,7 +114,7 @@ model.intype('gpu')
 # loss_s: states
 # loss_p: prior (optional)
 
-def compute_loss(targets, predictions, reduction='elementwise_mean'):
+def compute_loss(targets, predictions, reduction='mean'):
     target_images = targets[0]
     target_states = targets[1]
     pred_images, pred_states, _ = predictions
