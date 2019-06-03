@@ -95,7 +95,7 @@ python play_maps.py -map <map>
 # add -h to see the full list of options available
 ```
 
-The frame rate should be grater than 20 Hz.
+The frame rate should be greater than 20 Hz.
 Often it will be larger than 60 Hz.
 To be noted, here the vehicles are performing the actions extracted from the trajectories, and not simply following the original spatial coordinates.
 
@@ -202,4 +202,4 @@ You can also specify `-method bprop` to perform "brute force" planning, which wi
 ## Pre-trained models
 
 [Here](https://drive.google.com/file/d/1XahspfgFlBVF6ne479LCJgBr0luZGQt7/) you can download the predictive model and the policy we've trained on our servers (they are bundled together in the `model` field of this *Python* dictionary). The agent achieves 82% of success rate.
-[Here](https://drive.google.com/file/d/1di7hGnyzUiCADfxOhq6zGnRX0AwhEdLo/), instead, you can download only the predictive models (one for the state and one for the cost), and try to train the policy by your own. I'll provide the seed for the best results after the next hyperparameter search.
+[Here](https://drive.google.com/file/d/1di7hGnyzUiCADfxOhq6zGnRX0AwhEdLo/), instead, you can download only the predictive models (one for the state and one for the cost), and try to train the policy by your own.
