@@ -203,13 +203,13 @@ for i in range(200):
     train_losses = train(opt.epoch_size, opt.npred)
     valid_losses = test(int(opt.epoch_size / 2))
     n_iter += opt.epoch_size
-    model.intype('cpu')
+    model.cpu()
     torch.save({'model': model,
                 'optimizer': optimizer.state_dict(),
                 'n_iter': n_iter}, opt.model_file + '.model')
     if (n_iter/opt.epoch_size) % 10 == 0:
         torch.save(model, opt.model_file + f'.step{n_iter}.model')
-    model.intype('gpu')
+    model.cuda()
     log_string = f'step {n_iter} | '
     log_string += utils.format_losses(*train_losses, split='train')
     log_string += utils.format_losses(*valid_losses, split='valid')
