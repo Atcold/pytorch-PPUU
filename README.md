@@ -1,5 +1,5 @@
 # Prediction and Policy-learning Under Uncertainty (PPUU)
-[Gitter chatroom](gitter.im/PPUU), [video summary](youtu.be/X2s7gy3wIYw), [slides](bit.ly/PPUU-slides), [website](bit.ly/PPUU-web).  
+[Gitter chatroom](gitter.im/PPUU), [video summary](youtu.be/X2s7gy3wIYw), [slides](bit.ly/PPUU-slides), [poster](bit.ly/PPUU-poster), [website](bit.ly/PPUU-web).  
 Implementing [Model-Predictive Policy Learning with Uncertainty Regularization for Driving in Dense Traffic](http://bit.ly/PPUU-article) in [PyTorch](https://pytorch.org).
 
 ![planning](doc/planning.png)
