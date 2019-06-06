@@ -176,6 +176,8 @@ python train_fm.py -model_dir <fm_save_path>
 
 ![agent training](doc/agent_train.png)
 
+![uncertainty computation](doc/uncertainty.png)
+
 Once the dynamics model is trained, it can be used to train the policy network, using *MPUR*, *MPER*, or *IL*.
 These corresponds to:
 
