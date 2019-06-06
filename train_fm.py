@@ -104,7 +104,7 @@ else:
     optimizer = optim.Adam(model.parameters(), opt.lrt)
     n_iter = 0
 
-model.intype('gpu')
+model.cuda()
 
 
 # training and testing functions. We will compute several losses:
