@@ -136,14 +136,6 @@ class DataLoader:
     # a sequence of ncond given states, a sequence of npred actions,
     # and a sequence of npred states to be predicted
     def get_batch_fm(self, split, npred=-1, cuda=True):
-        if self.opt.debug and False:
-            self.opt.height = 117
-            self.opt.width = 24
-            self.opt.n_actions = 2
-            input_images = torch.randn(self.opt.batch_size, self.opt.ncond, 3, self.opt.height, self.opt.width)
-            actions = torch.randn(self.opt.batch_size, self.opt.npred, self.opt.n_actions)
-            target_images = torch.randn(self.opt.batch_size, self.opt.npred, 3, self.opt.height, self.opt.width)
-            return input_images.cuda(), actions.cuda(), target_images.cuda(), None, None
 
         if split == 'train':
             indx = self.train_indx
@@ -158,12 +150,9 @@ class DataLoader:
         images, states, actions, costs, ids, sizes = [], [], [], [], [], []
         nb = 0
         while nb < self.opt.batch_size:
-            if self.opt.debug:
-                s = self.random.choice(range(0, len(self.images)))
-            else:
-                s = self.random.choice(indx)
+            s = self.random.choice(indx)
             T = self.states[s].size(0)
-            if T > (self.opt.ncond + npred + 1):  # (Alf) I think all these "+1"s are wrong
+            if T > (self.opt.ncond + npred + 1): 
                 t = self.random.randint(0, T - (self.opt.ncond+npred + 1))
                 images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
