@@ -641,15 +641,8 @@ class FwdCNN_VAE(nn.Module):
         bsize = input_images.size(0)
         actions = actions.view(bsize, -1, self.opt.n_actions)
         npred = actions.size(1)
-        if self.opt.alpha == 0:
-            ploss = torch.zeros(1)
-            ploss2 = torch.zeros(1)
-        elif self.opt.alpha > 0:
-            ploss = None
-            ploss2 = None
-        if self.use_cuda and ploss is not None:
-            ploss = ploss.cuda()
-            ploss2 = ploss2.cuda()
+        ploss = torch.zeros(1).cuda()
+        ploss2 = torch.zeros(1).cuda()
 
         pred_images, pred_states = [], []
         z_list = []
@@ -672,22 +665,11 @@ class FwdCNN_VAE(nn.Module):
                     z = self.reparameterize(mu, logvar, True)
                     logvar = torch.clamp(logvar, max=4)  # this can go to inf when taking exp(), so clamp it
                     if self.opt.model == 'fwd-cnn-vae-fp':
-                        if self.opt.alpha == 0.0:
-                            kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-                            kld /= bsize
-                        elif self.opt.alpha > 0:
-                            kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
-                    elif self.opt.model == 'fwd-cnn-vae-lp':
-                        mu_logvar_prior = self.z_network_prior(h_x.view(bsize, -1)).view(bsize, 2, self.opt.nz)
-                        mu_prior = mu_logvar_prior[:, 0]
-                        logvar_prior = mu_logvar_prior[:, 1]
-                        # this can go to inf when taking exp(), so clamp it
-                        logvar_prior = torch.clamp(logvar_prior, max=4)
-                        kld = utils.kl_criterion(mu, logvar, mu_prior, logvar_prior)
-                    if ploss is None:
-                        ploss = kld
-                    else:
+                        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+                        kld /= bsize
                         ploss += kld
+                    else:
+                        raise ValueError
             else:
                 if z_seq is not None:
                     z = z_seq[t]
@@ -707,8 +689,6 @@ class FwdCNN_VAE(nn.Module):
                 pred_image.detach()
                 pred_state.detach()
             pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
-            # since these are normalized, we are clamping to 6 standard deviations (if gaussian)
-            # pred_state = torch.clamp(pred_state + input_states[:, -1], min=-6, max=6)
             pred_state = pred_state + input_states[:, -1]
 
             input_images = torch.cat((input_images[:, 1:], pred_image), 1)

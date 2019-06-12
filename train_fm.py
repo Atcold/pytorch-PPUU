@@ -112,7 +112,7 @@ model.cuda()
 # loss_s: states
 # loss_p: prior (optional)
 
-def compute_loss(targets, predictions, reduction='elementwise_mean'):
+def compute_loss(targets, predictions, reduction='mean'):
     target_images = targets[0]
     target_states = targets[1]
     pred_images, pred_states, _ = predictions
