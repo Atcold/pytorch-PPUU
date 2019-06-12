@@ -542,15 +542,6 @@ class FwdCNN(nn.Module):
         elif opt.policy == 'policy-vae':
             self.policy_net = PolicyVAE(opt)
 
-    def intype(self, t):
-        if t == 'gpu':
-            self.cuda()
-            self.use_cuda = True
-        elif t == 'cpu':
-            self.cpu()
-            self.use_cuda = False
-            
-
 
 # this version adds the actions *after* the z variables
 class FwdCNN_VAE(nn.Module):

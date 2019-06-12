@@ -1,4 +1,5 @@
 # Prediction and Policy-learning Under Uncertainty (PPUU)
+[Gitter chatroom](gitter.im/PPUU), [video summary](youtu.be/X2s7gy3wIYw), [slides](bit.ly/PPUU-slides), [poster](bit.ly/PPUU-poster), [website](bit.ly/PPUU-web).  
 Implementing [Model-Predictive Policy Learning with Uncertainty Regularization for Driving in Dense Traffic](http://bit.ly/PPUU-article) in [PyTorch](https://pytorch.org).
 
 ![planning](doc/planning.png)
@@ -174,6 +175,8 @@ python train_fm.py -model_dir <fm_save_path>
 ## Training the agent
 
 ![agent training](doc/agent_train.png)
+
+![uncertainty computation](doc/uncertainty.png)
 
 Once the dynamics model is trained, it can be used to train the policy network, using *MPUR*, *MPER*, or *IL*.
 These corresponds to:
