@@ -172,6 +172,13 @@ This can be done by running:
 python train_fm.py -model_dir <fm_save_path>
 ```
 
+## Training the cost model
+Along with the dynamics model, we have a separate model to predict the costs of state and action pairs, which can be trained by running:
+
+```bash
+ python train_cost.py
+ ```
+
 ## Training the agent
 
 ![agent training](doc/agent_train.png)
