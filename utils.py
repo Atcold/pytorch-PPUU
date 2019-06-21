@@ -149,8 +149,8 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
 
 def parse_car_path(path):
     splits = path.split('/')
-    time_slot = splits[4]
-    car_id = int(re.findall('car(\d+).pkl', splits[5])[0])
+    time_slot = splits[-2]
+    car_id = int(re.findall('car(\d+).pkl', splits[-1])[0])
     data_files = {'trajectories-0400-0415': 0,
                   'trajectories-0500-0515': 1,
                   'trajectories-0515-0530': 2}
