@@ -1,3 +1,4 @@
+import sys
 import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
 from torch.autograd import Variable
@@ -11,15 +12,13 @@ class DataLoader:
         self.random = random.Random()
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
-        if dataset == 'i80':
-            data_dir = 'traffic-data/state-action-cost/data_i80_v0'
+        if dataset == 'i80' or dataset == 'us101':
+            data_dir = 'traffic-data/state-action-cost/data_{}_v0'.format(dataset)
             if single_shard:
                 # quick load for debugging
-                data_files = ['trajectories-0500-0515.txt/']
+                data_files = ['{}.txt/'.format(next(os.walk(data_dir))[1][0])]
             else:
-                data_files = ['trajectories-0400-0415',
-                              'trajectories-0500-0515',
-                              'trajectories-0515-0530']
+                data_files = next(os.walk(data_dir))[1]
 
             self.images = []
             self.actions = []
@@ -151,9 +150,10 @@ class DataLoader:
         nb = 0
         while nb < self.opt.batch_size:
             s = self.random.choice(indx)
-            T = self.states[s].size(0)
+            # min is important since sometimes numbers do not align causing issues in stack operation below
+            T = min(self.images[s].size(0), self.states[s].size(0))  
             if T > (self.opt.ncond + npred + 1): 
-                t = self.random.randint(0, T - (self.opt.ncond+npred + 1))
+                t = self.random.randint(0, T - (self.opt.ncond+npred+1))
                 images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
                 actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
                 states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].cuda())
