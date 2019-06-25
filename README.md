@@ -211,5 +211,5 @@ You can also specify `-method bprop` to perform "brute force" planning, which wi
 
 ## Pre-trained models
 
-[Here](https://drive.google.com/file/d/1XahspfgFlBVF6ne479LCJgBr0luZGQt7/) you can download the predictive model and the policy we've trained on our servers (they are bundled together in the `model` field of this *Python* dictionary). The agent achieves 82% of success rate.
+[Here](https://drive.google.com/file/d/1XahspfgFlBVF6ne479LCJgBr0luZGQt7/) you can download the predictive model and the policy we've trained on our servers (they are bundled together in the `model` field of this *Python* dictionary). The agent achieves 82.0% of success rate.  
 [Here](https://drive.google.com/file/d/1di7hGnyzUiCADfxOhq6zGnRX0AwhEdLo/), instead, you can download only the predictive models (one for the state and one for the cost), and try to train the policy by your own.
