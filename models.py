@@ -843,7 +843,7 @@ class StochasticPolicy(nn.Module):
         logvar = self.logvar_net(h).view(bsize, self.n_outputs)
         logvar = torch.clamp(logvar, max=4.0)
         std = logvar.mul(0.5).exp_()
-        eps = torch.randn(bsize, n_samples, self.n_outputs).cuda()
+        eps = torch.randn(bsize, n_samples, self.n_outputs).cuda()  # .cuda() is FUCKING wrong!
         a = eps * std.view(bsize, 1, self.n_outputs) * std_mult
         a = a + mu.view(bsize, 1, self.n_outputs)
         # a = 3 * torch.tanh(a)
