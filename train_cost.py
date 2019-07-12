@@ -122,6 +122,9 @@ for i in range(200):
                 'optimizer': optimizer.state_dict(),
                 'n_iter': n_iter}, opt.model_file + '.model')
     if (n_iter/opt.epoch_size) % 10 == 0:
+        torch.save({'model': cost,
+                    'optimizer': optimizer.state_dict(),
+                    'n_iter': n_iter}, opt.model_file + f'.step{n_iter}.model')
         torch.save(model, opt.model_file + f'.step{n_iter}.model')
     model.intype('gpu')
     log_string = f'step {n_iter} | train: {train_loss} | valid: {valid_loss}' 
