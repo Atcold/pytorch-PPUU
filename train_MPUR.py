@@ -115,7 +115,7 @@ elif 'zdropout=0.0' in opt.mfile:
     opt.model_file += '-zdropout=0.0'
 if 'model=fwd-cnn-layers' in opt.mfile:
     opt.model_file += '-deterministic'
-opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
+opt.model_file += f'-nfeature={opt.nfeature}'
 opt.model_file += f'-bsize={opt.batch_size}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'
