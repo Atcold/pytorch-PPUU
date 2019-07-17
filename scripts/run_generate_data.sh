@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Allows named arguments
+set -k
+
 # Pick the map you'd like to generate data for (comment the others)
 MAP="ai"
 MAP="i80"
@@ -16,5 +19,5 @@ for t in $(eval echo {0..$T}); do  # time slot
     sbatch \
         --output ${MAP}_ts${t}.out \
         --error ${MAP}_ts${t}.err \
-        submit_generate_data_${MAP}.slurm $t
+        submit_generate_data_${MAP}.slurm time_slot=$t
 done
