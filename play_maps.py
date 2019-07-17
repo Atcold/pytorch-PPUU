@@ -24,7 +24,7 @@ kwargs = {
 }
 
 if opt.map == 'highD':
-    kwargs['rec'] = '28'
+    kwargs['rec'] = '58'
 
 gym.envs.registration.register(
     id='Traffic-v0',
