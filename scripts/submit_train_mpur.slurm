@@ -13,8 +13,10 @@
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=canziani@nyu.edu
 
-cd ../
+eval "$(conda shell.bash hook)"
+conda activate PPUU
 
+cd ../
 srun python train_MPUR.py \
     -npred $npred \
     -u_reg $u_reg \
@@ -24,5 +26,6 @@ srun python train_MPUR.py \
     -lambda_l $lambda_l \
     -infer_z $infer_z \
     -lambda_a $lambda_a \
-    -seed $seed
+    -seed $seed \
+    -policy 'policy-deterministic'
 
