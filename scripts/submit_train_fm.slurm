@@ -17,5 +17,18 @@ eval "$(conda shell.bash hook)"
 conda activate PPUU
 
 cd ../
-srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -z_dropout ${9} -layers ${10} -batch_size ${11} -seed ${12} -dropout ${13} -l2reg ${14}
+srun python train_fm.py \
+    -model $model \
+    -lrt $lrt \
+    -nfeature $nfeature \
+    -warmstart $warmstart \
+    -ncond $ncond \
+    -npred $npred \
+    -beta $beta \
+    -nz $nz \
+    -z_dropout $z_dropout \
+    -layers $layers \
+    -batch_size $batch_size \
+    -seed $seed \
+    -dropout $dropout
 

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Allows named arguments
+set -k
 
 rm *.err
 rm *.out
@@ -13,12 +15,23 @@ for model in fwd-cnn-vae-fp; do
                             for beta in 0.000001; do 
                                 for z_dropout in 0.5; do 
                                     for layers in 3; do 
-                                        for bsize in 8; do
+                                        for bsize in 64; do
                                             for seed in 1; do 
-                                                for dropout in 0.1; do 
-                                                    for l2reg in 0.001; do 
-                                                        sbatch submit_train_fm.slurm $model $lrt $nfeature $warmstart $ncond $npred $beta $nz $z_dropout $layers $bsize $seed $dropout $l2reg
-                                                    done
+                                                for dropout in 0.1; do
+                                                    sbatch submit_train_fm.slurm \
+                                                    model=$model \
+                                                    lrt=$lrt \
+                                                    nfeature=$nfeature \
+                                                    warmstart=$warmstart \
+                                                    ncond=$ncond \
+                                                    npred=$npred \
+                                                    beta=$beta \
+                                                    nz=$nz \
+                                                    z_dropout=$z_dropout\
+                                                    layers=$layers \
+                                                    batch_size=$bsize \
+                                                    seed=$seed \
+                                                    dropout=$dropout
                                                 done
                                             done
                                         done
