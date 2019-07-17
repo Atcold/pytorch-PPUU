@@ -16,6 +16,8 @@
 # %%
 import os
 from matplotlib import pylab as plt
+from os import path
+from numpy import array
 
 # %%
 # %matplotlib inline
@@ -28,14 +30,15 @@ plt.rc('figure', figsize=(20,5))
 N = 20
 seeds = [i for i in range(10)]
 success = list(list() for seed in seeds)
-path = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/planning_results/'
-name = 'MPUR-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-' + \
-        'lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed={seed}-novaluestep{step}.model.log'
+performance_path = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/planning_results/'
+name = 'MPUR-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-bsize=6-npred=30-ureg=0.05' + \
+       '-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed={seed}' + \
+       '-novaluestep{step}.model.log'
 steps = [(i + 1) * 5000 for i in range(N)]
-                                                                                                                        
+
 for seed in seeds:
     for step in steps:
-        file_name = path + name.format(seed=seed, step=step)
+        file_name = path.join(performance_path, name.format(seed=seed, step=step))
         if os.path.isfile(file_name):
             with open(file_name) as f:
                 success[seed - 1].append(float(f.readlines()[-1].split()[-1]))
@@ -43,10 +46,6 @@ for seed in seeds:
             success[seed - 1].append(None)
 
 # %%
-N = 20
-steps = [(i + 1) * 5_000 for i in range(N)]
-seeds = [i + 1 for i in range(10)]
-
 if success[0][0] is None:
     for seed in seeds:
         plt.plot(steps[1::2], success[seed - 1][1::2], label=f'seed: {seed}')
@@ -60,3 +59,48 @@ plt.legend()
 plt.ylim([0.40, 0.80])
 plt.ylim([0.50, 0.85])
 plt.xlim([5_000, 105_000])
+
+# %%
+N = 20
+performance_path = '/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/planning_results/'
+n = dict(); s = 'stc'; d = 'dtr'
+n[s] = 'MPUR-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-bsize=6-npred=30-ureg=0.05' + \
+       '-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed={seed}' + \
+       '-novaluestep{step}.model.log'
+n[d] = 'MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2' + \
+       '-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed={seed}-novaluestep{step}.model.log'
+name = n
+steps = [(i + 1) * 5000 for i in range(N)]
+
+seeds = dict(
+    stc=[i for i in range(10)],
+    dtr=[i + 1 for i in range(3)],
+)
+success = {k: list(list() for seed in seeds[k]) for k in seeds}
+
+for k in seeds:
+    for seed in seeds[k]:
+        for step in steps:
+            file_name = path.join(performance_path, name[k].format(seed=seed, step=step))
+            with open(file_name) as f:
+                success[k][seed - 1].append(float(f.readlines()[-1].split()[-1]))
+
+# %%
+for k in seeds:
+    for seed in seeds[k]:
+        plt.plot(
+            array(steps) / 1e3, success[k][seed - 1],
+            label=f'{k}-seed: {seed}',
+            alpha=.4 if k is 'stc' else 1,
+            linewidth=4 if k is 'dtr' else 1
+        )
+plt.grid(True)
+plt.xlabel('steps [k]')
+plt.ylabel('success rate')
+plt.legend(ncol=7)
+plt.ylim([0.50, 0.85])
+plt.xlim([5, 105])
+plt.title('Stochastic vs. deterministic policy success rate')
+plt.xticks(range(10, 100 + 10, 10));
+
+# plt.savefig('Stc-vs-dtr-success_rate.png', bbox_inches = 'tight')

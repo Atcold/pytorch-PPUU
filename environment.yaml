@@ -16,5 +16,4 @@ dependencies:
     - pygame
     - scikit-learn
     - jupytext
-prefix: /usr/local/miniconda3/envs/PPUU
-
+    - ipdb
