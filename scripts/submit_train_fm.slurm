@@ -13,7 +13,9 @@
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=canziani@nyu.edu
 
-# module load python-3.6
+eval "$(conda shell.bash hook)"
+conda activate PPUU
+
 cd ../
 srun python train_fm.py -model $1 -lrt $2 -nfeature $3 -warmstart $4 -ncond $5 -npred $6 -beta $7 -nz $8 -z_dropout ${9} -layers ${10} -batch_size ${11} -seed ${12} -dropout ${13} -l2reg ${14}
 

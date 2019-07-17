@@ -13,8 +13,10 @@
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=canziani@nyu.edu
 
-cd ../
+eval "$(conda shell.bash hook)"
+conda activate PPUU
 
+cd ../
 srun python eval_policy.py \
     -method policy-MPUR \
     -policy_model $policy
