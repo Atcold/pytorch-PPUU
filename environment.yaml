@@ -9,9 +9,12 @@ dependencies:
   - pytorch=1.0.1
   - scipy=1.2.0
   - matplotlib
+  - pip
+  - jupyter
   - pip:
     - gym
     - pygame
     - scikit-learn
+    - jupytext
 prefix: /usr/local/miniconda3/envs/PPUU
 
