@@ -1,3 +1,4 @@
+import sys
 import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
 from torch.autograd import Variable
@@ -11,15 +12,13 @@ class DataLoader:
         self.random = random.Random()
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
-        if dataset == 'i80':
-            data_dir = 'traffic-data/state-action-cost/data_i80_v0'
+        if dataset == 'i80' or dataset == 'us101':
+            data_dir = 'traffic-data/state-action-cost/data_{}_v0'.format(dataset)
             if single_shard:
                 # quick load for debugging
-                data_files = ['trajectories-0500-0515.txt/']
+                data_files = ['{}.txt/'.format(next(os.walk(data_dir))[1][0])]
             else:
-                data_files = ['trajectories-0400-0415',
-                              'trajectories-0500-0515',
-                              'trajectories-0515-0530']
+                data_files = next(os.walk(data_dir))[1]
 
             self.images = []
             self.actions = []
@@ -127,7 +126,7 @@ class DataLoader:
                         'a_std': self.a_std,
                         's_mean': self.s_mean,
                         's_std': self.s_std}, stats_path)
-        
+
         car_sizes_path = data_dir + '/car_sizes.pth'
         print('[loading car sizes: {}]'.format(car_sizes_path))
         self.car_sizes = torch.load(car_sizes_path)
@@ -136,6 +135,9 @@ class DataLoader:
     # a sequence of ncond given states, a sequence of npred actions,
     # and a sequence of npred states to be predicted
     def get_batch_fm(self, split, npred=-1, cuda=True):
+
+        # Choose the correct device
+        device = torch.device('cuda') if cuda else torch.device('cpu')
 
         if split == 'train':
             indx = self.train_indx
@@ -151,17 +153,18 @@ class DataLoader:
         nb = 0
         while nb < self.opt.batch_size:
             s = self.random.choice(indx)
-            T = self.states[s].size(0)
-            if T > (self.opt.ncond + npred + 1): 
-                t = self.random.randint(0, T - (self.opt.ncond+npred + 1))
-                images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].cuda())
-                actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].cuda())
-                states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].cuda())
-                costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].cuda())
+            # min is important since sometimes numbers do not align causing issues in stack operation below
+            T = min(self.images[s].size(0), self.states[s].size(0))
+            if T > (self.opt.ncond + npred + 1):
+                t = self.random.randint(0, T - (self.opt.ncond+npred+1))
+                images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].to(device))
+                actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].to(device))
+                states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].to(device))
+                costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].to(device))
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
-                timeslot = splits[3]
-                car_id = int(re.findall('car(\d+).pkl', splits[4])[0])
+                timeslot = splits[-2]
+                car_id = int(re.findall('car(\d+).pkl', splits[-1])[0])
                 size = self.car_sizes[timeslot][car_id]
                 sizes.append([size[0], size[1]])
                 nb += 1
@@ -176,10 +179,10 @@ class DataLoader:
         sizes = torch.tensor(sizes)
 
         if not self.opt.debug:
-            actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).cuda()
-            actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).cuda()
-            states -= self.s_mean.view(1, 1, 4).expand(states.size()).cuda()
-            states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).cuda()
+            actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(device)
+            actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(device)
+            states -= self.s_mean.view(1, 1, 4).expand(states.size()).to(device)
+            states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).to(device)
 
         costs = torch.stack(costs)
 
@@ -197,9 +200,17 @@ class DataLoader:
         actions       = actions[:, t0:t1].float().contiguous()
         # input_actions = actions[:, :t0].float().contiguous()
 
-        if not cuda:
-            input_images = input_images.cpu()
-            actions = actions.cpu()
-            target_images = target_images.cpu()
-
         return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
+
+
+if __name__ == '__main__':
+    # Create some dummy options
+    class my_opt():
+        debug = False
+        batch_size = 4
+        npred = 20
+        ncond = 10
+    # Instantiate data set object
+    d = DataLoader(None, opt=my_opt, dataset='i80')
+    # Retrieve first training batch
+    x = d.get_batch_fm('train', cuda=False)

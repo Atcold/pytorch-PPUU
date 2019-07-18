@@ -97,6 +97,9 @@ class HighDCar(Car):
         self._colour = colours['c']
         self._braked = False
         self.off_screen = self._max_t <= 0
+        self._states = list()
+        self._states_image = list()
+        self._actions = list()
         self._passing = False
         self._actions = list()
         self._states = list()
@@ -105,7 +108,8 @@ class HighDCar(Car):
         self.screen_w = screen_w
         self._safe_factor = 1.5  # second, manually matching the data TODO: Check this number
         if font is not None:
-            self._text = self.get_text(f'{self.id}: Lane {self.current_lane}', font)
+            self._text = self.get_text(self.id, font)
+            # self._text = self.get_text(f'{self.id}: Lane {self.current_lane}', font)  # Uncomment to display lane #
         self.is_controlled = False
         self.collisions_per_frame = 0
 
@@ -572,7 +576,8 @@ class HighD(Simulator):
 
             # Perform such action
             v.step(action)
-            v._text = v.get_text(f'{v.id}: Lane {v.current_lane}', self.font[15])
+            # Uncomment below to display current lane during play maps
+            # v._text = v.get_text(f'{v.id}: Lane {v.current_lane}', self.font[15])
 
             # Store state and action pair
             if (self.store or v.is_controlled) and v.valid:
