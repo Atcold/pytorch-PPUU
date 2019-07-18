@@ -41,9 +41,9 @@ class DataLoader:
                     actions = []
                     costs = []
                     states = []
-                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
+                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl').sort()
                     for f in ids:
-                        print('[loading {}]'.format(f))
+                        print(f'[loading {f}]')
                         fd = pickle.load(open(f, 'rb'))
                         Ta = fd['actions'].size(0)
                         Tp = fd['pixel_proximity_cost'].size(0)
@@ -76,23 +76,22 @@ class DataLoader:
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
-        self.n_train = int(math.floor(self.n_episodes * 0.8))
-        self.n_valid = int(math.floor(self.n_episodes * 0.1))
-        self.n_test = int(math.floor(self.n_episodes * 0.1))
         splits_path = data_dir + '/splits.pth'
         if os.path.exists(splits_path):
-            print('[loading data splits: {}]'.format(splits_path))
+            print(f'[loading data splits: {splits_path}]')
             self.splits = torch.load(splits_path)
             self.train_indx = self.splits.get('train_indx')
             self.valid_indx = self.splits.get('valid_indx')
             self.test_indx = self.splits.get('test_indx')
         else:
             print('[generating data splits]')
-            numpy.random.seed(0)
-            perm = numpy.random.permutation(self.n_episodes)
-            self.train_indx = perm[0:self.n_train]
-            self.valid_indx = perm[self.n_train + 1:self.n_train + self.n_valid]
-            self.test_indx = perm[self.n_train + self.n_valid + 1:]
+            rgn = numpy.random.RandomState(0)
+            perm = rgn.permutation(self.n_episodes)
+            n_train = int(math.floor(self.n_episodes * 0.8))
+            n_valid = int(math.floor(self.n_episodes * 0.1))
+            self.train_indx = perm[0 : self.n_train]
+            self.valid_indx = perm[n_train : n_train + n_valid]
+            self.test_indx = perm[n_train + n_valid :]
             torch.save(dict(
                 train_indx=self.train_indx,
                 valid_indx=self.valid_indx,
@@ -101,7 +100,7 @@ class DataLoader:
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
-            print('[loading data stats: {}]'.format(stats_path))
+            print(f'[loading data stats: {stats_path}]')
             stats = torch.load(stats_path)
             self.a_mean = stats.get('a_mean')
             self.a_std = stats.get('a_std')
@@ -122,13 +121,15 @@ class DataLoader:
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
-            torch.save({'a_mean': self.a_mean,
-                        'a_std': self.a_std,
-                        's_mean': self.s_mean,
-                        's_std': self.s_std}, stats_path)
+            torch.save(dict(
+                a_mean=self.a_mean,
+                a_std=self.a_std,
+                s_mean=self.s_mean,
+                s_std=self.s_std,
+            ), stats_path)
 
         car_sizes_path = data_dir + '/car_sizes.pth'
-        print('[loading car sizes: {}]'.format(car_sizes_path))
+        print(f'[loading car sizes: {car_sizes_path}]')
         self.car_sizes = torch.load(car_sizes_path)
 
     # get batch to use for forward modeling
@@ -151,20 +152,21 @@ class DataLoader:
 
         images, states, actions, costs, ids, sizes = [], [], [], [], [], []
         nb = 0
+        T = self.opt.ncond + npred
         while nb < self.opt.batch_size:
             s = self.random.choice(indx)
             # min is important since sometimes numbers do not align causing issues in stack operation below
-            T = min(self.images[s].size(0), self.states[s].size(0))
-            if T > (self.opt.ncond + npred + 1):
-                t = self.random.randint(0, T - (self.opt.ncond+npred+1))
-                images.append(self.images[s][t:t+(self.opt.ncond+npred)+1].to(device))
-                actions.append(self.actions[s][t:t+(self.opt.ncond+npred)].to(device))
-                states.append(self.states[s][t:t+(self.opt.ncond+npred)+1].to(device))
-                costs.append(self.costs[s][t:t+(self.opt.ncond+npred)+1].to(device))
+            episode_length = min(self.images[s].size(0), self.states[s].size(0))
+            if episode_length >= T:
+                t = self.random.randint(0, episode_length - T)
+                images.append(self.images[s][t : t + T].to(device))
+                actions.append(self.actions[s][t : t + T].to(device))
+                states.append(self.states[s][t : t + T].to(device))
+                costs.append(self.costs[s][t : t + T].to(device))
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
                 timeslot = splits[-2]
-                car_id = int(re.findall('car(\d+).pkl', splits[-1])[0])
+                car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
                 size = self.car_sizes[timeslot][car_id]
                 sizes.append([size[0], size[1]])
                 nb += 1
@@ -190,7 +192,7 @@ class DataLoader:
         # ^                ^                              ^
         # 0               t0                             t1
         t0 = self.opt.ncond
-        t1 = t0 + npred
+        t1 = T
         input_images  = images [:,   :t0].float().contiguous()
         input_states  = states [:,   :t0].float().contiguous()
         target_images = images [:, t0:t1].float().contiguous()
@@ -199,6 +201,34 @@ class DataLoader:
         t0 -= 1; t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
         # input_actions = actions[:, :t0].float().contiguous()
+
+        #          n_cond                      n_pred
+        # <---------------------><---------------------------------->
+        # .                     ..                                  .
+        # +---------------------+.                                  .  ^          ^
+        # |i|i|i|i|i|i|i|i|i|i|i|.  3 × 117 × 24                    .  |          |
+        # +---------------------+.                                  .  | inputs   |
+        # +---------------------+.                                  .  |          |
+        # |s|s|s|s|s|s|s|s|s|s|s|.  4                               .  |          |
+        # +---------------------+.                                  .  v          |
+        # .                   +-----------------------------------+ .  ^          |
+        # .                2  |a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a| .  | actions  |
+        # .                   +-----------------------------------+ .  v          |
+        # .                     +-----------------------------------+  ^          | tensors
+        # .       3 × 117 × 24  |i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                  4  |s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|  | targets  |
+        # .                     +-----------------------------------+  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                  2  |c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|  |          |
+        # .                     +-----------------------------------+  v          v
+        # +---------------------------------------------------------+             ^
+        # |                           car_id                        |             | string
+        # +---------------------------------------------------------+             v
+        # +---------------------------------------------------------+             ^
+        # |                          car_size                       |  2          | tensor
+        # +---------------------------------------------------------+             v
 
         return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
 
