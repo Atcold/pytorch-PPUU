@@ -247,7 +247,7 @@ class I80(Simulator):
         elif isfile(file_name + '.txt'):
             file_name += '.txt'
             print(f'Loading trajectories from {file_name}')
-            df = pd.read_table(file_name, sep='\s+', header=None, names=(
+            df = pd.read_csv(file_name, sep=r'\s+', header=None, names=(
                 'Vehicle ID',
                 'Frame ID',
                 'Total Frames',
