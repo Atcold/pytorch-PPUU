@@ -830,8 +830,9 @@ class StochasticPolicy(nn.Module):
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())
-            state_images = state_images.cuda().unsqueeze(0)
-            states = states.cuda().unsqueeze(0)
+            if state_images.dim() == 4:  # if processing single vehicle
+                state_images = state_images.cuda().unsqueeze(0)
+                states = states.cuda().unsqueeze(0)
 
         bsize = state_images.size(0)
 
@@ -862,7 +863,6 @@ class StochasticPolicy(nn.Module):
             return a.squeeze(), entropy, mu, std, value
         else:
             return a.squeeze(), entropy, mu, std
-
 
 
 class DeterministicPolicy(nn.Module):
@@ -901,8 +901,9 @@ class DeterministicPolicy(nn.Module):
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())
-            state_images = state_images.cuda().unsqueeze(0)
-            states = states.cuda().unsqueeze(0)
+            if state_images.dim() == 4:  # if processing single vehicle
+                state_images = state_images.cuda().unsqueeze(0)
+                states = states.cuda().unsqueeze(0)
 
         bsize = state_images.size(0)
 
