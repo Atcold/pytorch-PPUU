@@ -10,7 +10,7 @@ import torch
 from custom_graphics import draw_dashed_line
 from traffic_gym import Simulator, Car, colours
 
-SCALE = 1
+SCALE = 5
 Y_OFFSET = 50
 MAX_SPEED = 130
 DT = 1 / 25  # frame rate for highD dataset (comes from recording_meta csv files)
@@ -69,8 +69,7 @@ class HighDCar(Car):
     max_a = 100   # TODO: Confirm with Alfredo that this number is ok
     max_b = 0.02  # TODO: Confirm with Alfredo that this number is ok
 
-    def __init__(self, df, look_ahead, screen_w, font=None, kernel=0, dt=DT):
-        k = kernel
+    def __init__(self, df, look_ahead, screen_w, font=None, dt=DT):
         self._driving_direction = df.at[df.index[0], 'Driving Direction']  # +1 := left-to-right; -1 := right-to-left
         self._length = df.at[df.index[0], 'Vehicle Length'] * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * SCALE
@@ -157,8 +156,8 @@ class HighDCar(Car):
         b = (new_direction - self._direction).dot(ortho_direction) / (self._speed * self._dt + 1e-6)
 
         # From an analysis of the action histograms -> limit a, b to sensible range
-        # assert a / SCALE < self.max_a, f'Car {self.id} acceleration magnitude out of range: {a/SCALE} > {self.max_a}'
-        # assert b < self.max_b, f'Car {self.id} acceleration angle out of range: {b} > {self.max_b}'
+        assert a / SCALE < self.max_a, f'Car {self.id} acceleration magnitude out of range: {a/SCALE} > {self.max_a}'
+        assert b < self.max_b, f'Car {self.id} acceleration angle out of range: {b} > {self.max_b}'
 
         # Colour code for identifying trajectory divergence if not self.off_screen:
         lane_width = (self._upper_lane_markings[1] - self._upper_lane_markings[0])
@@ -352,8 +351,6 @@ class HighD(Simulator):
                                    'Vehicle Velocity X',
                                    'Vehicle Velocity Y',
                                    'Vehicle Acceleration X',
-                                   'Vehicle Acceleration Y',
-                                   'Front Sight Distance',
                                    'Back Sight Distance',
                                    'Spacing',
                                    'Headway',
@@ -380,6 +377,7 @@ class HighD(Simulator):
                                                df_track['Vehicle Velocity Y']**2)
         df_track['Vehicle Acceleration'] = np.sqrt(df_track['Vehicle Acceleration X'] ** 2 +
                                                    df_track['Vehicle Acceleration Y'] ** 2)
+        df_track['Frame ID'] = df_track['Frame ID'] - 1  # re-index frames to 0
 
         # Merge recordings meta into tracks df on Recording ID key
         rec_cols = ['Recording ID',

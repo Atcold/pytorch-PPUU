@@ -23,7 +23,6 @@ class DataLoader:
                 data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
             else:
                 _, data_files, _ = next(os.walk(data_dir))
-
             self.images = []
             self.actions = []
             self.costs = []
@@ -209,7 +208,7 @@ class DataLoader:
 
 if __name__ == '__main__':
     # Create some dummy options
-    class my_opt:
+    class my_opt():
         debug = False
         batch_size = 4
         npred = 20

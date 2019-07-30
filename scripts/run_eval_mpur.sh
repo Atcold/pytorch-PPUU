@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Allows named arguments
 set -k
 
@@ -428,8 +430,30 @@ policies=(
 "MPUR-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=9-novaluestep100000.model"
 )
 
+#policies=(
+# TODO: ADD MULTIPLE SEEDS AND MULTIPLE STEPS HERE
+#"MPUR-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=1-novaluestep130000.model"
+#)
+
+policies=(
+"svg-policy-gauss-model=vae-zdropout=0.5-policy-gauss-nfeature=256-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=1-novalue.model"
+)
+
+MAP="us101"
+#MAP="i80"
+
+MODEL_DIR="models_us101_v2/"
+
+MFILE="model=fwd-cnn-vae-fp-layers=3-bsize=8-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=0-seed=1.step400000.model"
+
 for policy in ${policies[*]}; do
-    sbatch submit_eval_mpur.slurm \
+    sbatch \
+        --output ../logs/eval_policy_${MAP}_i80policy.out \
+        --error ../logs/eval_policy_${MAP}_i80policy.err \
+        submit_eval_mpur.slurm \
+        map=$MAP \
+        mfile=$MFILE \
+        model_dir=$MODEL_DIR \
         policy=$policy
 done
 
