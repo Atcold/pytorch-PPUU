@@ -5,7 +5,7 @@ import gym
 parser = argparse.ArgumentParser()
 parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-display', type=int, default=1)
-parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
 parser.add_argument('-state_image', type=int, default=0)
 parser.add_argument('-store', type=int, default=0)
 parser.add_argument('-nb_episodes', type=int, default=1)
@@ -22,6 +22,9 @@ kwargs = {
     'store': opt.store,
     'delta_t': opt.delta_t,
 }
+
+if opt.map == 'highD':
+    kwargs['rec'] = '50'
 
 gym.envs.registration.register(
     id='Traffic-v0',
@@ -53,12 +56,19 @@ gym.envs.registration.register(
     kwargs=kwargs,
 )
 
+gym.envs.registration.register(
+    id='HighD-v0',
+    entry_point='map_highD:HighD',
+    kwargs=kwargs,
+)
+
 env_names = {
     'ai': 'Traffic-v0',
     'i80': 'I-80-v0',
     'us101': 'US-101-v0',
     'lanker': 'Lankershim-v0',
     'peach': 'Peachtree-v0',
+    'highD': 'HighD-v0',
 }
 
 print('Building the environment (loading data, if any)')
@@ -66,7 +76,7 @@ env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
     # env.reset(frame=int(input('Frame: ')), time_slot=0)
-    env.reset(frame=0, time_slot=0)
+    env.reset(frame=2936, time_slot=0)
 
     done = False
     while not done:
