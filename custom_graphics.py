@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Point:
-    # constructed using a normal tuple
+    # constructed using a normal tupple
     def __init__(self, point_t=(0, 0)):
         self.x = float(point_t[0])
         self.y = float(point_t[1])
@@ -56,18 +56,6 @@ def draw_text(screen, text, xy, font_size=30, colour=(255, 255, 255), font=None)
 def draw_rect(screen, colour, rect, direction=(1, 0), thickness=0):
     x, y, l, w = rect
     xy = np.array(((x, y - w/2), (x, y + w/2), (x + l, y + w/2), (x + l, y - w/2)))
-    c, s = direction
-    rot = np.array(((c, -s), (s, c)))
-    xy = (rot @ (xy - (x, y)).T).T + (x, y)
-    return pygame.draw.polygon(screen, colour, xy, thickness)
-
-
-def draw_highD_rect(screen, colour, rect, direction=(1, 0), thickness=0):
-    x, y, l, w = rect
-    if direction[0] > 0:
-        xy = np.array(((x, y), (x, y + w), (x + l, y + w), (x + l, y)))
-    else:
-        xy = np.array(((x, y), (x, y - w), (x + l, y - w), (x + l, y)))
     c, s = direction
     rot = np.array(((c, -s), (s, c)))
     xy = (rot @ (xy - (x, y)).T).T + (x, y)

@@ -9,12 +9,10 @@
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=48000
-#SBATCH --mail-type=BEGIN
-#SBATCH --mail-type=END
-#SBATCH --mail-type=FAIL
-#SBATCH --mail-user=yzs208@nyu.edu
+#SBATCH --mail-type=END,FAIL # notifications for job done & fail
+#SBATCH --mail-user=mbh305@nyu.edu
 
-source activate PPUU 
+source activate py35
 cd ../
-srun python generate_trajectories.py -time_slot $1 -v 1
+srun python generate_trajectories.py -time_slot $time_slot -v 1
 

@@ -76,7 +76,7 @@ env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
     # env.reset(frame=int(input('Frame: ')), time_slot=0)
-    env.reset(frame=2936, time_slot=0)
+    env.reset(frame=0, time_slot=0)
 
     done = False
     while not done:
