@@ -27,6 +27,7 @@ y = r_[-1:3.1:.1]
 
 # %%
 target_lane_cost = y ** 2 / 4
+target_lane_cost = abs(y) * .5
 
 # %%
 r, g, b, p = 'C1', 'C3', 'C0', 'C2'
