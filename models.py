@@ -23,10 +23,10 @@ class encoder(nn.Module):
             self.feature_maps = (opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
                 nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
-                nn.Dropout2d(p=opt.dropout, inplace=True), 
+                nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
-                nn.Dropout2d(p=opt.dropout, inplace=True), 
+                nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[1], self.feature_maps[2], 4, 2, 1),
             )
@@ -35,13 +35,13 @@ class encoder(nn.Module):
             self.feature_maps = (opt.nfeature // 8, opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
                 nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
-                nn.Dropout2d(p=opt.dropout, inplace=True), 
+                nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
-                nn.Dropout2d(p=opt.dropout, inplace=True), 
+                nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[1], self.feature_maps[2], 4, 2, 1),
-                nn.Dropout2d(p=opt.dropout, inplace=True), 
+                nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[2], self.feature_maps[3], 4, 2, 1)
             )
@@ -88,15 +88,15 @@ class u_network(nn.Module):
         super(u_network, self).__init__()
         self.opt = opt
         self.encoder = nn.Sequential(
-            nn.Conv2d(self.opt.nfeature, self.opt.nfeature, 4, 2, 1), 
-            nn.Dropout2d(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True), 
+            nn.Conv2d(self.opt.nfeature, self.opt.nfeature, 4, 2, 1),
+            nn.Dropout2d(p=opt.dropout, inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(self.opt.nfeature, self.opt.nfeature, (4, 1), 2, 1)
         )
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (4, 1), 2, 1),
-            nn.Dropout2d(p=opt.dropout, inplace=True), 
+            nn.Dropout2d(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (4, 3), 2, 0)
         )
@@ -104,12 +104,12 @@ class u_network(nn.Module):
         assert(self.opt.layers == 3) # hardcoded sizes
         self.hidden_size = self.opt.nfeature*3*2
         self.fc = nn.Sequential(
-            nn.Linear(self.hidden_size, self.opt.nfeature), 
-            nn.Dropout(p=opt.dropout, inplace=True), 
-            nn.LeakyReLU(0.2, inplace=True), 
+            nn.Linear(self.hidden_size, self.opt.nfeature),
+            nn.Dropout(p=opt.dropout, inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(self.opt.nfeature, self.hidden_size)
         )
-    
+
     def forward(self, h):
         h1 = self.encoder(h)
         h2 = self.fc(h1.view(-1, self.hidden_size))
@@ -168,15 +168,15 @@ class decoder(nn.Module):
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True)
             )
-        
+
         n_hidden = self.feature_maps[-1]
 
         self.s_predictor = nn.Sequential(
             nn.Linear(2*n_hidden, n_hidden),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(n_hidden, n_hidden),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(n_hidden, self.n_out*4)
         )
@@ -212,8 +212,8 @@ class z_expander(nn.Module):
         return z_exp
 
 
-# maps a hidden representation to a distribution over latent variables. 
-# We use this for the VAE models. 
+# maps a hidden representation to a distribution over latent variables.
+# We use this for the VAE models.
 class z_network_gaussian(nn.Module):
     def __init__(self, opt):
         super(z_network_gaussian, self).__init__()
@@ -249,8 +249,8 @@ class z_network_gaussian(nn.Module):
         return z, mu, logvar
 
 
-# takes as input a sequence of frames, states and actions, and outputs the parameters of a 
-# Gaussian Mixture Model. 
+# takes as input a sequence of frames, states and actions, and outputs the parameters of a
+# Gaussian Mixture Model.
 class PriorMDN(nn.Module):
     def __init__(self, opt):
         super(PriorMDN, self).__init__()
@@ -289,7 +289,7 @@ class PriorMDN(nn.Module):
         bsize = input_images.size(0)
         npred = actions.size(1)
         ploss = torch.zeros(1).cuda()
-    
+
         for t in range(npred):
             h_x = model.encoder(input_images, input_states)
             target_images, target_states, target_costs = targets
@@ -319,8 +319,8 @@ class PriorMDN(nn.Module):
         return ploss / npred
 
 
-# takes as input a sequence of frames, states and actions, and outputs the parameters of a 
-# Gaussian Mixture Model. 
+# takes as input a sequence of frames, states and actions, and outputs the parameters of a
+# Gaussian Mixture Model.
 class PriorGaussian(nn.Module):
     def __init__(self, opt, nz):
         super(PriorGaussian, self).__init__()
@@ -368,7 +368,7 @@ class PriorGaussian(nn.Module):
         return mu, sigma, a
 
 
-# Mixture Density network (fully-connected). 
+# Mixture Density network (fully-connected).
 class v_network_mdn_fc(nn.Module):
     def __init__(self, opt, n_outputs):
         super(v_network_mdn_fc, self).__init__()
@@ -377,13 +377,13 @@ class v_network_mdn_fc(nn.Module):
 
         self.network = nn.Sequential(
             nn.Linear(self.opt.hidden_size, opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True)
         )
 
@@ -413,7 +413,7 @@ class v_network(nn.Module):
             nn.Linear(opt.nfeature, opt.nfeature),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, opt.nfeature),
-            nn.LeakyReLU(0.2, inplace=True), 
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, opt.nz)
         )
 
@@ -422,10 +422,10 @@ class v_network(nn.Module):
         h = h.view(bsize, self.opt.hidden_size)
         u = self.network(h)
         u = u / torch.norm(u, 2, 1).unsqueeze(1)
-        return u 
+        return u
 
 
-# combines a sequence of images with the state vector. 
+# combines a sequence of images with the state vector.
 class policy_encoder(nn.Module):
     def __init__(self, opt):
         super(policy_encoder, self).__init__()
@@ -467,17 +467,17 @@ class FwdCNN(nn.Module):
     def __init__(self, opt, mfile):
         super(FwdCNN, self).__init__()
         self.opt = opt
-        # If we are given a model file, use it to initialize this model. 
+        # If we are given a model file, use it to initialize this model.
         # otherwise initialize from scratch
         if mfile == '':
             self.encoder = encoder(opt, 0, opt.ncond)
             self.decoder = decoder(opt)
             self.a_encoder = nn.Sequential(
                 nn.Linear(self.opt.n_actions, self.opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(self.opt.nfeature, self.opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(self.opt.nfeature, self.opt.hidden_size)
             )
@@ -503,7 +503,7 @@ class FwdCNN(nn.Module):
         h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         a_emb = self.a_encoder(action).view(h_x.size())
 
-        h = h_x 
+        h = h_x
         h = h + a_emb
         h = h + self.u_network(h)
         pred_image, pred_state = self.decoder(h)
@@ -554,10 +554,10 @@ class FwdCNN_VAE(nn.Module):
             self.decoder = decoder(opt)
             self.a_encoder = nn.Sequential(
                 nn.Linear(self.opt.n_actions, self.opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(self.opt.nfeature, self.opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(self.opt.nfeature, self.opt.hidden_size)
             )
@@ -578,10 +578,10 @@ class FwdCNN_VAE(nn.Module):
 
         self.z_network = nn.Sequential(
             nn.Linear(opt.hidden_size, opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, opt.nfeature),
-            nn.Dropout(p=opt.dropout, inplace=True), 
+            nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(opt.nfeature, 2*opt.nz)
         )
@@ -589,10 +589,10 @@ class FwdCNN_VAE(nn.Module):
         if self.opt.model == 'fwd-cnn-vae3-lp':
             self.z_network_prior = nn.Sequential(
                 nn.Linear(opt.hidden_size, opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, opt.nfeature),
-                nn.Dropout(p=opt.dropout, inplace=True), 
+                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(opt.nfeature, 2*opt.nz)
             )
@@ -712,10 +712,12 @@ class FwdCNN_VAE(nn.Module):
             self.policy_net = PolicyTEN(opt)
         elif opt.policy == 'policy-vae':
             self.policy_net = PolicyVAE(opt)
+        elif opt.policy == 'policy-deterministic':
+            self.policy_net = DeterministicPolicy(opt)
 
     def create_prior_net(self, opt):
         self.prior_net = PriorGaussian(opt, opt.context_dim)
-        
+
     def intype(self, t):
         if t == 'gpu':
             self.cuda()
@@ -771,7 +773,7 @@ class CostPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(opt.n_hidden, opt.n_hidden),
             nn.ReLU(),
-            nn.Linear(opt.n_hidden, 2), 
+            nn.Linear(opt.n_hidden, 2),
             nn.Tanh()
         )
 
@@ -791,7 +793,7 @@ class StochasticPolicy(nn.Module):
         self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
-        self.proj = nn.Linear(opt.hidden_size, opt.n_hidden)
+        self.proj = nn.Linear(self.hsize, opt.n_hidden)
         self.context_dim = context_dim
 
         self.fc = nn.Sequential(
@@ -806,10 +808,10 @@ class StochasticPolicy(nn.Module):
 
         if context_dim > 0:
             self.context_encoder = nn.Sequential(
-                nn.Linear(context_dim, opt.n_hidden), 
-                nn.ReLU(), 
-                nn.Linear(opt.n_hidden, opt.n_hidden), 
-                nn.ReLU(), 
+                nn.Linear(context_dim, opt.n_hidden),
+                nn.ReLU(),
+                nn.Linear(opt.n_hidden, opt.n_hidden),
+                nn.ReLU(),
                 nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
@@ -828,8 +830,9 @@ class StochasticPolicy(nn.Module):
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())
-            state_images = state_images.cuda().unsqueeze(0)
-            states = states.cuda().unsqueeze(0)
+            if state_images.dim() == 4:  # if processing single vehicle
+                state_images = state_images.cuda().unsqueeze(0)
+                states = states.cuda().unsqueeze(0)
 
         bsize = state_images.size(0)
 
@@ -843,7 +846,7 @@ class StochasticPolicy(nn.Module):
         logvar = self.logvar_net(h).view(bsize, self.n_outputs)
         logvar = torch.clamp(logvar, max=4.0)
         std = logvar.mul(0.5).exp_()
-        eps = torch.randn(bsize, n_samples, self.n_outputs).cuda()
+        eps = torch.randn(bsize, n_samples, self.n_outputs).cuda()  # .cuda() is FUCKING wrong!
         a = eps * std.view(bsize, 1, self.n_outputs) * std_mult
         a = a + mu.view(bsize, 1, self.n_outputs)
         # a = 3 * torch.tanh(a)
@@ -862,14 +865,13 @@ class StochasticPolicy(nn.Module):
             return a.squeeze(), entropy, mu, std
 
 
-
 class DeterministicPolicy(nn.Module):
     def __init__(self, opt, context_dim=0, output_dim=None):
-        super(DeterministicPolicy, self).__init__()
+        super().__init__()
         self.opt = opt
-        self.encoder = encoder(opt, 0, opt.ncond)
-        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
+        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
+        self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
         self.context_dim = context_dim
 
@@ -885,23 +887,40 @@ class DeterministicPolicy(nn.Module):
 
         if context_dim > 0:
             self.context_encoder = nn.Sequential(
-                nn.Linear(context_dim, opt.n_hidden), 
-                nn.ReLU(), 
-                nn.Linear(opt.n_hidden, opt.n_hidden), 
-                nn.ReLU(), 
+                nn.Linear(context_dim, opt.n_hidden),
+                nn.ReLU(),
+                nn.Linear(opt.n_hidden, opt.n_hidden),
+                nn.ReLU(),
                 nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
     def forward(self, state_images, states, context=None, sample=True,
                 normalize_inputs=False, normalize_outputs=False, n_samples=1):
+
+        if normalize_inputs:
+            state_images = state_images.clone().float().div_(255.0)
+            states -= self.stats['s_mean'].view(1, 4).expand(states.size())
+            states /= self.stats['s_std'].view(1, 4).expand(states.size())
+            if state_images.dim() == 4:  # if processing single vehicle
+                state_images = state_images.cuda().unsqueeze(0)
+                states = states.cuda().unsqueeze(0)
+
         bsize = state_images.size(0)
+
         h = self.encoder(state_images, states).view(bsize, self.hsize)
-        h = self.proj(h)
+        h = self.proj(h)  # from hidden_size to n_hidden
         if self.context_dim > 0:
             assert(context is not None)
             h = h + self.context_encoder(context)
-        h = self.fc(h).view(bsize, self.n_outputs)
-        return h
+        a = self.fc(h).view(bsize, self.n_outputs)
+
+        if normalize_outputs:  # done only at inference time, if only "volatile" was still a thing...
+            a = a.data
+            a.clamp_(-3, 3)
+            a *= self.stats['a_std'].view(1, 2).expand(a.size()).cuda()
+            a += self.stats['a_mean'].view(1, 2).expand(a.size()).cuda()
+
+        return a, None, None, None  # Returning a tuple of 4, for consistency with the stochastic policy
 
 
 class ValueFunction(nn.Module):
@@ -964,8 +983,8 @@ class PolicyMDN(nn.Module):
     def forward(self, state_images, states, sample=False, normalize_inputs=False, normalize_outputs=False):
 
         if normalize_inputs:
-            # policy network is trained with states normalized by mean and standard dev. 
-            # this is to unnormalize the predictions at evaluation time. 
+            # policy network is trained with states normalized by mean and standard dev.
+            # this is to unnormalize the predictions at evaluation time.
             state_images = state_images.clone().float().div_(255.0)
             states -= self.stats['s_mean'].view(1, 4).expand(states.size())
             states /= self.stats['s_std'].view(1, 4).expand(states.size())

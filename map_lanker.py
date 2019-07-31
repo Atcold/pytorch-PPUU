@@ -98,9 +98,10 @@ class Lankershim(I80):
 
     @staticmethod
     def _get_data_frame(time_slot, x_max, x_offset):
+        # TODO: need caching! See I-80
         file_name = f'traffic-data/xy-trajectories/{time_slot}.txt'
         print(f'Loading trajectories from {file_name}')
-        df = pd.read_table(file_name, sep='\s+', header=None, names=(
+        df = pd.read_csv(file_name, sep=r'\s+', header=None, names=(
             'Vehicle ID',
             'Frame ID',
             'Total Frames',

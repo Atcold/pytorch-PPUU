@@ -110,3 +110,4 @@ for ts in time_slots:
             print(c)
 
 torch.save(car_sizes, f'traffic-data/state-action-cost/data_{opt.map}_v0/car_sizes.pth')
+

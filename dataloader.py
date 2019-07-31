@@ -5,6 +5,7 @@ import os
 import pickle
 import random
 import re
+import sys
 import torch
 
 
@@ -77,23 +78,22 @@ class DataLoader:
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
-        self.n_train = int(math.floor(self.n_episodes * 0.8))
-        self.n_valid = int(math.floor(self.n_episodes * 0.1))
-        self.n_test = int(math.floor(self.n_episodes * 0.1))
         splits_path = data_dir + '/splits.pth'
         if os.path.exists(splits_path):
-            print('[loading data splits: {}]'.format(splits_path))
+            print(f'[loading data splits: {splits_path}]')
             self.splits = torch.load(splits_path)
             self.train_indx = self.splits.get('train_indx')
             self.valid_indx = self.splits.get('valid_indx')
             self.test_indx = self.splits.get('test_indx')
         else:
             print('[generating data splits]')
-            numpy.random.seed(0)
-            perm = numpy.random.permutation(self.n_episodes)
-            self.train_indx = perm[0:self.n_train]
-            self.valid_indx = perm[self.n_train + 1:self.n_train + self.n_valid]
-            self.test_indx = perm[self.n_train + self.n_valid + 1:]
+            rgn = numpy.random.RandomState(0)
+            perm = rgn.permutation(self.n_episodes)
+            n_train = int(math.floor(self.n_episodes * 0.8))
+            n_valid = int(math.floor(self.n_episodes * 0.1))
+            self.train_indx = perm[0 : self.n_train]
+            self.valid_indx = perm[n_train : n_train + n_valid]
+            self.test_indx = perm[n_train + n_valid :]
             torch.save(dict(
                 train_indx=self.train_indx,
                 valid_indx=self.valid_indx,
@@ -102,7 +102,7 @@ class DataLoader:
 
         stats_path = data_dir + '/data_stats.pth'
         if os.path.isfile(stats_path):
-            print('[loading data stats: {}]'.format(stats_path))
+            print(f'[loading data stats: {stats_path}]')
             stats = torch.load(stats_path)
             self.a_mean = stats.get('a_mean')
             self.a_std = stats.get('a_std')
@@ -123,10 +123,12 @@ class DataLoader:
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
-            torch.save({'a_mean': self.a_mean,
-                        'a_std': self.a_std,
-                        's_mean': self.s_mean,
-                        's_std': self.s_std}, stats_path)
+            torch.save(dict(
+                a_mean=self.a_mean,
+                a_std=self.a_std,
+                s_mean=self.s_mean,
+                s_std=self.s_std,
+            ), stats_path)
 
         car_sizes_path = data_dir + '/car_sizes.pth'
         print(f'[loading car sizes: {car_sizes_path}]')
@@ -192,7 +194,7 @@ class DataLoader:
         # ^                ^                              ^
         # 0               t0                             t1
         t0 = self.opt.ncond
-        t1 = t0 + npred
+        t1 = T
         input_images  = images [:,   :t0].float().contiguous()
         input_states  = states [:,   :t0].float().contiguous()
         target_images = images [:, t0:t1].float().contiguous()
@@ -201,6 +203,34 @@ class DataLoader:
         t0 -= 1; t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
         # input_actions = actions[:, :t0].float().contiguous()
+
+        #          n_cond                      n_pred
+        # <---------------------><---------------------------------->
+        # .                     ..                                  .
+        # +---------------------+.                                  .  ^          ^
+        # |i|i|i|i|i|i|i|i|i|i|i|.  3 × 117 × 24                    .  |          |
+        # +---------------------+.                                  .  | inputs   |
+        # +---------------------+.                                  .  |          |
+        # |s|s|s|s|s|s|s|s|s|s|s|.  4                               .  |          |
+        # +---------------------+.                                  .  v          |
+        # .                   +-----------------------------------+ .  ^          |
+        # .                2  |a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a| .  | actions  |
+        # .                   +-----------------------------------+ .  v          |
+        # .                     +-----------------------------------+  ^          | tensors
+        # .       3 × 117 × 24  |i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                  4  |s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|  | targets  |
+        # .                     +-----------------------------------+  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                  2  |c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|  |          |
+        # .                     +-----------------------------------+  v          v
+        # +---------------------------------------------------------+             ^
+        # |                           car_id                        |             | string
+        # +---------------------------------------------------------+             v
+        # +---------------------------------------------------------+             ^
+        # |                          car_size                       |  2          | tensor
+        # +---------------------------------------------------------+             v
 
         return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
 
@@ -216,3 +246,4 @@ if __name__ == '__main__':
     d = DataLoader(None, opt=my_opt, dataset='i80')
     # Retrieve first training batch
     x = d.get_batch_fm('train', cuda=False)
+

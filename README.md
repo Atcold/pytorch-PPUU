@@ -1,5 +1,5 @@
 # Prediction and Policy-learning Under Uncertainty (PPUU)
-[Gitter chatroom](gitter.im/PPUU), [video summary](youtu.be/X2s7gy3wIYw), [slides](bit.ly/PPUU-slides), [poster](bit.ly/PPUU-poster), [website](bit.ly/PPUU-web).  
+[Gitter chatroom](http://gitter.im/PPUU), [video summary](http://youtu.be/X2s7gy3wIYw), [slides](http://bit.ly/PPUU-slides), [poster](http://bit.ly/PPUU-poster), [website](http://bit.ly/PPUU-web).  
 Implementing [Model-Predictive Policy Learning with Uncertainty Regularization for Driving in Dense Traffic](http://bit.ly/PPUU-article) in [PyTorch](https://pytorch.org).
 
 ![planning](doc/planning.png)
@@ -54,7 +54,7 @@ So, open up your terminal, and type:
 
 ```bash
 git clone git@github.com:Atcold/pytorch-PPUU.git
-# or with the https protocol 
+# or with the https protocol
 # git clone https://github.com/Atcold/pytorch-PPUU
 ```
 
@@ -83,7 +83,8 @@ conda env create -f environment.yaml
 As prescribed, activate it by typing:
 
 ```bash
-source activate PPUU
+source activate PPUU  # or
+conda activate PPUU
 ```
 
 Finally, have a look at the four maps available in the NGSIM data set, namely: *I-80*, *US-101*, *Lankershim*, and *Peachtree*.
@@ -201,7 +202,7 @@ python train_{MPUR,MPER,IL}.py -model_dir <fm_load_path> -mfile <fm_filename>
 ## Evaluating the agent
 
 To evaluate a trained policy, run the script `eval_policy.py` in one of the three following modes.
-Type `-h` to see other options and details. 
+Type `-h` to see other options and details.
 
 ```bash
 python eval_policy.py -model_dir <load_path> -policy_model <policy_filename> -method policy-{MPUR,MPER,IL}

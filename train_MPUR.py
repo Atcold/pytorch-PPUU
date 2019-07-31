@@ -26,7 +26,7 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
-parser.add_argument('-policy', type=str, default='policy-gauss')
+parser.add_argument('-policy', type=str, default='policy-deterministic')
 parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
 parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v12/')
 parser.add_argument('-ncond', type=int, default=20)
@@ -115,7 +115,7 @@ elif 'zdropout=0.0' in opt.mfile:
     opt.model_file += '-zdropout=0.0'
 if 'model=fwd-cnn-layers' in opt.mfile:
     opt.model_file += '-deterministic'
-opt.model_file += f'-{opt.policy}-nfeature={opt.nfeature}'
+opt.model_file += f'-nfeature={opt.nfeature}'
 opt.model_file += f'-bsize={opt.batch_size}'
 opt.model_file += f'-npred={opt.npred}'
 opt.model_file += f'-ureg={opt.u_reg}'

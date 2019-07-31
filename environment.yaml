@@ -8,8 +8,12 @@ dependencies:
   - python=3.7
   - pytorch=1.0.1
   - scipy=1.2.0
+  - matplotlib
+  - pip
+  - jupyter
   - pip:
     - gym
     - pygame
-prefix: /usr/local/miniconda3/envs/PPUU
-
+    - scikit-learn
+    - jupytext
+    - ipdb
