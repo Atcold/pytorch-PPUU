@@ -13,10 +13,10 @@ class DataLoader:
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
         if dataset == 'i80' or dataset == 'us101':
-            data_dir = 'traffic-data/state-action-cost/data_{}_v0'.format(dataset)
+            data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
             if single_shard:
                 # quick load for debugging
-                data_files = ['{}.txt/'.format(next(os.walk(data_dir))[1][0])]
+                data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
             else:
                 data_files = next(os.walk(data_dir))[1]
 
@@ -28,7 +28,7 @@ class DataLoader:
             for df in data_files:
                 combined_data_path = f'{data_dir}/{df}/all_data.pth'
                 if os.path.isfile(combined_data_path):
-                    print('[loading data shard: {}]'.format(combined_data_path))
+                    print(f'[loading data shard: {combined_data_path}]')
                     data = torch.load(combined_data_path)
                     self.images += data.get('images')
                     self.actions += data.get('actions')
