@@ -41,7 +41,8 @@ class DataLoader:
                     actions = []
                     costs = []
                     states = []
-                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl').sort()
+                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
+                    ids.sort()
                     for f in ids:
                         print(f'[loading {f}]')
                         fd = pickle.load(open(f, 'rb'))
@@ -89,7 +90,7 @@ class DataLoader:
             perm = rgn.permutation(self.n_episodes)
             n_train = int(math.floor(self.n_episodes * 0.8))
             n_valid = int(math.floor(self.n_episodes * 0.1))
-            self.train_indx = perm[0 : self.n_train]
+            self.train_indx = perm[0 : n_train]
             self.valid_indx = perm[n_train : n_train + n_valid]
             self.test_indx = perm[n_train + n_valid :]
             torch.save(dict(
