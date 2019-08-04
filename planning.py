@@ -352,7 +352,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
     else:
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
-        proximity_loss = proximity_cost * gamma_mask[:, :npred]  #torch.mean(proximity_cost * gamma_mask[:, :npred])
+        proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+
 
     _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
