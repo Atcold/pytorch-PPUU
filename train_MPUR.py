@@ -47,7 +47,7 @@ parser.add_argument('-lrt_z', type=float, default=0.0)
 parser.add_argument('-z_updates', type=int, default=0)
 parser.add_argument('-infer_z', type=int, default=0)
 parser.add_argument('-gamma', type=float, default=0.99)
-parser.add_argument('-learned_cost', type=int, default=1)
+parser.add_argument('-learned_cost', action='store_true')
 M1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
      'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
 M2 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
@@ -130,7 +130,8 @@ opt.model_file += f'-seed={opt.seed}'
 if opt.value_model == '':
     opt.model_file += '-novalue'
 
-if opt.learned_cost == 1:
+if opt.learned_cost:
+    print('[loading cost regressor]')
     model.cost = torch.load(path.join(opt.model_dir, opt.mfile + '.cost.model'))['model']
 
 
