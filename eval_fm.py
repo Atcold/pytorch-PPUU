@@ -28,7 +28,7 @@ parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-noise', type=float, default=0.0)
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-model_dir', type=str, default='models/')
 M1 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
      'warmstart=0-seed=1.step200000.model'
 M2 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
