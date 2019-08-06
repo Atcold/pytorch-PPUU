@@ -454,7 +454,7 @@ class Car:
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
         new_h = int(scale*sub_rot_array.shape[0])
         new_w = int(scale*sub_rot_array.shape[1])
-        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h)))
+        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
