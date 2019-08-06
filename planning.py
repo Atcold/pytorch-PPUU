@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import numpy
 import utils
-
+import ipdb
 
 ##################################################################################
 # functions for planning and training policy networks using the forward model
@@ -50,7 +50,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     Z_rep        = Z_rep.       view(n_models * bsize, npred, -1)
 
     model.train()  # turn on dropout, for uncertainty estimation
-    pred_images, pred_states, pred_costs = [], [], []
+    pred_images, pred_states = [], []
     for t in range(npred):
         z = Z_rep[:, t]
         pred_image, pred_state = model.forward_single_step(input_images, input_states, actions[:, t], z)
@@ -76,10 +76,11 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         pred_costs = pred_costs[:, :, :, 0] + model.opt.lambda_l * pred_costs[:, :, :, 1]
         if detach:
             pred_costs.detach_()
-
-    # pred_costs, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes.unsqueeze(0).expand(
-    # n_models, bsize, 2).contiguous().view(n_models * bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'],
-    # s_std=model.stats['s_std'])
+    else:
+        #ipdb.set_trace()
+        pred_costs, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes.unsqueeze(0).expand(
+        n_models, bsize, 2).contiguous().view(n_models * bsize, 2), unnormalize=True, s_mean=model.stats['s_mean'],
+        s_std=model.stats['s_std'])
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
     pred_states = pred_states.view(n_models, bsize, npred, -1)
@@ -134,7 +135,8 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
             actions=actions,
             npred=npred,
             n_models=10,
-            detach=True
+            detach=True,
+            car_sizes=car_sizes
         )
         u_images.append(pred_images_var)
         u_states.append(pred_states_var)
@@ -328,6 +330,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
 
     gamma_mask = torch.tensor([0.99**t for t in range(npred + 1)]).cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
+        #ipdb.set_trace()
         proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
                                                  s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if n_updates_z > 0:
@@ -351,6 +354,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
 
+
     _, _, c_var, _, c_mean, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
         detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
@@ -366,8 +370,9 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     #         detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
     #     )
 
+    #ipdb.set_trace()
     return [pred_images, pred_states, proximity_loss, lane_loss, total_u_loss, c_mean, c_var], pred_actions,\
-           [pred_images_adv, pred_states_adv, pred_costs_adv]
+            [pred_images_adv, pred_states_adv, pred_costs_adv]
 
 
 def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
