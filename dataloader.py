@@ -16,65 +16,68 @@ class DataLoader:
         self.opt = opt
         self.random = random.Random()
         self.random.seed(12345)  # use this so that the same batches will always be picked
+
         acceptable_maps = {'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'}
         assert dataset in acceptable_maps, 'Data set not supported'
-        data_dir = 'traffic-data/state-action-cost/data_{}_v0'.format(dataset)
-        if single_shard:
-            # quick load for debugging
-            data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
-        else:
-            _, data_files, _ = next(os.walk(data_dir))
-        self.images = []
-        self.actions = []
-        self.costs = []
-        self.states = []
-        self.ids = []
-        for df in data_files:
-            combined_data_path = f'{data_dir}/{df}/all_data.pth'
-            if os.path.isfile(combined_data_path):
-                print('[loading data shard: {}]'.format(combined_data_path))
-                data = torch.load(combined_data_path)
-                self.images += data.get('images')
-                self.actions += data.get('actions')
-                self.costs += data.get('costs')
-                self.states += data.get('states')
-                self.ids += data.get('ids')
+            data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
+            if single_shard:
+                # quick load for debugging
+                data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
             else:
-                print(data_dir)
-                images = []
-                actions = []
-                costs = []
-                states = []
-                ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
-                for f in ids:
-                    print('[loading {}]'.format(f))
-                    fd = pickle.load(open(f, 'rb'))
-                    Ta = fd['actions'].size(0)
-                    Tp = fd['pixel_proximity_cost'].size(0)
-                    Tl = fd['lane_cost'].size(0)
-                    # assert Ta == Tp == Tl  # TODO Check why there are more costs than actions
-                    # if not(Ta == Tp == Tl): pdb.set_trace()
-                    images.append(fd['images'])
-                    actions.append(fd['actions'])
-                    costs.append(torch.cat((
-                        fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
-                        fd.get('lane_cost')[:Ta].view(-1, 1),
-                    ), 1),)
-                    states.append(fd['states'])
+                data_files = next(os.walk(data_dir))[1]
 
-                print(f'Saving {combined_data_path} to disk')
-                torch.save({
-                    'images': images,
-                    'actions': actions,
-                    'costs': costs,
-                    'states': states,
-                    'ids': ids,
-                }, combined_data_path)
-                self.images += images
-                self.actions += actions
-                self.costs += costs
-                self.states += states
-                self.ids += ids
+            self.images = []
+            self.actions = []
+            self.costs = []
+            self.states = []
+            self.ids = []
+            for df in data_files:
+                combined_data_path = f'{data_dir}/{df}/all_data.pth'
+                if os.path.isfile(combined_data_path):
+                    print(f'[loading data shard: {combined_data_path}]')
+                    data = torch.load(combined_data_path)
+                    self.images += data.get('images')
+                    self.actions += data.get('actions')
+                    self.costs += data.get('costs')
+                    self.states += data.get('states')
+                    self.ids += data.get('ids')
+                else:
+                    print(data_dir)
+                    images = []
+                    actions = []
+                    costs = []
+                    states = []
+                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
+                    ids.sort()
+                    for f in ids:
+                        print(f'[loading {f}]')
+                        fd = pickle.load(open(f, 'rb'))
+                        Ta = fd['actions'].size(0)
+                        Tp = fd['pixel_proximity_cost'].size(0)
+                        Tl = fd['lane_cost'].size(0)
+                        # assert Ta == Tp == Tl  # TODO Check why there are more costs than actions
+                        # if not(Ta == Tp == Tl): pdb.set_trace()
+                        images.append(fd['images'])
+                        actions.append(fd['actions'])
+                        costs.append(torch.cat((
+                            fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
+                            fd.get('lane_cost')[:Ta].view(-1, 1),
+                        ), 1),)
+                        states.append(fd['states'])
+
+                    print(f'Saving {combined_data_path} to disk')
+                    torch.save({
+                        'images': images,
+                        'actions': actions,
+                        'costs': costs,
+                        'states': states,
+                        'ids': ids,
+                    }, combined_data_path)
+                    self.images += images
+                    self.actions += actions
+                    self.costs += costs
+                    self.states += states
+                    self.ids += ids
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
@@ -91,7 +94,7 @@ class DataLoader:
             perm = rgn.permutation(self.n_episodes)
             n_train = int(math.floor(self.n_episodes * 0.8))
             n_valid = int(math.floor(self.n_episodes * 0.1))
-            self.train_indx = perm[0 : self.n_train]
+            self.train_indx = perm[0 : n_train]
             self.valid_indx = perm[n_train : n_train + n_valid]
             self.test_indx = perm[n_train + n_valid :]
             torch.save(dict(
@@ -123,12 +126,10 @@ class DataLoader:
             all_states = torch.cat(all_states, 0)
             self.s_mean = torch.mean(all_states, 0)
             self.s_std = torch.std(all_states, 0)
-            torch.save(dict(
-                a_mean=self.a_mean,
-                a_std=self.a_std,
-                s_mean=self.s_mean,
-                s_std=self.s_std,
-            ), stats_path)
+            torch.save({'a_mean': self.a_mean,
+                        'a_std': self.a_std,
+                        's_mean': self.s_mean,
+                        's_std': self.s_std}, stats_path)
 
         car_sizes_path = data_dir + '/car_sizes.pth'
         print(f'[loading car sizes: {car_sizes_path}]')
@@ -203,7 +204,6 @@ class DataLoader:
         t0 -= 1; t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
         # input_actions = actions[:, :t0].float().contiguous()
-
         #          n_cond                      n_pred
         # <---------------------><---------------------------------->
         # .                     ..                                  .
