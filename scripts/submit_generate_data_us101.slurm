@@ -11,4 +11,4 @@
 #SBATCH --mail-user=canziani@nyu.edu
 
 cd ../
-srun python -u generate_trajectories.py -time_slot $1 -map us101
+srun python -u generate_trajectories.py -time_slot $time_slot -map us101

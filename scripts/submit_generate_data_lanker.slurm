@@ -11,5 +11,5 @@
 #SBATCH --mail-user=canziani@nyu.edu
 
 cd ../
-srun python -u generate_trajectories.py -time_slot $1 -map lanker
+srun python -u generate_trajectories.py -time_slot $time_slot -map lanker
 
