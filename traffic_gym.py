@@ -6,7 +6,9 @@ import random
 import numpy as np
 import scipy.misc
 import sys, pickle
+from skimage import measure, transform
 # from matplotlib.image import imsave
+import PIL
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core, spaces
 import os
@@ -450,7 +452,9 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
-        sub_rot_array_scaled = scipy.misc.imresize(sub_rot_array, scale)  # is deprecated, need to be replaced
+        new_h = int(scale*sub_rot_array.shape[0])
+        new_w = int(scale*sub_rot_array.shape[1])
+        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
