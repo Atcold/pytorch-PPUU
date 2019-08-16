@@ -1,7 +1,9 @@
 <component name="ProjectDictionaryState">
   <dictionary name="atcold">
     <words>
+      <w>autoencoder</w>
       <w>backprop</w>
+      <w>conv</w>
       <w>cuda</w>
       <w>lankershim</w>
       <w>mkdir</w>

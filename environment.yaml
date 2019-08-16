@@ -11,6 +11,7 @@ dependencies:
   - matplotlib
   - pip
   - jupyter
+  - tqdm
   - pip:
     - gym
     - pygame

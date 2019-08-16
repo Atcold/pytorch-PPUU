@@ -160,30 +160,27 @@ class DataLoader:
                 t = self.random.randint(0, episode_length - T)
                 images.append(self.images[s][t : t + T].to(device))
                 actions.append(self.actions[s][t : t + T].to(device))
-                states.append(self.states[s][t : t + T].to(device))
+                states.append(self.states[s][t : t + T, 0].to(device))  # discard 6 neighbouring cars
                 costs.append(self.costs[s][t : t + T].to(device))
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
-                timeslot = splits[-2]
+                time_slot = splits[-2]
                 car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
-                size = self.car_sizes[timeslot][car_id]
+                size = self.car_sizes[time_slot][car_id]
                 sizes.append([size[0], size[1]])
                 nb += 1
 
-        images = torch.stack(images).float()
-        images.div_(255.0)
-
-        states = torch.stack(states)
-        states = states[:, :, 0].contiguous()
-
+        # Pile up stuff
+        images  = torch.stack(images)
+        states  = torch.stack(states)
         actions = torch.stack(actions)
-        sizes = torch.tensor(sizes)
+        sizes   = torch.tensor(sizes)
 
+        # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
-            actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(device)
-            actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(device)
-            states -= self.s_mean.view(1, 1, 4).expand(states.size()).to(device)
-            states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).to(device)
+            actions = self.normalise_action(actions)
+            states = self.normalise_state_vector(states)
+        images = self.normalise_state_image(images)
 
         costs = torch.stack(costs)
 
@@ -230,15 +227,30 @@ class DataLoader:
 
         return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
 
+    @staticmethod
+    def normalise_state_image(images):
+        return images.float().div_(255.0)
+
+    def normalise_state_vector(self, states):
+        shape = (1, 1, 4) if states.dim() == 3 else (1, 4)  # dim = 3: state sequence, dim = 2: single state
+        states -= self.s_mean.view(*shape).expand(states.size()).to(states.device)
+        states /= (1e-8 + self.s_std.view(*shape).expand(states.size())).to(states.device)
+        return states
+
+    def normalise_action(self, actions):
+        actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
+        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
+        return actions
+
 
 if __name__ == '__main__':
     # Create some dummy options
-    class my_opt():
+    class DataSettings:
         debug = False
         batch_size = 4
         npred = 20
         ncond = 10
     # Instantiate data set object
-    d = DataLoader(None, opt=my_opt, dataset='i80')
+    d = DataLoader(None, opt=DataSettings, dataset='i80')
     # Retrieve first training batch
     x = d.get_batch_fm('train', cuda=False)
