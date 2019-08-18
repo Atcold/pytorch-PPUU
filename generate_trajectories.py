@@ -1,11 +1,10 @@
-import argparse, pdb
+import argparse
+import os
+import random
+
 import gym
 import numpy as np
-import os
-import pickle
-import random
 import torch
-import scipy.misc
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
@@ -55,19 +54,19 @@ register(
     kwargs=kwargs
 )
 
-gym.envs.registration.register(
+register(
     id='US-101-v0',
     entry_point='map_us101:US101',
     kwargs=kwargs,
 )
 
-gym.envs.registration.register(
+register(
     id='Lankershim-v0',
     entry_point='map_lanker:Lankershim',
     kwargs=kwargs,
 )
 
-gym.envs.registration.register(
+register(
     id='Peachtree-v0',
     entry_point='map_peach:Peachtree',
     kwargs=kwargs,

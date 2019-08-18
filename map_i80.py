@@ -1,17 +1,15 @@
 # from os import getpid, system
+import bisect
+import os
+import pickle
 from os.path import isfile
 
-import torch
-from random import choice, randrange
-
-from custom_graphics import draw_dashed_line
-from traffic_gym import Simulator, Car, colours
-import pygame
-import pandas as pd
 import numpy as np
-import pdb, random
-import bisect
-import pdb, pickle, os, re
+import pandas as pd
+import pygame
+import torch
+
+from traffic_gym import Simulator, Car, colours
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -81,13 +79,15 @@ class I80Car(Car):
         direction_vector = self._trajectory[k + 1] - self._trajectory[k]
         norm = np.linalg.norm(direction_vector)
         if what == 'direction':
-            if norm < 1e-6: return self._direction  # if static returns previous direction
+            if norm < 1e-6:
+                return self._direction  # if static returns previous direction
             return direction_vector / norm
         if what == 'speed':
             return norm / self._dt
         if what == 'init_direction':  # valid direction can be computed when speed is non-zero
             t = 1  # check if the car is in motion the next step
-            while self._df.at[self._df.index[t], 'Vehicle Velocity'] < 5 and t < self._max_t: t += 1
+            while self._df.at[self._df.index[t], 'Vehicle Velocity'] < 5 and t < self._max_t:
+                t += 1
             # t point to the point in time where speed is > 5
             direction_vector = self._trajectory[t] - self._trajectory[t - 1]
             norm = np.linalg.norm(direction_vector)
@@ -294,7 +294,7 @@ class I80(Simulator):
             if self.train_indx is None:
                 train_indx_file = '/home/atcold/Work/GitHub/pytorch-Traffic-Simulator/train_indx.pkl'
                 if not os.path.isfile(train_indx_file):
-                    import get_data_idx
+                    pass
                 print('Loading training indices')
                 with open(train_indx_file, 'rb') as f:
                     self.train_indx = pickle.load(f)
@@ -310,7 +310,8 @@ class I80(Simulator):
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0], self.X_OFFSET)
         self.max_frame = max(self.df['Frame ID'])
-        if vehicle_id: frame = self._get_first_frame(vehicle_id)
+        if vehicle_id:
+            frame = self._get_first_frame(vehicle_id)
         if frame is None:  # controlled
             # Start at a random valid (new_vehicles is not empty) initial frame
             frame_df = self.df['Frame ID'].values
@@ -368,7 +369,8 @@ class I80(Simulator):
             for vehicle_id in vehicles:
                 this_vehicle = df['Vehicle ID'] == vehicle_id
                 car_df = df[this_vehicle & now_and_on]
-                if len(car_df) < self.smoothing_window + 1: continue
+                if len(car_df) < self.smoothing_window + 1:
+                    continue
                 f = self.font[20] if self.display else None
                 car = self.EnvCar(car_df, self.offset, self.look_ahead, self.screen_size[0], f, self.smoothing_window,
                                   dt=self.delta_t)
@@ -439,7 +441,8 @@ class I80(Simulator):
 
             if v.is_controlled and v.valid:
                 v.count_collisions(state)
-                if v.collisions_per_frame > 0: self.collision = True
+                if v.collisions_per_frame > 0:
+                    self.collision = True
 
             # # Create set of off track vehicles
             # if v._colour[0] > 128:  # one lane away
@@ -461,8 +464,10 @@ class I80(Simulator):
 
         # Keep the ghost updated
         if self.store_sim_video:
-            if self.ghost and self.ghost.off_screen: self.ghost = None
-            if self.ghost: self.ghost.step(self.ghost.policy())
+            if self.ghost and self.ghost.off_screen:
+                self.ghost = None
+            if self.ghost:
+                self.ghost.step(self.ghost.policy())
 
         self.frame += int(self.delta_t * 10)
 
@@ -477,7 +482,8 @@ class I80(Simulator):
                 return_reward=self.return_reward,
                 gamma=self.gamma,
             )
-            if return_: return return_
+            if return_:
+                return return_
 
         # return observation, reward, done, info
         return None, None, self.done, None
@@ -488,12 +494,13 @@ class I80(Simulator):
 
         lanes = self.lanes  # lanes
 
+        s = surface  # screen
+        draw_line = pygame.draw.line  # shortcut
+        sw = self.screen_size[0]  # screen width
+
         if mode == 'human':
-            s = surface  # screen
-            draw_line = pygame.draw.line  # shortcut
             w = colours['w']  # colour white
             g = (128, 128, 128)
-            sw = self.screen_size[0]  # screen width
 
             for lane in lanes:
                 draw_line(s, g, (0, lane['min']), (sw, lane['min']), 1)
@@ -517,10 +524,7 @@ class I80(Simulator):
             # pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
-            s = surface  # screen
-            draw_line = pygame.draw.line  # shortcut
             w = colours['r']  # colour white
-            sw = self.screen_size[0]  # screen width
             m = offset
 
             for lane in lanes:

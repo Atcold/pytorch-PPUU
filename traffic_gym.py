@@ -1,22 +1,20 @@
 import bisect
-
-import pygame, pdb, torch
-import math, numpy
-import random
-import numpy as np
-import scipy.misc
-import sys, pickle
-from skimage import measure, transform
-# from matplotlib.image import imsave
-import PIL
-from custom_graphics import draw_dashed_line, draw_text, draw_rect
-from gym import core, spaces
 import os
+import pdb
+import pickle
+import random
+import sys
+
+import numpy as np
+import pygame
+import torch
+# from matplotlib.image import imsave
+from PIL import Image
+from gym import core, spaces
 from imageio import imwrite
 from torch.autograd import Variable
 
-# from skimage.transform import rescale
-
+from custom_graphics import draw_dashed_line, draw_text, draw_rect
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -256,7 +254,8 @@ class Car:
             self._text[1].top = y - self._width // 2
             surface.blit(self._text[0], self._text[1])
 
-            if self._braked: self._colour = colours['g']
+            if self._braked:
+                self._colour = colours['g']
             return _r
         if mode == 'machine':
             return draw_rect(surface, colours['g'], rectangle, d)
@@ -313,7 +312,8 @@ class Car:
         return self._position
 
     def _brake(self, fraction):
-        if self._passing: return 0
+        if self._passing:
+            return 0
         # Maximum braking acceleration, eq. (1) from
         # http://www.tandfonline.com/doi/pdf/10.1080/16484142.2007.9638118
         g, mu = 9.81, 0.9  # gravity and friction coefficient
@@ -416,11 +416,16 @@ class Car:
         return action
 
     def _safe_left(self, state):
-        if self.back[0] < self.safe_distance: return False  # Cannot see in the future
-        if self._passing: return False
-        if state[0] is None: return False  # On the leftmost lane
-        if state[0][0] and (self - state[0][0])[0] < state[0][0].safe_distance: return False
-        if state[0][1] and (state[0][1] - self)[0] < self.safe_distance: return False
+        if self.back[0] < self.safe_distance:
+            return False  # Cannot see in the future
+        if self._passing:
+            return False
+        if state[0] is None:
+            return False  # On the leftmost lane
+        if state[0][0] and (self - state[0][0])[0] < state[0][0].safe_distance:
+            return False
+        if state[0][1] and (state[0][1] - self)[0] < self.safe_distance:
+            return False
         return True
 
     def _safe_right(self, state):
@@ -452,9 +457,10 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
-        new_h = int(scale*sub_rot_array.shape[0])
-        new_w = int(scale*sub_rot_array.shape[1])
-        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
+        new_h = int(scale * sub_rot_array.shape[0])
+        new_w = int(scale * sub_rot_array.shape[1])
+        sub_rot_array_scaled = np.array(Image.fromarray(sub_rot_array).resize((new_w, new_h),
+                                                                                  resample=2))  # bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
@@ -525,7 +531,8 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
 
     def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
-        if len(self._states_image) < n: return None  # no enough samples
+        if len(self._states_image) < n:
+            return None  # no enough samples
         # n × (state_image, lane_cost, proximity_cost, frame) ->
         # -> (n × state_image, n × lane_cost, n × proximity_cost, n × frame)
         transpose = list(zip(*self._states_image))
@@ -584,17 +591,19 @@ class Car:
             mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
+            pickle_dump_dict = dict(images=im_pth,
+                                    actions=torch.stack(self._actions),
+                                    lane_cost=lane_cost,
+                                    pixel_proximity_cost=pixel_proximity_cost,
+                                    states=states,
+                                    proximity_cost=proximity_cost,
+                                    mask=mask,
+                                    frames=frames)
+            if hasattr(self, '_lane_list'):  # check if vehicle has lane list attribute
+                pickle_dump_dict['lanes'] = \
+                    np.array(self._df[self._df['Frame ID'].isin(frames)]['Lane Identification'].values)
             with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
-                pickle.dump({
-                    'images': im_pth,
-                    'actions': torch.stack(self._actions),
-                    'lane_cost': lane_cost,
-                    'pixel_proximity_cost': pixel_proximity_cost,
-                    'states': states,
-                    'proximity_cost': proximity_cost,
-                    'mask': mask,
-                    'frames': frames,
-                }, f)
+                pickle.dump(pickle_dump_dict, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
             os.system('mkdir -p ' + save_dir)
@@ -631,7 +640,8 @@ class Simulator(core.Env):
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False):
 
         # Observation spaces definition
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W),
+                                            dtype=np.float32)
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
