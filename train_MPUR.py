@@ -87,7 +87,6 @@ opt.model_file = path.join(opt.model_dir, 'policy_networks', 'MPUR-' + opt.polic
 # load the model
 model = torch.load(path.join(opt.model_dir, opt.mfile))
 if type(model) is dict: model = model['model']
-model.disable_unet = False
 model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
 if opt.value_model != '':

@@ -125,7 +125,6 @@ if opt.actions_subsample == -1:
 
 model.intype('gpu')
 model.cuda()
-model.disable_unet=False
 
 
 print('[loading data]')
