@@ -51,8 +51,7 @@ def read_images(dirname, pytorch=True):
 def lane_cost(images, car_size):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
-        3), images.size(4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
 
     width, length = car_size[:, 0], car_size[:, 1]  # feet
@@ -68,8 +67,7 @@ def lane_cost(images, car_size):
     max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     min_x = max_x
-    min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = torch.tensor(min_y)
+    min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
 
@@ -94,8 +92,7 @@ def lane_cost(images, car_size):
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
-        3), images.size(4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
     states = states.view(bsize * npred, 4).clone()
 
@@ -121,8 +118,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
-    min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = torch.tensor(min_y)
+    min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
