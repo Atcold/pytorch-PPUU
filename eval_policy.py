@@ -72,7 +72,6 @@ def load_models():
     stats = torch.load(path.join(data_path, 'data_stats.pth'))
     forward_model = torch.load(path.join(opt.model_dir, opt.mfile))
     if type(forward_model) is dict: forward_model = forward_model['model']
-    forward_model.disable_unet = False
     value_function, policy_network_il, policy_network_mper = None, None, None
     model_path = path.join(opt.model_dir, f'policy_networks/{opt.policy_model}')
     if opt.value_model != '':
