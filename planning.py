@@ -261,7 +261,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
                           n_updates_z=10, infer_z=False):
 
     input_images_orig, input_states_orig = inputs
-    target_images, target_states, target_costs = targets
+    target_images, target_states, target_costs, target_lanes = targets
 
     input_images = input_images_orig.clone()
     input_states = input_states_orig.clone()
@@ -278,7 +278,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     # get initial action sequence, for an episode long npred (= 20) steps
     model.eval()
     for t in range(npred):
-        actions, _, _, _ = model.policy_net(input_images, input_states)
+        actions, _, _, _ = model.policy_net(input_images, input_states, controls=dict(target_lanes=target_lanes))
         if infer_z:
             h_x = model.encoder(input_images, input_states)
             h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())

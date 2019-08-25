@@ -7,7 +7,7 @@ import utils
 print('> Loading DataLoader')
 class opt:
     debug = 0
-dataloader = DataLoader(None, opt, 'i80')
+dataloader = DataLoader(opt, 'i80')
 
 print('> Loading splits')
 splits = torch.load('/home/atcold/vLecunGroup/nvidia-collab/traffic-data-atcold/data_i80_v0/splits.pth')

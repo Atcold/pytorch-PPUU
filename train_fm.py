@@ -43,7 +43,7 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 
 
 # define model file name

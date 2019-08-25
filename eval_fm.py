@@ -63,7 +63,7 @@ model.eval()
 # if opt.cuda == 1:
     # model.intype('gpu')
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 # model.opt.npred = opt.npred  # instruct the model about how many predictions we want it to produce
 model.opt.alpha = 0
 model.disable_unet = False

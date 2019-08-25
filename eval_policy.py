@@ -101,7 +101,7 @@ def load_models():
     return forward_model, value_function, policy_network_il, policy_network_mper, stats
 
 
-dataloader = DataLoader(None, opt, 'i80')
+dataloader = DataLoader(opt, 'i80')
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
 

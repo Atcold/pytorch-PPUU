@@ -53,7 +53,7 @@ model.eval()
 if opt.cuda == 1:
     model.intype('gpu')
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 
 def compute_pz(nbatches):
     model.p_z = []

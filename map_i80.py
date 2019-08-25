@@ -68,7 +68,8 @@ class I80Car(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
-        self._lane_list = df['Lane Identification'].values
+        lane_shift = max((k - 1) / 2, 0)
+        self._lane_list = df['Lane Identification'].values[lane_shift:self._max_t+lane_shift]
         self.collisions_per_frame = 0
 
     @property

@@ -1,11 +1,15 @@
-import sys
-import numpy, random, pdb, math, pickle, glob, time, os, re
+import glob
+import math
+import numpy
+import os
+import pickle
+import random
+import re
 import torch
-from torch.autograd import Variable
 
 
 class DataLoader:
-    def __init__(self, fname, opt, dataset='simulator', single_shard=False):
+    def __init__(self, opt, dataset='simulator', single_shard=False):
         if opt.debug:
             single_shard = True
         self.opt = opt
@@ -13,7 +17,7 @@ class DataLoader:
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
         if dataset == 'i80' or dataset == 'us101':
-            data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
+            data_dir = f'traffic-data/state-action-cost/data_{dataset}_v{opt.v}'
             if single_shard:
                 # quick load for debugging
                 data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
@@ -24,6 +28,7 @@ class DataLoader:
             self.actions = []
             self.costs = []
             self.states = []
+            self.current_lanes = []
             self.ids = []
             for df in data_files:
                 combined_data_path = f'{data_dir}/{df}/all_data.pth'
@@ -34,6 +39,7 @@ class DataLoader:
                     self.actions += data.get('actions')
                     self.costs += data.get('costs')
                     self.states += data.get('states')
+                    self.current_lanes += data.get('lanes')
                     self.ids += data.get('ids')
                 else:
                     print(data_dir)
@@ -41,6 +47,7 @@ class DataLoader:
                     actions = []
                     costs = []
                     states = []
+                    lanes = []
                     ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
                     ids.sort()
                     for f in ids:
@@ -58,6 +65,7 @@ class DataLoader:
                             fd.get('lane_cost')[:Ta].view(-1, 1),
                         ), 1),)
                         states.append(fd['states'])
+                        lanes.append(fd['lanes'])
 
                     print(f'Saving {combined_data_path} to disk')
                     torch.save({
@@ -65,12 +73,14 @@ class DataLoader:
                         'actions': actions,
                         'costs': costs,
                         'states': states,
+                        'lanes': lanes,
                         'ids': ids,
                     }, combined_data_path)
                     self.images += images
                     self.actions += actions
                     self.costs += costs
                     self.states += states
+                    self.current_lanes += lanes
                     self.ids += ids
         else:
             assert False, 'Data set not supported'
@@ -131,6 +141,13 @@ class DataLoader:
         print(f'[loading car sizes: {car_sizes_path}]')
         self.car_sizes = torch.load(car_sizes_path)
 
+        # Lane information for target lane
+        map_nb_lanes = dict(i80=7)  # add number of lanes for each map in this dict
+        # TODO: Right now this is a hack -- in future these lane markings should be loaded from pkl file
+        map_lane_markings = dict(i80="")  # add tuple of mid-lane y positions for each map in this dict
+        self.nb_lanes = map_nb_lanes[dataset]
+        self.lane_markings = map_lane_markings[dataset]
+
     # get batch to use for forward modeling
     # a sequence of ncond given states, a sequence of npred actions,
     # and a sequence of npred states to be predicted
@@ -149,7 +166,7 @@ class DataLoader:
         if npred == -1:
             npred = self.opt.npred
 
-        images, states, actions, costs, ids, sizes = [], [], [], [], [], []
+        images, states, actions, costs, current_lanes, target_y, ids, sizes = [], [], [], [], [], [], []
         nb = 0
         T = self.opt.ncond + npred
         while nb < self.opt.batch_size:
@@ -158,10 +175,14 @@ class DataLoader:
             episode_length = min(self.images[s].size(0), self.states[s].size(0))
             if episode_length >= T:
                 t = self.random.randint(0, episode_length - T)
-                images.append(self.images[s][t : t + T].to(device))
-                actions.append(self.actions[s][t : t + T].to(device))
-                states.append(self.states[s][t : t + T].to(device))
-                costs.append(self.costs[s][t : t + T].to(device))
+                images.append(self.images[s][t: t + T].to(device))
+                actions.append(self.actions[s][t: t + T].to(device))
+                states.append(self.states[s][t: t + T].to(device))
+                costs.append(self.costs[s][t: t + T].to(device))
+                current_lanes.append(self.current_lanes[s][t].to(device))
+                random_lane_offset = random.randint(-2, 2)
+                target_lane = max(0, min(self.nb_lanes - 1, current_lanes[-1] + random_lane_offset))
+                target_y.append(self.get_target_lane(self.lane_markings[target_lane]).to(device))
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
                 timeslot = splits[-2]
@@ -197,8 +218,11 @@ class DataLoader:
         target_images = images [:, t0:t1].float().contiguous()
         target_states = states [:, t0:t1].float().contiguous()
         target_costs  = costs  [:, t0:t1].float().contiguous()
-        t0 -= 1; t1 -= 1
+        target_lanes  = torch.tensor(target_y).contiguous()
+        t0 -= 1
+        t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
+
         # input_actions = actions[:, :t0].float().contiguous()
         #          n_cond                      n_pred
         # <---------------------><---------------------------------->
@@ -220,6 +244,9 @@ class DataLoader:
         # .                     +-----------------------------------+  |          |
         # .                     +-----------------------------------+  |          |
         # .                  2  |c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                     +-----------------------------------+  |          |
+        # .                  1  | target lane y position            |  |          |
         # .                     +-----------------------------------+  v          v
         # +---------------------------------------------------------+             ^
         # |                           car_id                        |             | string
@@ -228,7 +255,8 @@ class DataLoader:
         # |                          car_size                       |  2          | tensor
         # +---------------------------------------------------------+             v
 
-        return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
+        return [input_images, input_states], actions, [target_images, target_states, target_costs, target_lanes],\
+               ids, sizes
 
 
 if __name__ == '__main__':
@@ -239,6 +267,6 @@ if __name__ == '__main__':
         npred = 20
         ncond = 10
     # Instantiate data set object
-    d = DataLoader(None, opt=my_opt, dataset='i80')
+    d = DataLoader(opt=my_opt, dataset='i80')
     # Retrieve first training batch
     x = d.get_batch_fm('train', cuda=False)

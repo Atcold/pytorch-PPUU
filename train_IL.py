@@ -51,7 +51,7 @@ opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
 
 os.system('mkdir -p ' + opt.model_dir)
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 
 opt.model_file = f'{opt.model_dir}/model={opt.model}-bsize={opt.batch_size}-ncond={opt.ncond}-npred={opt.npred}-lrt={opt.lrt}-nhidden={opt.n_hidden}-nfeature={opt.nfeature}-nmixture={opt.n_mixture}-gclip={opt.grad_clip}-seed={opt.seed}'
 

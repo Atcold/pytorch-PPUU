@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
-parser.add_argument('-v', type=int, default=4)
+parser.add_argument('-v', type=int, default=0)
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-policy', type=str, default='policy-deterministic')
 parser.add_argument('-model_dir', type=str, default='models/')
@@ -86,7 +86,8 @@ opt.model_file = path.join(opt.model_dir, 'policy_networks', 'MPUR-' + opt.polic
 
 # load the model
 model = torch.load(path.join(opt.model_dir, opt.mfile))
-if type(model) is dict: model = model['model']
+if type(model) is dict:
+    model = model['model']
 model.disable_unet = False
 model.opt.lambda_l = opt.lambda_l
 model.create_policy_net(opt)
@@ -95,7 +96,7 @@ if opt.value_model != '':
     model.value_function = value_function
 optimizer = optim.Adam(model.policy_net.parameters(), opt.lrt)  # POLICY optimiser ONLY!
 # Have traffic-data point to /misc/vlgscratch4/LecunGroup/nvidia-collab/data/data_i80_v4/
-stats = torch.load('traffic-data/state-action-cost/data_i80_v0/data_stats.pth')
+stats = torch.load(f'traffic-data/state-action-cost/data_{opt.dataset}_v{opt.v}/data_stats.pth')
 model.stats = stats
 if 'ten' in opt.mfile:
     p_z_file = opt.model_dir + opt.mfile + '.pz'
@@ -138,7 +139,7 @@ if opt.learned_cost:
 print(f'[will save as: {opt.model_file}]')
 
 
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 model.train()
 model.opt.u_hinge = opt.u_hinge
 planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)
@@ -148,7 +149,9 @@ model.eval()
 def train(nbatches, npred):
     model.train()
     model.policy_net.train()
-    total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates, grad_norm = 0, 0, 0, 0, 0, 0
+
+    # tl: target lane
+    total_loss_c, total_loss_u, total_loss_l, total_loss_a, total_loss_tl, n_updates, grad_norm = 0, 0, 0, 0, 0, 0, 0
     total_loss_policy = 0
     for j in range(nbatches):
         optimizer.zero_grad()
@@ -163,6 +166,7 @@ def train(nbatches, npred):
         loss_l = pred[3]  # lane cost
         loss_u = pred[4]  # uncertainty cost
         loss_a = actions.norm(2, 2).pow(2).mean()  # action regularisation
+        # TODO: Calculate target lane loss calculation and add it to line below
         loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
 
         if not math.isnan(loss_policy.item()):
@@ -195,8 +199,10 @@ def train(nbatches, npred):
     total_loss_u /= n_updates
     total_loss_a /= n_updates
     total_loss_l /= n_updates
+    # TODO: Add line for target lane loss
     total_loss_policy /= n_updates
     print(f'[avg grad norm: {grad_norm / n_updates}]')
+    # TODO: Add return element for target lane loss
     return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
 
 
@@ -205,7 +211,7 @@ def test(nbatches, npred):
     model.policy_net.train()
     total_loss_c, total_loss_u, total_loss_l, total_loss_a, n_updates = 0, 0, 0, 0, 0
     total_loss_policy = 0
-    for i in range(nbatches):
+    for _ in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('valid', npred)
         inputs = utils.make_variables(inputs)
         targets = utils.make_variables(targets)
@@ -215,6 +221,7 @@ def test(nbatches, npred):
         loss_l = pred[3]
         loss_u = pred[4]
         loss_a = actions.norm(2, 2).pow(2).mean()
+        # TODO: Calculate target lane loss calculation and add it to line below
         loss_policy = loss_c + opt.u_reg * loss_u + opt.lambda_l * loss_l + opt.lambda_a * loss_a
         if not math.isnan(loss_policy.item()):
             total_loss_c += loss_c.item()
@@ -232,7 +239,9 @@ def test(nbatches, npred):
     total_loss_l /= n_updates
     total_loss_u /= n_updates
     total_loss_a /= n_updates
+    # TODO: Add line for target lane loss
     total_loss_policy /= n_updates
+    # TODO: Add return element for target lane loss
     return total_loss_c, total_loss_l, total_loss_u, total_loss_a, total_loss_policy
 
 

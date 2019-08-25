@@ -129,7 +129,7 @@ model.disable_unet=False
 
 
 print('[loading data]')
-dataloader = DataLoader(None, opt, opt.dataset)
+dataloader = DataLoader(opt, opt.dataset)
 
 
 # training and testing functions. We will compute several losses:

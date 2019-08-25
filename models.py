@@ -12,7 +12,7 @@ import utils
 
 # encodes a sequence of input frames and states, and optionally a cost or action, to a hidden representation
 class encoder(nn.Module):
-    def __init__(self, opt, a_size, n_inputs, states=True, state_input_size=4):
+    def __init__(self, opt, a_size, n_inputs, states=True, state_input_size=4, free_will=False):
         super(encoder, self).__init__()
         self.opt = opt
         self.a_size = a_size
@@ -72,7 +72,20 @@ class encoder(nn.Module):
                 nn.Linear(n_hidden, opt.hidden_size)
             )
 
-    def forward(self, images, states=None, actions=None):
+        if free_will:
+            # target lane / speed encoder
+            n_hidden = self.feature_maps[-1]
+            self.t_encoder = nn.Sequential(
+                nn.Linear(1, n_hidden),  # target lane / speed provided as singleton float
+                nn.Dropout(p=opt.dropout, inplace=True),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(n_hidden, n_hidden),
+                nn.Dropout(p=opt.dropout, inplace=True),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(n_hidden, opt.hidden_size)
+            )
+
+    def forward(self, images, states=None, actions=None, controls=None):
         bsize = images.size(0)
         h = self.f_encoder(images.view(bsize, self.n_inputs * 3, self.opt.height, self.opt.width))
         if states is not None:
@@ -80,6 +93,9 @@ class encoder(nn.Module):
         if actions is not None:
             a = self.a_encoder(actions.contiguous().view(bsize, self.a_size))
             h = h + a.view(h.size())
+        if controls is not None:
+            t = self.t_encoder(controls['target_lanes'].continguous().view(bsize, 1))
+            h = h + t.view(h.size())
         return h
 
 
@@ -561,15 +577,27 @@ class FwdCNN_VAE(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(self.opt.nfeature, self.opt.hidden_size)
             )
+            # Target Lane encoder: target lane is provided as integer
+            self.l_encoder = nn.Sequential(
+                nn.Linear(1, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.nfeature),
+                nn.Dropout(p=opt.dropout, inplace=True),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(self.opt.nfeature, self.opt.hidden_size)
+            )
             self.u_network = u_network(opt)
         else:
             print('[initializing encoder and decoder with: {}]'.format(mfile))
             self.mfile = mfile
             pretrained_model = torch.load(mfile)
-            if type(pretrained_model) is dict: pretrained_model = pretrained_model['model']
+            if type(pretrained_model) is dict:
+                pretrained_model = pretrained_model['model']
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
             self.a_encoder = pretrained_model.a_encoder
+            self.l_encoder = pretrained_model.l_encoder
             self.u_network = pretrained_model.u_network
             self.encoder.n_inputs = opt.ncond
             self.decoder.n_out = 1
@@ -618,16 +646,17 @@ class FwdCNN_VAE(nn.Module):
             z = self.reparameterize(mu_prior, logvar_prior, True)
         return z
 
-    def forward_single_step(self, input_images, input_states, action, z):
+    def forward_single_step(self, input_images, input_states, action, lane, z):
         # encode the inputs (without the action)
         bsize = input_images.size(0)
         h_x = self.encoder(input_images, input_states)
         z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         a_emb = self.a_encoder(action).view(h_x.size())
+        l_emb = self.l_encoder(lane).view(h_x.size())
 
         h = h_x + z_exp
-        h = h + a_emb
+        h = h + a_emb + l_emb
         h = h + self.u_network(h)
         pred_image, pred_state = self.decoder(h)
         pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
@@ -727,8 +756,6 @@ class FwdCNN_VAE(nn.Module):
             self.cpu()
             self.use_cuda = False
             self.z_zero = self.z_zero.cpu()
-
-
 
 
 #######################################
@@ -869,7 +896,7 @@ class DeterministicPolicy(nn.Module):
     def __init__(self, opt, context_dim=0, output_dim=None):
         super().__init__()
         self.opt = opt
-        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
+        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond, free_will=True)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
@@ -894,7 +921,7 @@ class DeterministicPolicy(nn.Module):
                 nn.Linear(opt.n_hidden, opt.n_hidden)
             )
 
-    def forward(self, state_images, states, context=None, sample=True,
+    def forward(self, state_images, states, context=None, controls=None, sample=True,
                 normalize_inputs=False, normalize_outputs=False, n_samples=1):
 
         if normalize_inputs:
@@ -907,11 +934,12 @@ class DeterministicPolicy(nn.Module):
 
         bsize = state_images.size(0)
 
-        h = self.encoder(state_images, states).view(bsize, self.hsize)
+        h = self.encoder(state_images, states, controls=controls).view(bsize, self.hsize)
         h = self.proj(h)  # from hidden_size to n_hidden
         if self.context_dim > 0:
             assert(context is not None)
             h = h + self.context_encoder(context)
+
         a = self.fc(h).view(bsize, self.n_outputs)
 
         if normalize_outputs:  # done only at inference time, if only "volatile" was still a thing...
@@ -952,7 +980,6 @@ class ValueFunction(nn.Module):
         h = self.proj(h)
         h = self.fc(h).view(bsize, self.n_outputs)
         return h
-
 
 
 # Mixture Density Network model

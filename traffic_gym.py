@@ -600,8 +600,7 @@ class Car:
                                     mask=mask,
                                     frames=frames)
             if hasattr(self, '_lane_list'):  # check if vehicle has lane list attribute
-                pickle_dump_dict['lanes'] = \
-                    np.array(self._df[self._df['Frame ID'].isin(frames)]['Lane Identification'].values)
+                pickle_dump_dict['lanes'] = self._lane_list - 1  # re-index lanes
             with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
                 pickle.dump(pickle_dump_dict, f)
         elif mode == 'img':
