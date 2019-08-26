@@ -1,7 +1,6 @@
 import torch, numpy, argparse, pdb, os, time, math, random, re
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import models, planning
@@ -147,7 +146,7 @@ def compute_loss(targets, predictions, gamma=1.0, r=True):
         loss_i *= gamma_mask
         loss_s *= gamma_mask
         loss_c *= gamma_mask
-    return loss_i.mean(), loss_s.mean(), Variable(torch.zeros(1)), loss_p.mean()
+    return loss_i.mean(), loss_s.mean(), torch.zeros(1), loss_p.mean()
 
 def train(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
@@ -157,14 +156,11 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = planning.train_policy_net_mper(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
 #        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
-#        proximity_cost = proximity_cost * Variable(gamma_mask)
-#        lane_cost = lane_cost * Variable(gamma_mask)
+#        proximity_cost = proximity_cost * gamma_mask
+#        lane_cost = lane_cost * gamma_mask
 #        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
         loss_policy = loss_i + loss_s + opt.lambda_h*loss_p
         if opt.loss_c == 1:
@@ -197,9 +193,6 @@ def test(nbatches, npred):
     total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('test', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, pred_actions = planning.train_policy_net_mper(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         loss_policy = loss_i + loss_s

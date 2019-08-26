@@ -2,7 +2,6 @@ import torch, numpy, argparse, pdb, os, math
 import utils
 import models
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
@@ -74,9 +73,6 @@ def train(nbatches):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
@@ -95,9 +91,6 @@ def test(nbatches):
     total_loss, nb = 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
