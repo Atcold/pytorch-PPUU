@@ -3,7 +3,6 @@ import gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 import torch.nn as nn
 from gym.envs.registration import register
 import scipy.misc
@@ -60,9 +59,6 @@ def compute_pz(nbatches):
     for j in range(nbatches):
         print('[estimating z distribution: {:2.1%}]'.format(float(j)/nbatches), end="\r")
         inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred, (opt.cuda == 1))
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = utils.Variable(actions)
         pred, loss_kl = model(inputs, actions, targets, save_z = True)
         del inputs, actions, targets
 

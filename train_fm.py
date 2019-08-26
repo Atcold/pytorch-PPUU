@@ -1,7 +1,6 @@
 import torch, numpy, argparse, pdb, os, time, math, random
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import importlib
@@ -146,9 +145,6 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
@@ -177,9 +173,6 @@ def test(nbatches):
     total_loss_i, total_loss_s, total_loss_p = 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
 
         pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]

@@ -1,7 +1,6 @@
 import sys
 import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
-from torch.autograd import Variable
 
 
 class DataLoader:

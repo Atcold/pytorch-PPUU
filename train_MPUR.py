@@ -85,8 +85,6 @@ def start(what, nbatches, npred):
     )
     for j in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
         pred, actions = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
             n_updates_z=opt.z_updates, infer_z=opt.infer_z
