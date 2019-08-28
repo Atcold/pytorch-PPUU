@@ -5,6 +5,7 @@
       <w>backprop</w>
       <w>conv</w>
       <w>cuda</w>
+      <w>imgs</w>
       <w>lankershim</w>
       <w>mkdir</w>
       <w>npred</w>
@@ -15,6 +16,8 @@
       <w>regressor</w>
       <w>unnormalize</w>
       <w>unsqueeze</w>
+      <w>unsqueezes</w>
+      <w>vcts</w>
       <w>waypoint</w>
       <w>waypoints</w>
     </words>

@@ -4,6 +4,7 @@ import numpy
 import utils
 import ipdb
 
+
 ##################################################################################
 # functions for planning and training policy networks using the forward model
 ##################################################################################
@@ -395,7 +396,7 @@ def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_m
                 mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
                 mu = mu_logvar[:, 0]
                 logvar = mu_logvar[:, 1]
-                z = model.reparameterize(mu, logvar, True)
+                z = model.reparameterize(mu, logvar, sample=True)
             z_ = z
             z_list.append(z_)
             z_exp = model.z_expander(z_).view(bsize, model.opt.nfeature, model.opt.h_height, model.opt.h_width)
@@ -421,3 +422,122 @@ def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_m
     pred_actions = torch.stack(pred_actions, 1)
 
     return [pred_images, pred_states, None, total_ploss], pred_actions
+
+
+def train_policy_net_ioc(model, inputs, targets, car_sizes, expert_actions, n_models=10, infer_z=False):
+    state_images, state_vectors = inputs  # unpack inputs
+    target_state_imgs, target_state_vcts, target_costs = targets  # unpack targets
+    bsize = state_images.size(0)
+    npred = target_state_imgs.size(1)
+    predictions = dict(
+        policy_state_imgs=list(),
+        policy_state_vcts=list(),
+        policy_actions=list(),
+        expert_state_imgs=list(),
+        expert_state_vcts=list(),
+    )
+
+    # Sample latent variables from a (fixed) prior
+    z = model.sample_z(npred * bsize).view(npred, bsize, -1)  # npred x bsize x nz, likely 30 x 6 x 32
+
+    # Set predictive model in evaluation mode
+    model.eval()
+
+    # Making a copy, since we're going to edit them
+    state_imgs_copy = state_images.clone()
+    state_vcts_copy = state_vectors.clone()
+
+    # Predicting the states reached by the expert (s, a ↦ š, via f)
+    for t in range(npred):
+        actions = expert_actions[:, t]
+        z_t = get_latent(bsize, state_imgs_copy, state_vcts_copy, model, target_state_imgs[:, t], sample=False)
+        with torch.no_grad():
+            pred_expert = model.forward_single_step(state_imgs_copy, state_vcts_copy, actions, z_t)
+        pred_expert_state_img, pred_expert_state_vct = pred_expert
+        # Auto regress: enqueue output as new element of the input
+        state_imgs_copy = torch.cat((state_imgs_copy[:, 1:], pred_expert_state_img), 1)  # decoder unsqueezes it already
+        state_vcts_copy = torch.cat((state_vcts_copy[:, 1:], pred_expert_state_vct.unsqueeze(1)), 1)
+        predictions['expert_state_imgs'].append(pred_expert_state_img)
+        predictions['expert_state_vcts'].append(pred_expert_state_vct)
+
+    predictions['expert_state_imgs'] = torch.cat(predictions['expert_state_imgs'], 1)
+    predictions['expert_state_vcts'] = torch.stack(predictions['expert_state_vcts'], 1)
+
+    # Making a copy, since we're going to edit them
+    state_imgs_copy = state_images.clone()
+    state_vcts_copy = state_vectors.clone()
+
+    # Predicting the states reached by the policy (s ↦ â ↦ ŝ, via π, f)
+    for t in range(npred):
+        policy_actions, _, _, _ = model.policy_net(state_imgs_copy, state_vcts_copy)
+        if infer_z:  # currently off
+            z_t = get_latent(bsize, state_imgs_copy, state_vcts_copy, model, target_state_imgs[:, t], sample=True)
+        else:
+            z_t = z[t]  # from out fixed prior
+        pred_policy = model.forward_single_step(state_imgs_copy, state_vcts_copy, policy_actions, z_t)
+        pred_policy_state_img, pred_policy_state_vct = pred_policy
+        # Auto regress: enqueue output as new element of the input
+        state_imgs_copy = torch.cat((state_imgs_copy[:, 1:], pred_policy_state_img), 1)
+        state_vcts_copy = torch.cat((state_vcts_copy[:, 1:], pred_policy_state_vct.unsqueeze(1)), 1)
+
+        predictions['policy_state_imgs'].append(pred_policy_state_img)
+        predictions['policy_state_vcts'].append(pred_policy_state_vct)
+        predictions['policy_actions'].append(policy_actions)
+
+    predictions['policy_state_imgs'] = torch.cat(predictions['policy_state_imgs'], 1)
+    predictions['policy_state_vcts'] = torch.stack(predictions['policy_state_vcts'], 1)
+    predictions['policy_actions'] = torch.stack(predictions['policy_actions'], 1)
+
+    # Computing the energies for expert and policy
+    energies = dict()
+    energies['expert_state_vct'], energies['expert_state_img'] = model.energy_net(
+        state_vector=predictions['expert_state_vcts'].view(bsize * npred, state_vectors.size(2)),
+        state_image=predictions['expert_state_imgs'].view(bsize * npred, *state_images.size()[2:])
+    )
+    energies['policy_state_vct'], energies['policy_state_img'] = model.energy_net(
+        state_vector=predictions['policy_state_vcts'].view(bsize * npred, state_vectors.size(2)),
+        state_image=predictions['policy_state_imgs'].view(bsize * npred, *state_images.size()[2:])
+    )
+
+    # Compute proximity and lane losses
+    proximity_cost, _ = utils.proximity_cost(
+        predictions['policy_state_imgs'], predictions['policy_state_vcts'].detach(), car_sizes, unnormalize=True,
+        s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
+    )
+    lane_cost = utils.lane_cost(predictions['policy_state_imgs'], car_sizes)
+    gamma_mask = torch.tensor([0.99 ** t for t in range(npred + 1)]).cuda().unsqueeze(0)
+    proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+    lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+
+    # It looks like compute_uncertainty_batch messes around with its inputs! >:(
+    state_imgs_copy = state_images.clone()
+    state_vcts_copy = state_vectors.clone()
+
+    # Compute the uncertainty loss
+    _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
+        model, state_imgs_copy, state_vcts_copy, predictions['policy_actions'], targets, car_sizes, npred=npred,
+        n_models=n_models, detach=False, Z=z.permute(1, 0, 2), compute_total_loss=True
+    )
+
+    # Compute the action loss
+    loss_a = predictions['policy_actions'].norm(2, 2).pow(2).mean()
+
+    # Add to expert and policy state prediction the predicted losses
+    predictions.update(dict(
+        proximity=proximity_loss,
+        lane=lane_loss,
+        uncertainty=total_u_loss,
+        action=loss_a,
+    ))
+
+    return predictions, energies
+
+
+def get_latent(bsize, input_images, input_states, model, target_image, sample=True):
+    h_x = model.encoder(input_images, input_states)
+    h_y = model.y_encoder(target_image.unsqueeze(1).contiguous())
+    mu_logvar = model.z_network((h_x + h_y).view(bsize, -1)).view(bsize, 2, model.opt.nz)
+    mu = mu_logvar[:, 0]
+    logvar = mu_logvar[:, 1]
+    z_t = model.reparameterize(mu, logvar, sample=sample)
+    return z_t

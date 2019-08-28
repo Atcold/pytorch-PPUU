@@ -1,3 +1,4 @@
+import warnings
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -721,6 +722,7 @@ class FwdCNN_VAE(nn.Module):
         self.prior_net = PriorGaussian(opt, opt.context_dim)
 
     def intype(self, t):
+        warnings.warn('Get rid of this shit. Thanks.', DeprecationWarning)
         if t == 'gpu':
             self.cuda()
             self.z_zero = self.z_zero.cuda()
@@ -1018,24 +1020,32 @@ class PolicyMDN(nn.Module):
         return pi, mu, sigma, a
 
 
+# Bullshit to deal with sending opt around
+class Settings:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
 class EnergyNet(nn.Module):  # g(s)
     def __init__(self, nb_layers=3, dropout_rate=0.5, conv_h_size=(256, 14, 3), img_size=(117, 24)):
         super().__init__()
 
-        class Settings:  # this is garbage!
-            # debug = False
-            # batch_size = 4
-            npred = 1
-            ncond = 1
-            layers = nb_layers
-            nfeature, h_height, h_width = conv_h_size
-            height, width = img_size
-            dropout = dropout_rate
-            hidden_size = prod(conv_h_size)
+        settings = Settings(  # this is garbage!
+            npred=1,
+            ncond=1,
+            layers=nb_layers,
+            nfeature=conv_h_size[0],
+            h_height=conv_h_size[1],
+            h_width=conv_h_size[2],
+            height=img_size[0],
+            width=img_size[1],
+            dropout=dropout_rate,
+            hidden_size=prod(conv_h_size),
+        )
 
-        self.encoder = encoder(Settings, a_size=0, n_inputs=1)
-        self.decoder = decoder(Settings)
-        self.u_network = u_network(Settings)
+        self.encoder = encoder(settings, a_size=0, n_inputs=1)
+        self.decoder = decoder(settings)
+        self.u_network = u_network(settings)
 
     def forward(self, state_vector, state_image):
         state_vector.unsqueeze_(1)  # because we usually feed a sequence
@@ -1065,3 +1075,5 @@ if __name__ == '__main__':
         with torch.no_grad():
             energy = tuple(e.item() for e in energy_net(state_vector=dummy_vector, state_image=dummy_image))
         print(f'   The energy of the dummy state is energy_vct: {energy[0]:.3f}, energy_img: {energy[1]:.3f}')
+
+    torch.save(energy_net, 'energy_net.pth')

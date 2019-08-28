@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import math
+import warnings
 import numpy
 import os
 import pdb
@@ -460,8 +461,8 @@ def embed(Z, ztop, ndim=3):
             'ztop_only_isomap': ztop_only_isomap}
 
 
-def parse_command_line(parser=None):
-    if parser is None: parser = argparse.ArgumentParser()
+def parse_command_line(what=None):
+    parser = argparse.ArgumentParser()
     # data params
     parser.add_argument('-seed', type=int, default=1)
     parser.add_argument('-dataset', type=str, default='i80')
@@ -501,7 +502,16 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
+
+    if what is 'IOC':
+        parser.add_argument('-lrt_nrg', type=float, default=0.0001, help='learning rate')
+        parser.add_argument('-margin_vct', type=float, default=9, help='margin for state_vector energy')
+        parser.add_argument('-margin_img', type=float, default=5, help='margin for state_image energy')
+        parser.add_argument('-lambda_e', type=float, default=1, help='coefficient for energy cost')
+
     opt = parser.parse_args()
+
+    # Some hardcoded stuff, kinda global variables
     opt.n_inputs = 4
     opt.n_actions = 2
     opt.height = 117
@@ -509,18 +519,15 @@ def parse_command_line(parser=None):
     opt.h_height = 14
     opt.h_width = 3
     opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
+
     return opt
 
 
 def build_model_file_name(opt):
-    if 'vae' in opt.mfile:
-        opt.model_file += f'-model=vae'
-    if 'zdropout=0.5' in opt.mfile:
-        opt.model_file += '-zdropout=0.5'
-    elif 'zdropout=0.0' in opt.mfile:
-        opt.model_file += '-zdropout=0.0'
-    if 'model=fwd-cnn-layers' in opt.mfile:
-        opt.model_file += '-deterministic'
+    if 'vae' in opt.mfile: opt.model_file += f'-model=vae'
+    if 'zdropout=0.5' in opt.mfile: opt.model_file += '-zdropout=0.5'
+    elif 'zdropout=0.0' in opt.mfile: opt.model_file += '-zdropout=0.0'
+    if 'model=fwd-cnn-layers' in opt.mfile: opt.model_file += '-deterministic'
     opt.model_file += f'-nfeature={opt.nfeature}'
     opt.model_file += f'-bsize={opt.batch_size}'
     opt.model_file += f'-npred={opt.npred}'
@@ -533,7 +540,6 @@ def build_model_file_name(opt):
     opt.model_file += f'-inferz={opt.infer_z}'
     opt.model_file += f'-learnedcost={opt.learned_cost}'
     opt.model_file += f'-seed={opt.seed}'
-    if opt.value_model == '':
-        opt.model_file += '-novalue'
+    if opt.value_model == '': opt.model_file += '-novalue'
 
     print(f'[will save as: {opt.model_file}]')
