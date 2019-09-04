@@ -478,7 +478,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
     parser.add_argument('-lrt', type=float, default=0.0001, help='learning rate')
     parser.add_argument('-grad_clip', type=float, default=50.0)
-    parser.add_argument('-epoch_size', type=int, default=10)  # TODO: test with 500
+    parser.add_argument('-epoch_size', type=int, default=500)
     parser.add_argument('-n_futures', type=int, default=10)
     parser.add_argument('-u_reg', type=float, default=0.05, help='coefficient of uncertainty regularization term')
     parser.add_argument('-u_hinge', type=float, default=0.5)
