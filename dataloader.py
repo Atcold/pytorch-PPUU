@@ -199,7 +199,7 @@ class DataLoader:
         states  = torch.stack(states)
         actions = torch.stack(actions)
         sizes   = torch.tensor(sizes)
-        target_lanes = torch.tensor(target_y).to(device)
+        target_lanes = torch.tensor(target_y, dtype=torch.float).to(device)
 
         # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
