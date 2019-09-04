@@ -12,7 +12,6 @@ import torch
 from PIL import Image
 from gym import core, spaces
 from imageio import imwrite
-from torch.autograd import Variable
 
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 
@@ -737,8 +736,8 @@ class Simulator(core.Env):
         states -= s_mean.view(1, 1, 4).expand(states.size())
         states /= (1e-8 + s_std.view(1, 1, 4).expand(states.size()))
 
-        images = Variable(images.float())
-        states = Variable(states.float())
+        images = images.float()
+        states = states.float()
         _, _, _, actions = self.policy_network(images, states, sample=True, unnormalize=True)
         actions = actions.view(bsize, -1, 2)
         return actions

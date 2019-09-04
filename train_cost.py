@@ -1,7 +1,6 @@
 import torch, numpy, argparse, pdb, os, time, math, random
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import importlib
@@ -72,9 +71,6 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = model(inputs, actions, targets, z_dropout=0)
         pred_cost = cost(pred[0].view(opt.batch_size*opt.npred, 1, 3, opt.height, opt.width), pred[1].view(opt.batch_size*opt.npred, 1, 4))
         loss = F.mse_loss(pred_cost.view(opt.batch_size, opt.npred, 2), targets[2])
@@ -94,9 +90,6 @@ def test(nbatches, npred):
     total_loss = 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = model(inputs, actions, targets, z_dropout=0)
         pred_cost = cost(pred[0].view(opt.batch_size*opt.npred, 1, 3, opt.height, opt.width), pred[1].view(opt.batch_size*opt.npred, 1, 4))
         loss = F.mse_loss(pred_cost.view(opt.batch_size, opt.npred, 2), targets[2])

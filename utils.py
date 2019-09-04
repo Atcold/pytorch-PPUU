@@ -16,7 +16,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image, ImageDraw
 from sklearn import decomposition
-from torch.autograd import Variable
 
 
 def printnorm(x):
@@ -181,13 +180,6 @@ def log(fname, s):
     f.close()
 
 
-def make_variables(x):
-    y = []
-    for i in range(len(x)):
-        y.append(Variable(x[i]))
-    return y
-
-
 def combine(x, y, method):
     if method == 'add':
         return x + y
@@ -209,7 +201,7 @@ def format_losses(loss_i, loss_s, loss_p=None, split='train'):
 def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     targets = [targets_[i] for i in range(0, 3)]
     # speed up
-    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_ = torch.zeros(actions.size()).cuda()
     actions_.data[:, :, 0].fill_(std)
     pred_speed, _ = model(inputs, actions_, targets)
     for p in pred_speed:
@@ -222,7 +214,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     del pred_speed, _
 
     # brake
-    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_ = torch.zeros(actions.size()).cuda()
     actions_.data[:, :, 0].fill_(-std)
     pred_brake, _ = model(inputs, actions_, targets)
     for p in pred_brake:
@@ -235,7 +227,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     del pred_brake, _
 
     # turn left
-    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_ = torch.zeros(actions.size()).cuda()
     actions_.data[:, :, 1].fill_(std)
     pred_left, _ = model(inputs, actions_, targets)
     for p in pred_left:
@@ -248,7 +240,7 @@ def test_actions(mdir, model, inputs, actions, targets_, std=1.5):
     del pred_left, _
 
     # turn right
-    actions_ = Variable(torch.zeros(actions.size()).cuda())
+    actions_ = torch.zeros(actions.size()).cuda()
     actions_.data[:, :, 1].fill_(-std)
     pred_right, _ = model(inputs, actions_, targets)
     for p in pred_right:
