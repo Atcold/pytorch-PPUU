@@ -9,7 +9,7 @@ import torch
 
 
 class DataLoader:
-    def __init__(self, opt, dataset='simulator', single_shard=False):
+    def __init__(self, fname, opt, dataset='simulator', single_shard=False):
         if opt.debug:
             single_shard = True
         self.opt = opt
@@ -142,9 +142,12 @@ class DataLoader:
         self.car_sizes = torch.load(car_sizes_path)
 
         # Lane information for target lane
-        map_nb_lanes = dict(i80=7)  # add number of lanes for each map in this dict
+        map_nb_lanes = dict(i80=6,)  # add number of lanes for each map in this dict
         # TODO: Right now this is a hack -- in future these lane markings should be loaded from pkl file
-        map_lane_markings = dict(i80="")  # add tuple of mid-lane y positions for each map in this dict
+        # add tuple of mid-lane y positions
+        map_lane_markings = dict(
+            i80=(48, 72, 96, 120, 144, 168),
+        )
         self.nb_lanes = map_nb_lanes[dataset]
         self.lane_markings = map_lane_markings[dataset]
 
@@ -166,7 +169,7 @@ class DataLoader:
         if npred == -1:
             npred = self.opt.npred
 
-        images, states, actions, costs, current_lanes, target_y, ids, sizes = [], [], [], [], [], [], []
+        images, states, actions, costs, target_y, ids, sizes = [], [], [], [], [], [], []
         nb = 0
         T = self.opt.ncond + npred
         while nb < self.opt.batch_size:
@@ -177,34 +180,32 @@ class DataLoader:
                 t = self.random.randint(0, episode_length - T)
                 images.append(self.images[s][t: t + T].to(device))
                 actions.append(self.actions[s][t: t + T].to(device))
-                states.append(self.states[s][t: t + T].to(device))
+                states.append(self.states[s][t: t + T, 0].to(device))  # discard 6 neighbouring cars
                 costs.append(self.costs[s][t: t + T].to(device))
-                current_lanes.append(self.current_lanes[s][t].to(device))
-                random_lane_offset = random.randint(-2, 2)
-                target_lane = max(0, min(self.nb_lanes - 1, current_lanes[-1] + random_lane_offset))
-                target_y.append(self.get_target_lane(self.lane_markings[target_lane]).to(device))
+                current_lane = self.current_lanes[s][t + self.opt.ncond]
+                random_lane_offset = self.random.randint(-2, 2)
+                target_lane = max(0, min(self.nb_lanes - 1, current_lane + random_lane_offset))
+                target_y.append(self.lane_markings[target_lane])
                 ids.append(self.ids[s])
                 splits = self.ids[s].split('/')
-                timeslot = splits[-2]
+                time_slot = splits[-2]
                 car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
-                size = self.car_sizes[timeslot][car_id]
+                size = self.car_sizes[time_slot][car_id]
                 sizes.append([size[0], size[1]])
                 nb += 1
 
-        images = torch.stack(images).float()
-        images.div_(255.0)
-
-        states = torch.stack(states)
-        states = states[:, :, 0].contiguous()
-
+        # Pile up stuff
+        images  = torch.stack(images)
+        states  = torch.stack(states)
         actions = torch.stack(actions)
-        sizes = torch.tensor(sizes)
+        sizes   = torch.tensor(sizes)
+        target_lanes = torch.tensor(target_y).to(device)
 
+        # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
-            actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(device)
-            actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(device)
-            states -= self.s_mean.view(1, 1, 4).expand(states.size()).to(device)
-            states /= (1e-8 + self.s_std.view(1, 1, 4).expand(states.size())).to(device)
+            actions = self.normalise_action(actions)
+            states = self.normalise_state_vector(states)
+        images = self.normalise_state_image(images)
 
         costs = torch.stack(costs)
 
@@ -218,7 +219,6 @@ class DataLoader:
         target_images = images [:, t0:t1].float().contiguous()
         target_states = states [:, t0:t1].float().contiguous()
         target_costs  = costs  [:, t0:t1].float().contiguous()
-        target_lanes  = torch.tensor(target_y).contiguous()
         t0 -= 1
         t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
@@ -258,15 +258,30 @@ class DataLoader:
         return [input_images, input_states], actions, [target_images, target_states, target_costs, target_lanes],\
                ids, sizes
 
+    @staticmethod
+    def normalise_state_image(images):
+        return images.float().div_(255.0)
+
+    def normalise_state_vector(self, states):
+        shape = (1, 1, 4) if states.dim() == 3 else (1, 4)  # dim = 3: state sequence, dim = 2: single state
+        states -= self.s_mean.view(*shape).expand(states.size()).to(states.device)
+        states /= (1e-8 + self.s_std.view(*shape).expand(states.size())).to(states.device)
+        return states
+
+    def normalise_action(self, actions):
+        actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
+        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
+        return actions
+
 
 if __name__ == '__main__':
     # Create some dummy options
-    class my_opt():
+    class DataSettings:
         debug = False
         batch_size = 4
         npred = 20
         ncond = 10
     # Instantiate data set object
-    d = DataLoader(opt=my_opt, dataset='i80')
+    d = DataLoader(None, opt=DataSettings, dataset='i80')
     # Retrieve first training batch
     x = d.get_batch_fm('train', cuda=False)

@@ -1,3 +1,4 @@
+import argparse
 import glob
 import json
 import math
@@ -51,8 +52,7 @@ def read_images(dirname, pytorch=True):
 def lane_cost(images, car_size):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
-        3), images.size(4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
 
     width, length = car_size[:, 0], car_size[:, 1]  # feet
@@ -68,8 +68,7 @@ def lane_cost(images, car_size):
     max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     min_x = max_x
-    min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = torch.tensor(min_y)
+    min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
 
@@ -94,8 +93,7 @@ def lane_cost(images, car_size):
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size(0), images.size(1), images.size(2), images.size(
-        3), images.size(4)
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
     states = states.view(bsize * npred, 4).clone()
 
@@ -121,8 +119,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
-    min_y = numpy.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = torch.tensor(min_y)
+    min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
@@ -469,3 +466,83 @@ def embed(Z, ztop, ndim=3):
             'ztop_only_pca': ztop_only_pca,
             'ztop_only_laplacian': ztop_only_laplacian,
             'ztop_only_isomap': ztop_only_isomap}
+
+
+def parse_command_line(parser=None):
+    if parser is None: parser = argparse.ArgumentParser()
+    # data params
+    parser.add_argument('-seed', type=int, default=1)
+    parser.add_argument('-dataset', type=str, default='i80')
+    parser.add_argument('-v', type=int, default=0)
+    parser.add_argument('-model', type=str, default='fwd-cnn')
+    parser.add_argument('-policy', type=str, default='policy-deterministic')
+    parser.add_argument('-model_dir', type=str, default='models/')
+    parser.add_argument('-ncond', type=int, default=20)
+    parser.add_argument('-npred', type=int, default=30)
+    parser.add_argument('-layers', type=int, default=3)
+    parser.add_argument('-batch_size', type=int, default=6)
+    parser.add_argument('-nfeature', type=int, default=256)
+    parser.add_argument('-n_hidden', type=int, default=256)
+    parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
+    parser.add_argument('-lrt', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('-grad_clip', type=float, default=50.0)
+    parser.add_argument('-epoch_size', type=int, default=10)  # TODO: test with 500
+    parser.add_argument('-n_futures', type=int, default=10)
+    parser.add_argument('-u_reg', type=float, default=0.05, help='coefficient of uncertainty regularization term')
+    parser.add_argument('-u_hinge', type=float, default=0.5)
+    parser.add_argument('-lambda_a', type=float, default=0.0, help='l2 regularization on actions')
+    parser.add_argument('-lambda_l', type=float, default=0.2, help='coefficient of lane cost')
+    parser.add_argument('-lambda_tl', type=float, default=0.2, help='coefficient for target lane cost')
+    parser.add_argument('-lrt_z', type=float, default=0.0)
+    parser.add_argument('-z_updates', type=int, default=0)
+    parser.add_argument('-infer_z', action='store_true')
+    parser.add_argument('-gamma', type=float, default=0.99)
+    parser.add_argument('-learned_cost', action='store_true')
+    m1 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+         'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
+    m2 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
+         'warmstart=0-seed=1.step200000.model'
+    parser.add_argument('-mfile', type=str, default=m1, help='dynamics model used to train the policy network')
+    parser.add_argument('-value_model', type=str, default='')
+    parser.add_argument('-load_model_file', type=str, default='')
+    parser.add_argument('-combine', type=str, default='add')
+    parser.add_argument('-debug', action='store_true')
+    parser.add_argument('-save_movies', action='store_true')
+    parser.add_argument('-l2reg', type=float, default=0.0)
+    parser.add_argument('-no_cuda', action='store_true')
+    opt = parser.parse_args()
+    opt.n_inputs = 4
+    opt.n_actions = 2
+    opt.height = 117
+    opt.width = 24
+    opt.h_height = 14
+    opt.h_width = 3
+    opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
+    return opt
+
+
+def build_model_file_name(opt):
+    if 'vae' in opt.mfile:
+        opt.model_file += f'-model=vae'
+    if 'zdropout=0.5' in opt.mfile:
+        opt.model_file += '-zdropout=0.5'
+    elif 'zdropout=0.0' in opt.mfile:
+        opt.model_file += '-zdropout=0.0'
+    if 'model=fwd-cnn-layers' in opt.mfile:
+        opt.model_file += '-deterministic'
+    opt.model_file += f'-nfeature={opt.nfeature}'
+    opt.model_file += f'-bsize={opt.batch_size}'
+    opt.model_file += f'-npred={opt.npred}'
+    opt.model_file += f'-ureg={opt.u_reg}'
+    opt.model_file += f'-lambdal={opt.lambda_l}'
+    opt.model_file += f'-lambdaa={opt.lambda_a}'
+    opt.model_file += f'-gamma={opt.gamma}'
+    opt.model_file += f'-lrtz={opt.lrt_z}'
+    opt.model_file += f'-updatez={opt.z_updates}'
+    opt.model_file += f'-inferz={opt.infer_z}'
+    opt.model_file += f'-learnedcost={opt.learned_cost}'
+    opt.model_file += f'-seed={opt.seed}'
+    if opt.value_model == '':
+        opt.model_file += '-novalue'
+
+    print(f'[will save as: {opt.model_file}]')

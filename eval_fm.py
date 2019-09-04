@@ -66,7 +66,6 @@ model.eval()
 dataloader = DataLoader(opt, opt.dataset)
 # model.opt.npred = opt.npred  # instruct the model about how many predictions we want it to produce
 model.opt.alpha = 0
-model.disable_unet = False
 
 dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
 if '-ten' in opt.mfile:

@@ -94,7 +94,7 @@ class encoder(nn.Module):
             a = self.a_encoder(actions.contiguous().view(bsize, self.a_size))
             h = h + a.view(h.size())
         if controls is not None:
-            t = self.t_encoder(controls['target_lanes'].continguous().view(bsize, 1))
+            t = self.t_encoder(controls['target_lanes'].contiguous().view(bsize, 1))
             h = h + t.view(h.size())
         return h
 
@@ -597,7 +597,6 @@ class FwdCNN_VAE(nn.Module):
             self.encoder = pretrained_model.encoder
             self.decoder = pretrained_model.decoder
             self.a_encoder = pretrained_model.a_encoder
-            self.l_encoder = pretrained_model.l_encoder
             self.u_network = pretrained_model.u_network
             self.encoder.n_inputs = opt.ncond
             self.decoder.n_out = 1
@@ -646,17 +645,16 @@ class FwdCNN_VAE(nn.Module):
             z = self.reparameterize(mu_prior, logvar_prior, True)
         return z
 
-    def forward_single_step(self, input_images, input_states, action, lane, z):
+    def forward_single_step(self, input_images, input_states, action, z):
         # encode the inputs (without the action)
         bsize = input_images.size(0)
         h_x = self.encoder(input_images, input_states)
         z_exp = self.z_expander(z).view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         h_x = h_x.view(bsize, self.opt.nfeature, self.opt.h_height, self.opt.h_width)
         a_emb = self.a_encoder(action).view(h_x.size())
-        l_emb = self.l_encoder(lane).view(h_x.size())
 
         h = h_x + z_exp
-        h = h + a_emb + l_emb
+        h = h + a_emb
         h = h + self.u_network(h)
         pred_image, pred_state = self.decoder(h)
         pred_image = torch.sigmoid(pred_image + input_images[:, -1].unsqueeze(1))
