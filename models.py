@@ -1054,6 +1054,7 @@ class EnergyNet(nn.Module):  # g(s)
         h = h + self.u_network(h)  # U net with residual (?)
         pred_image, pred_vector = self.decoder(h)  # no (?) residual
         pred_image = torch.sigmoid(pred_image)
+        pred_vector.unsqueeze_(1)  # TODO: fix this fucking bug (decoder implementation)!
         b = state_vector.size(0)
         distance_image = torch.norm((state_image - pred_image).view(b, -1), 2, dim=1).mean()
         distance_vector = torch.norm((state_vector - pred_vector).view(b, -1), 2, dim=1).mean()
