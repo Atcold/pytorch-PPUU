@@ -138,9 +138,11 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+    costs_adj = costs * safe_distance.view(bsize, npred)
+    costs_adj -= (costs_adj - costs).detach()
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    return costs, proximity_mask
+    return costs_adj, proximity_mask
 
 
 def parse_car_path(path):
