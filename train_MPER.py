@@ -3,6 +3,7 @@ import utils
 from dataloader import DataLoader
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 import models, planning
 import importlib
 
@@ -54,6 +55,8 @@ parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-test_only', type=int, default=0)
+parser.add_argument('-tensorboard_dir', type=str, default=None,
+                    help='path to the directory where to save tensorboard log')
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -236,6 +239,7 @@ if opt.test_only == 1:
     print('[testing]')
     valid_losses = test(10, 200)
 else:
+    writer = SummaryWriter(log_dir=opt.tensorboard_dir)
     print('[training]')
     utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
     npred = opt.npred if opt.npred != -1 else 16
@@ -254,6 +258,19 @@ else:
                     'n_iter': n_iter},
                    opt.model_file + '.model')
         model.intype('gpu')
+
+        writer.add_scalar('Loss/train_state_img', train_losses[0], i)
+        writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
+        writer.add_scalar('Loss/train_costs', train_losses[2], i)
+        writer.add_scalar('Loss/train_policy', train_losses[3], i)
+        writer.add_scalar('Loss/train_relative_entropy', train_losses[4], i)
+
+        writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
+        writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
+        writer.add_scalar('Loss/validation_costs', valid_losses[2], i)
+        writer.add_scalar('Loss/validation_policy', valid_losses[3], i)
+        writer.add_scalar('Loss/validation_relative_entropy', valid_losses[4], i)
+
         log_string = f'step {n_iter} | npred {npred} | bsize {bsize} | esize {opt.epoch_size} | '
         log_string += utils.format_losses(train_losses[0], train_losses[1], split='train')
         log_string += utils.format_losses(valid_losses[0], valid_losses[1], split='valid')
@@ -261,4 +278,6 @@ else:
         utils.log(opt.model_file + '.log', log_string)
         if i > 0 and(i % opt.curriculum_length == 0) and (opt.npred == -1) and npred < 400:
             npred += 8
+
+    writer.close()
 

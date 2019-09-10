@@ -501,6 +501,8 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
+    parser.add_argument('-tensorboard_dir', type=str, default=None,
+                        help='path to the directory where to save tensorboard log')
     opt = parser.parse_args()
     opt.n_inputs = 4
     opt.n_actions = 2
