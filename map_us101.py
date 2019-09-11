@@ -1,14 +1,6 @@
-from random import choice, randrange
-
-from custom_graphics import draw_dashed_line
-from map_i80 import I80, I80Car, colours
-from traffic_gym import Simulator
 import pygame
-import pandas as pd
-import numpy as np
-import pdb, random
-import bisect
-import pdb, pickle, os
+
+from map_i80 import I80, I80Car, colours
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -82,6 +74,7 @@ class US101(I80):
         self.vehicles_history = None
         self.lane_occupancy = None
         self.nb_lanes = 6
+        # self.lanes = self.build_lanes(self.nb_lanes)
         self.smoothing_window = 15
 
     def _draw_lanes(self, surface, mode='human', offset=0):

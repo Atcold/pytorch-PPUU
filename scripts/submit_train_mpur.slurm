@@ -24,6 +24,7 @@ srun python train_MPUR.py \
     -batch_size $batch_size \
     -lambda_l $lambda_l \
     -lambda_a $lambda_a \
+    -lambda_tl $lambda_tl \
     -seed $seed \
     -policy 'policy-deterministic'
 

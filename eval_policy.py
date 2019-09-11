@@ -12,7 +12,7 @@ from imageio import imwrite
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-map', type=str, default='i80', help=' ')
-parser.add_argument('-v', type=str, default='3', help=' ')
+parser.add_argument('-v', type=str, default='0', help=' ')
 parser.add_argument('-seed', type=int, default=333333, help=' ')
 # planning params
 parser.add_argument('-method', type=str, default='bprop', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
@@ -34,6 +34,7 @@ parser.add_argument('-opt_a', type=int, default=1, help=' ')
 parser.add_argument('-u_reg', type=float, default=0.0, help=' ')
 parser.add_argument('-u_hinge', type=float, default=1.0, help=' ')
 parser.add_argument('-lambda_l', type=float, default=0.0, help=' ')
+# TODO: Add lambda_tl to parser.add_argument
 parser.add_argument('-graph_density', type=float, default=0.001, help=' ')
 parser.add_argument('-display', type=int, default=0, help=' ')
 parser.add_argument('-debug', action='store_true', help=' ')
@@ -65,7 +66,7 @@ opt.h_width = 3
 opt.opt_z = (opt.opt_z == 1)
 opt.opt_a = (opt.opt_a == 1)
 
-data_path = 'traffic-data/state-action-cost/data_i80_v0'
+data_path = f'traffic-data/state-action-cost/data_{opt.map}_v{opt.v}'
 
 
 def load_models():
@@ -100,7 +101,7 @@ def load_models():
     return forward_model, value_function, policy_network_il, policy_network_mper, stats
 
 
-dataloader = DataLoader(opt, 'i80')
+dataloader = DataLoader(None, opt, opt.map)
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
 
@@ -180,7 +181,10 @@ for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
+    # TODO: watch play_maps to choose the first car from each lane for car_id as opposed to utils.parse_car_path
+    # TODO: Check timeslot and how it comes in (i.e. int == 0?)
     timeslot, car_id = utils.parse_car_path(car_path)
+    # TODO: load car_id.pkl file to get the current lane dump so we can set target lane as a few seconds in the future
     inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
@@ -216,6 +220,7 @@ for j in range(n_test):
                                                            normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'policy-MPUR':
+            # TODO: Pass target lane as "controls"
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()

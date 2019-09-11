@@ -68,8 +68,9 @@ class I80Car(Car):
         if font is not None:
             self._text = self.get_text(self.id, font)
         self.is_controlled = False
-        lane_shift = max((k - 1) / 2, 0)
+        lane_shift = max(k // 2, 0)
         self._lane_list = df['Lane Identification'].values[lane_shift:self._max_t+lane_shift] - 1
+        print(f'Vehicle {self.id}: Max Lane = {self._lane_list.max()}')
         self.collisions_per_frame = 0
 
     @property
@@ -240,7 +241,7 @@ class I80(Simulator):
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'traffic-data/xy-trajectories/{time_slot}'
+        file_name = f'/Volumes/Cims/misc/vlgscratch4/LecunGroup/nvidia-collab/yairschiff/pytorch-PPUU/traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
             print(f'Loading trajectories from {file_name}')

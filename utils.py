@@ -533,6 +533,7 @@ def build_model_file_name(opt):
     opt.model_file += f'-updatez={opt.z_updates}'
     opt.model_file += f'-inferz={opt.infer_z}'
     opt.model_file += f'-learnedcost={opt.learned_cost}'
+    opt.model_file += f'-lambdatl={opt.lambda_tl}'
     opt.model_file += f'-seed={opt.seed}'
     if opt.value_model == '':
         opt.model_file += '-novalue'
