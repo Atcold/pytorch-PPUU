@@ -210,7 +210,8 @@ class Car:
         # if cost and cost > 0.95:
         #     print(f'Car {self.id} prox cost: {cost:.2f}')
 
-        return obs, mask, cost
+        target_lane_cost = abs(self._position[1] - 48)
+        return obs, mask, cost, target_lane_cost
 
     def draw(self, surface, mode='human', offset=0):
         """
@@ -519,7 +520,8 @@ class Car:
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
         # return state_image, lane_cost, proximity_cost, frame
-        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
+        target_lane_cost = abs(centre[1] - 48)
+        return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, target_lane_cost, global_frame
 
     def store(self, object_name, object_):
         if object_name == 'action':
@@ -548,6 +550,7 @@ class Car:
         cost = dict(
             proximity_cost=self._states[-1][2],
             lane_cost=self._states_image[-1][1],
+            target_lane_cost=self._states[-1][3],
             pixel_proximity_cost=self._states_image[-1][2],
             collisions_per_frame=self.collisions_per_frame,
             arrived_to_dst=self.arrived_to_dst,

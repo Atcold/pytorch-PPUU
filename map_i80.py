@@ -70,7 +70,6 @@ class I80Car(Car):
         self.is_controlled = False
         lane_shift = max(k // 2, 0)
         self._lane_list = df['Lane Identification'].values[lane_shift:self._max_t+lane_shift] - 1
-        print(f'Vehicle {self.id}: Max Lane = {self._lane_list.max()}')
         self.collisions_per_frame = 0
 
     @property
@@ -241,7 +240,8 @@ class I80(Simulator):
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'/Volumes/Cims/misc/vlgscratch4/LecunGroup/nvidia-collab/yairschiff/pytorch-PPUU/traffic-data/xy-trajectories/{time_slot}'
+        # file_name = f'/Volumes/Cims/misc/vlgscratch4/LecunGroup/nvidia-collab/yairschiff/pytorch-PPUU/traffic-data/xy-trajectories/{time_slot}'
+        file_name = f'traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
             print(f'Loading trajectories from {file_name}')
@@ -386,7 +386,7 @@ class I80(Simulator):
                     car.buffer_size = self.nb_states
                     car.lanes = self.lanes
                     car.look_ahead = self.look_ahead
-                    # print(f'Controlling car {car.id}')
+                    print(f'Controlling car {car.id}')
                     # self.dump_folder = f'{self._t_slot}_{car.id}'
                     # print(f'Creating folder {self.dump_folder}')
                     # system(f'mkdir -p screen-dumps/{self.dump_folder}')
@@ -440,9 +440,11 @@ class I80(Simulator):
             if (self.store or v.is_controlled) and v.valid:
                 v.store('state', state)
                 v.store('action', action)
+                # TODO: Add store target lane cost?
 
             if v.is_controlled and v.valid:
                 v.count_collisions(state)
+                print(f'At frame{self.frame}, Car {v.id} is in lane {v.current_lane}')
                 if v.collisions_per_frame > 0:
                     self.collision = True
 

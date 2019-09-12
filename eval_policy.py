@@ -15,7 +15,7 @@ parser.add_argument('-map', type=str, default='i80', help=' ')
 parser.add_argument('-v', type=str, default='0', help=' ')
 parser.add_argument('-seed', type=int, default=333333, help=' ')
 # planning params
-parser.add_argument('-method', type=str, default='bprop', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
+parser.add_argument('-method', type=str, default='policy-MPUR', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
 parser.add_argument('-batch_size', type=int, default=1, help=' ')
 parser.add_argument('-n_batches', type=int, default=200, help=' ')
 parser.add_argument('-lrt', type=float, default=0.01, help=' ')
@@ -176,12 +176,20 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
-n_test = len(splits['test_indx'])
-for j in range(n_test):
-    movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
+# n_test = len(splits['test_indx'])
+# 1, 36, 15, 21, 5
+car_ids = [
+    "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car21.pkl",
+    "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car5.pkl",
+]
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# for j in range(n_test):
+for c in car_ids:
+    # movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
+    movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{c.split("/")[-1]}')
     print(f'[new episode, will save to: {movie_dir}]')
-    car_path = dataloader.ids[splits['test_indx'][j]]
-    # TODO: watch play_maps to choose the first car from each lane for car_id as opposed to utils.parse_car_path
+    # car_path = dataloader.ids[splits['test_indx'][j]]
+    car_path = c
     # TODO: Check timeslot and how it comes in (i.e. int == 0?)
     timeslot, car_id = utils.parse_car_path(car_path)
     # TODO: load car_id.pkl file to get the current lane dump so we can set target lane as a few seconds in the future
@@ -221,8 +229,10 @@ for j in range(n_test):
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'policy-MPUR':
             # TODO: Pass target lane as "controls"
+            target_y = torch.tensor(48, dtype=torch.float).to(device)  # middle of lane 4 (0 index) == pixel 144
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
-                                                           normalize_inputs=True, normalize_outputs=True)
+                                                           normalize_inputs=True, normalize_outputs=True,
+                                                           controls=dict(target_lanes=target_y))
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'bprop+policy-IL':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True,
@@ -244,8 +254,8 @@ for j in range(n_test):
             if info.collisions_per_frame > 0:
                 print(f'[collision after {cntr} frames, ending]')
                 done = True
-            print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(
-                a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'])
+            print('(action: ({:.4f}, {:.4f}) | true costs: (prox: {:.4f}, lane: {:.4f}, target_lane: {:.4f})]'.format(
+                a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'], cost['target_lane_cost'])
             )
 
             images.append(input_images[-1])
@@ -267,7 +277,7 @@ for j in range(n_test):
     distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
     road_completed.append(1 if cost['arrived_to_dst'] else 0)
     log_string = ' | '.join((
-        f'ep: {j + 1:3d}/{n_test}',
+        # f'ep: {j + 1:3d}/{n_test}',
         f'time: {time_travelled[-1]}',
         f'distance: {distance_travelled[-1]:.0f}',
         f'success: {road_completed[-1]:d}',
