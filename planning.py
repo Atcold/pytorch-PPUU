@@ -360,9 +360,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     )
 
     loss_a = pred_actions.norm(2, 2).pow(2).mean()
-    normalized_target_lanes = (target_lanes - model.stats['s_mean'][1]) / model.stats['s_std'][1]
     # Unsqueeze normalized target lanes so that size will be broadcast to match predicted states
-    target_lane_loss = (pred_states[:, :, 1] - normalized_target_lanes.unsqueeze(1)).abs().mean()
+    target_lane_loss = (pred_states[:, :, 1] - target_lanes.unsqueeze(1)).abs().mean()
 
     predictions = dict(
         state_img=pred_images,

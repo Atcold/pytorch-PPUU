@@ -228,7 +228,6 @@ for c in car_ids:
                                                            normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'policy-MPUR':
-            # TODO: Pass target lane as "controls"
             target_y = torch.tensor(48, dtype=torch.float).to(device)  # middle of lane 4 (0 index) == pixel 144
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,

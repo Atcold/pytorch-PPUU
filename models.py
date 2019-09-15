@@ -77,10 +77,8 @@ class encoder(nn.Module):
             n_hidden = self.feature_maps[-1]
             self.t_encoder = nn.Sequential(
                 nn.Linear(1, n_hidden),  # target lane / speed provided as singleton float
-                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(n_hidden, n_hidden),
-                nn.Dropout(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(n_hidden, opt.hidden_size)
             )
@@ -929,6 +927,8 @@ class DeterministicPolicy(nn.Module):
             if state_images.dim() == 4:  # if processing single vehicle
                 state_images = state_images.cuda().unsqueeze(0)
                 states = states.cuda().unsqueeze(0)
+            controls['target_lanes'] -= self.stats['s_mean'][1]
+            controls['target_lanes'] /= self.stats['s_std'][1]
 
         bsize = state_images.size(0)
 

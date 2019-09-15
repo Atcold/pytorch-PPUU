@@ -205,6 +205,7 @@ class DataLoader:
         if not self.opt.debug:
             actions = self.normalise_action(actions)
             states = self.normalise_state_vector(states)
+            target_lanes = self.normalize_target_lanes(target_lanes)
         images = self.normalise_state_image(images)
 
         costs = torch.stack(costs)
@@ -272,6 +273,11 @@ class DataLoader:
         actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
         actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
         return actions
+
+    def normalize_target_lanes(self, target_lanes):
+        target_lanes -= self.s_mean[1].to(target_lanes.device)  # 1st index of s_mean is y_position mean
+        target_lanes /= (1e-8 + self.s_std[1]).to(target_lanes.device)  # 1st index of s_std is y_position std
+        return target_lanes
 
 
 if __name__ == '__main__':
