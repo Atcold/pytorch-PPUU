@@ -179,8 +179,9 @@ time_travelled, distance_travelled, road_completed, action_sequences, state_sequ
 # n_test = len(splits['test_indx'])
 # 1, 36, 15, 21, 5
 car_ids = [
-    "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car21.pkl",
-    "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car5.pkl",
+    # "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car5.pkl",
+    # "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car21.pkl",
+    "traffic-data/state-action-cost/data_i80_v0/trajectories-0400-0415/car50.pkl",
 ]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # for j in range(n_test):

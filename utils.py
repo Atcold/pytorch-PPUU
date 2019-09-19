@@ -502,6 +502,17 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
+    # Eval policy params
+    parser.add_argument('-method', type=str, default='policy-MPUR',
+                        choices=['bprop', 'policy-MPUR', 'policy-MPER', 'policy-IL'],
+                        help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
+    parser.add_argument('-n_batches', type=int, default=200, help=' ')
+    parser.add_argument('-nexec', type=int, default=1, help=' ')
+    parser.add_argument('-display', type=int, default=0, help=' ')
+    parser.add_argument('-debug', action='store_true', help=' ')
+    parser.add_argument('-policy_model', type=str, default='', help=' ')
+    parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
+
     opt = parser.parse_args()
     opt.n_inputs = 4
     opt.n_actions = 2
