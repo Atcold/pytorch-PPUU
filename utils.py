@@ -509,7 +509,6 @@ def parse_command_line(parser=None):
     parser.add_argument('-n_batches', type=int, default=200, help=' ')
     parser.add_argument('-nexec', type=int, default=1, help=' ')
     parser.add_argument('-display', type=int, default=0, help=' ')
-    parser.add_argument('-debug', action='store_true', help=' ')
     parser.add_argument('-policy_model', type=str, default='', help=' ')
     parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
 

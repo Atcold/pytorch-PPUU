@@ -69,4 +69,4 @@ class ControlledI80(I80):
         observation = None
         while observation is None:
             observation, reward, done, info = self.step()
-        return observation
+        return observation, info

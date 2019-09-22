@@ -1,13 +1,15 @@
-import os, re
+import copy
 import random
-import torch
-import numpy
+from os import mkdir, path
+
 import gym
-from os import path
+import numpy
+import torch
+from imageio import imwrite
+
 import planning
 import utils
 from dataloader import DataLoader
-from imageio import imwrite
 
 opt = utils.parse_command_line()
 # parser.add_argument('-seed', type=int, default=333333, help=' ')
@@ -15,6 +17,7 @@ opt = utils.parse_command_line()
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
+device = torch.device('cuda' if torch.cuda.is_available() and not opt.no_cuda else 'cpu')
 
 opt.save_dir = path.join(opt.model_dir, 'planning_results')
 opt.height = 117
@@ -22,7 +25,7 @@ opt.width = 24
 opt.h_height = 14
 opt.h_width = 3
 
-data_path = f'traffic-data/state-action-cost/data_{opt.map}_v{opt.v}'
+data_path = f'traffic-data/state-action-cost/data_{opt.dataset}_v{opt.v}'
 
 
 def load_models():
@@ -45,7 +48,7 @@ def load_models():
     return forward_model, value_function, policy_network_il, policy_network_mper, stats
 
 
-dataloader = DataLoader(None, opt, opt.map)
+dataloader = DataLoader(None, opt, opt.dataset)
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
 
@@ -73,7 +76,7 @@ env_names = {
     'i80': 'I-80-v1',
 }
 
-env = gym.make(env_names[opt.map])
+env = gym.make(env_names[opt.dataset])
 plan_file = f'{opt.policy_model}'
 
 print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
@@ -81,16 +84,16 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
-n_test = len(splits['test_indx'])
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-for j in range(n_test):
+# n_test = len(splits['test_indx'])
+n_test = 2
+# for j in range(n_test):
+for j in range(1, n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
-    # TODO: Check timeslot and how it comes in (i.e. int == 0?)
     timeslot, car_id = utils.parse_car_path(car_path)
-    # TODO: load car_id.pkl file to get the current lane dump so we can set target lane as a few seconds in the future
-    inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    inputs, info = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    car_trajectory = copy.deepcopy(info._trajectory)  # copy the test car's true trajectory
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
@@ -102,11 +105,11 @@ for j in range(n_test):
     while not done:
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
-#        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
-        if opt.method == 'no-action':
-            a = numpy.zeros((1, 2))
-        elif opt.method == 'policy-MPUR':
-            target_y = torch.tensor(48, dtype=torch.float).to(device)  # middle of lane 4 (0 index) == pixel 144
+        if opt.method == 'policy-MPUR':
+            # Target y = average of car's true y position from now and 30 (opt.npred) steps into the future
+            target_y = torch.tensor(car_trajectory[cntr:cntr + opt.npred, 1].mean()).to(device)
+            print(f'(cntr={cntr}) target y: {target_y}')
+            # print(f'(cntr={cntr}) Last input state y: {input_states[-1][1]} vs. target y: {target_y}')
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,
                                                            controls=dict(target_lanes=target_y))
@@ -123,8 +126,8 @@ for j in range(n_test):
             if info.collisions_per_frame > 0:
                 print(f'[collision after {cntr} frames, ending]')
                 done = True
-            print('(action: ({:.4f}, {:.4f}) | true costs: (prox: {:.4f}, lane: {:.4f}, target_lane: {:.4f})]'.format(
-                a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'], cost['target_lane_cost'])
+            print('(action: ({:.4f}, {:.4f}) | true costs: (prox: {:.4f}, lane: {:.4f})]'.format(
+                a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'])
             )
 
             images.append(input_images[-1])
@@ -146,7 +149,7 @@ for j in range(n_test):
     distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
     road_completed.append(1 if cost['arrived_to_dst'] else 0)
     log_string = ' | '.join((
-        # f'ep: {j + 1:3d}/{n_test}',
+        f'ep: {j + 1:3d}/{n_test}',
         f'time: {time_travelled[-1]}',
         f'distance: {distance_travelled[-1]:.0f}',
         f'success: {road_completed[-1]:d}',
@@ -176,6 +179,6 @@ for j in range(n_test):
         if opt.save_sim_video:
             sim_path = path.join(movie_dir, 'sim')
             print(f'[saving simulator movie to {sim_path}]')
-            os.mkdir(sim_path)
+            mkdir(sim_path)
             for n, img in enumerate(info.frames):
                 imwrite(path.join(sim_path, f'im{n:05d}.png'), img)

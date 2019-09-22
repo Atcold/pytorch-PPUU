@@ -444,7 +444,6 @@ class I80(Simulator):
 
             if v.is_controlled and v.valid:
                 v.count_collisions(state)
-                print(f'At frame{self.frame}, Car {v.id} is in lane {v.current_lane}')
                 if v.collisions_per_frame > 0:
                     self.collision = True
 
@@ -472,6 +471,10 @@ class I80(Simulator):
                 self.ghost = None
             if self.ghost:
                 self.ghost.step(self.ghost.policy())
+                try:
+                    print(f'True y: {self.ghost._position[1]} vs. Controlled y: {self.controlled_car["locked"]._position[1]}')
+                except:
+                    print(f'Ghost y: {self.ghost._position[1]}')
 
         self.frame += int(self.delta_t * 10)
 

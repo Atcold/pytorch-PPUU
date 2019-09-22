@@ -210,8 +210,7 @@ class Car:
         # if cost and cost > 0.95:
         #     print(f'Car {self.id} prox cost: {cost:.2f}')
 
-        target_lane_cost = abs(self._position[1] - 48)
-        return obs, mask, cost, target_lane_cost
+        return obs, mask, cost
 
     def draw(self, surface, mode='human', offset=0):
         """
@@ -550,7 +549,6 @@ class Car:
         cost = dict(
             proximity_cost=self._states[-1][2],
             lane_cost=self._states_image[-1][1],
-            target_lane_cost=self._states[-1][3],
             pixel_proximity_cost=self._states_image[-1][2],
             collisions_per_frame=self.collisions_per_frame,
             arrived_to_dst=self.arrived_to_dst,
