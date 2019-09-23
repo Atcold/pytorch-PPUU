@@ -67,7 +67,7 @@ if opt.learned_cost:
 dataloader = DataLoader(None, opt, opt.dataset)
 model.train()
 model.opt.u_hinge = opt.u_hinge
-planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)
+planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred, sftmx_beta=opt.sftmx_beta)
 model.eval()
 
 
@@ -87,7 +87,7 @@ def start(what, nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
         pred, actions = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
-            n_updates_z=opt.z_updates, infer_z=opt.infer_z
+            n_updates_z=opt.z_updates, infer_z=opt.infer_z, sftmx_beta=opt.sftmx_beta
         )
         pred['policy'] = pred['proximity'] + \
                          opt.u_reg * pred['uncertainty'] + \

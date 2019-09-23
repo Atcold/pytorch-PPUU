@@ -50,6 +50,7 @@ parser.add_argument('-mfile', type=str, default=M1, help=' ')
 parser.add_argument('-value_model', type=str, default='', help=' ')
 parser.add_argument('-policy_model', type=str, default='', help=' ')
 parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
+parser.add_argument('-sftmx_beta', type=float, default=1.0)
 
 opt = parser.parse_args()
 
@@ -153,7 +154,7 @@ if 'bprop' in opt.method:
         plan_file += '-learnedcost=1'
     elif 'learnedcost=0' in opt.policy_model:
         plan_file += '-learnedcost=0'
-
+    plan_file += f'-sftmx_beta{opt.sftmx_beta}'
     plan_file += f'-rollouts={opt.n_rollouts}'
     plan_file += f'-rollout_length={opt.npred}'
     plan_file += f'-lrt={opt.bprop_lrt}'
@@ -205,7 +206,8 @@ for j in range(n_test):
                 forward_model, input_images, input_states, car_size, npred=opt.npred, n_futures=opt.n_rollouts,
                 normalize=True, bprop_niter=opt.bprop_niter, bprop_lrt=opt.bprop_lrt, u_reg=opt.u_reg,
                 use_action_buffer=(opt.bprop_buffer == 1), n_models=opt.n_dropout_models,
-                save_opt_stats=(opt.bprop_save_opt_stats == 1), nexec=opt.nexec, lambda_l=opt.lambda_l
+                save_opt_stats=(opt.bprop_save_opt_stats == 1), nexec=opt.nexec, lambda_l=opt.lambda_l,
+                sftmx_beta=opt.sftmx_beta
             )
         elif opt.method == 'policy-IL':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True,
@@ -226,7 +228,8 @@ for j in range(n_test):
             a = forward_model.plan_actions_backprop(input_images, input_states, npred=opt.npred,
                                                     n_futures=opt.n_rollouts, normalize=True,
                                                     bprop_niter=opt.bprop_niter, bprop_lrt=opt.bprop_lrt,
-                                                    actions=a, u_reg=opt.u_reg, nexec=opt.nexec)
+                                                    actions=a, u_reg=opt.u_reg, nexec=opt.nexec,
+                                                    sftmx_beta=opt.sftmx_beta)
 
         action_sequences[-1].append(a)
         state_sequences[-1].append(input_states)

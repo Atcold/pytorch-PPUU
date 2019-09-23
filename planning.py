@@ -10,7 +10,7 @@ import ipdb
 
 # estimate prediction uncertainty using dropout
 def compute_uncertainty_batch(model, input_images, input_states, actions, targets=None, car_sizes=None, npred=200,
-                              n_models=10, Z=None, dirname=None, detach=True, compute_total_loss=False):
+                              n_models=10, Z=None, dirname=None, detach=True, compute_total_loss=False, sftmx_beta=1.):
     """
     Compute variance over n_models prediction per input + action
 
@@ -23,6 +23,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     :param Z: predictive model latent samples
     :param detach: do not retain computational graph
     :param compute_total_loss: return overall loss
+    :param sftmx_beta: beta coefficient of the logsumexp function
     :return:
     """
 
@@ -81,7 +82,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         pred_costs, _ = utils.proximity_cost(
             pred_images, pred_states.data,
             car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2),
-            unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
+            unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'], sftmx_beta=sftmx_beta
         )
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
@@ -123,7 +124,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
 # compute uncertainty estimates for the ground truth actions in the training set.
 # this will give us an idea of what normal ranges are using actions the forward model
 # was trained on
-def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
+def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200, sftmx_beta=1.):
     u_images, u_states, u_costs, u_values, speeds = [], [], [], [], []
     data_bsize = dataloader.opt.batch_size
     dataloader.opt.batch_size = 8
@@ -138,7 +139,8 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
             npred=npred,
             n_models=10,
             detach=True,
-            car_sizes=car_sizes
+            car_sizes=car_sizes,
+            sftmx_beta=sftmx_beta
         )
         u_images.append(pred_images_var)
         u_states.append(pred_states_var)
@@ -168,7 +170,7 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
 
 def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True,
                           bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10,
-                          save_opt_stats=True, nexec=1, lambda_l=0.0):
+                          save_opt_stats=True, nexec=1, lambda_l=0.0, sftmx_beta=1.0):
     if use_action_buffer:
         actions = torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda()
     elif actions is None:
@@ -213,7 +215,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         pred_images, pred_states = pred[0], pred[1]
         proximity_cost, _ = utils.proximity_cost(
             pred_images, pred_states.data, car_sizes.expand(n_futures, 2),
-            unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
+            unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'], sftmx_beta=sftmx_beta
         )
 
         if hasattr(model, 'value_function'):
@@ -228,7 +230,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
             model.train()
             _, _, _, _, _, _, uncertainty_loss = compute_uncertainty_batch(
                 model, input_images, input_states, actions_rep, None, car_sizes, npred=npred, n_models=n_models,
-                Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True
+                Z=Z.permute(1, 0, 2).clone(), detach=False, compute_total_loss=True, sftmx_beta=sftmx_beta
             )
             loss = loss + u_reg * uncertainty_loss
         else:
@@ -259,7 +261,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
 
 
 def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
-                          n_updates_z=10, infer_z=False):
+                          n_updates_z=10, infer_z=False, sftmx_beta=1.):
     input_images_orig, input_states_orig = inputs
     target_images, target_states, target_costs = targets
 
@@ -312,12 +314,13 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
                                     z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
             pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
-                                                    s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+                                                    s_mean=model.stats['s_mean'], s_std=model.stats['s_std'],
+                                                    sftmx_beta=sftmx_beta)
 
             if k < n_updates_z + 1:
                 _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
                     model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
-                    detach=False, Z=Z_adv.permute(1, 0, 2), compute_total_loss=True
+                    detach=False, Z=Z_adv.permute(1, 0, 2), compute_total_loss=True, sftmx_beta=sftmx_beta
                 )
 
                 loss_z = -pred_cost_adv.mean()  # + total_u_loss.mean()
@@ -331,7 +334,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
         proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
-                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'], sftmx_beta=sftmx_beta)
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
         lane_cost = utils.lane_cost(pred_images, car_sizes)
@@ -355,7 +358,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
-        detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True
+        detach=False, Z=Z.permute(1, 0, 2), compute_total_loss=True, sftmx_beta=sftmx_beta
     )
 
     loss_a = pred_actions.norm(2, 2).pow(2).mean()

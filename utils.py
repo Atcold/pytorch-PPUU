@@ -48,7 +48,7 @@ def read_images(dirname, pytorch=True):
     return imgs
 
 
-def lane_cost(images, car_size):
+def lane_cost(images, car_size, sftmx_beta=1.):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
@@ -86,11 +86,12 @@ def lane_cost(images, car_size):
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     # costs = torch.max((proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)[0]
-    costs = torch.log(torch.sum(torch.exp(proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2))
+    costs = torch.logsumexp(sftmx_beta*(proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)/sftmx_beta
     return costs.view(bsize, npred)
 
 
-def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+def proximity_cost(
+        images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None, sftmx_beta=1):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
@@ -139,7 +140,9 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     # costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    costs = torch.log(torch.sum(torch.exp(proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2))
+    costs = torch.logsumexp(
+                sftmx_beta * (proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1),
+                2) / sftmx_beta
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
@@ -503,6 +506,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
+    parser.add_argument('-sftmx_beta', type=float, default=1.)
     opt = parser.parse_args()
     opt.n_inputs = 4
     opt.n_actions = 2
@@ -534,6 +538,7 @@ def build_model_file_name(opt):
     opt.model_file += f'-updatez={opt.z_updates}'
     opt.model_file += f'-inferz={opt.infer_z}'
     opt.model_file += f'-learnedcost={opt.learned_cost}'
+    opt.model_file += f'-sftmx_beta={opt.sftmx_beta}'
     opt.model_file += f'-seed={opt.seed}'
     if opt.value_model == '':
         opt.model_file += '-novalue'

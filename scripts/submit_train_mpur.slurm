@@ -1,17 +1,17 @@
 #!/bin/bash
 #
 #SBATCH --job-name=train_MPUR
-#SBATCH --output=logs/train_MPUR_%j.out
-#SBATCH --error=logs/train_MPUR_%j.err
+#SBATCH --output=logs_mpur/train_MPUR_%j.out
+#SBATCH --error=logs_mpur/train_MPUR_%j.err
 #SBATCH --time=48:00:00
 #SBATCH --gres gpu:1
 #SBATCH --constraint="gpu_12gb&pascal"
-#SBATCH --exclude="weaver1, weaver2, weaver3, weaver4, weaver5, vine5, vine11"
+#SBATCH --exclude="weaver1, weaver2, weaver3, weaver4, weaver5, vine5, vine11, lion1, lion2, lion3"
 #SBATCH --qos=batch
 #SBATCH --nodes=1
-#SBATCH --mem=48000
+#SBATCH --mem=40000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
+#SBATCH --mail-user=serkan@nyu.edu
 
 eval "$(conda shell.bash hook)"
 conda activate PPUU
@@ -24,8 +24,8 @@ srun python train_MPUR.py \
     -z_updates $z_updates \
     -batch_size $batch_size \
     -lambda_l $lambda_l \
-    -infer_z $infer_z \
     -lambda_a $lambda_a \
     -seed $seed \
+    -sftmx_beta $sftmx_beta \
     -policy 'policy-deterministic'
 
