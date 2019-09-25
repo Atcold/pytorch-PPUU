@@ -19,3 +19,4 @@ dependencies:
     - jupytext
     - ipdb
     - tb-nightly
+    - moviepy

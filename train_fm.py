@@ -6,7 +6,6 @@ import torch.optim as optim
 import importlib
 import models
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 
 
 torch.backends.cudnn.deterministic = True
@@ -39,8 +38,9 @@ parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', action='store_true')
-parser.add_argument('-tensorboard_dir', type=str, default=None,
-                    help='path to the directory where to save tensorboard log')
+parser.add_argument('-tensorboard_dir', type=str, default='models',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)
@@ -196,7 +196,7 @@ def test(nbatches):
     total_loss_p /= nbatches
     return total_loss_i, total_loss_s, total_loss_p
 
-writer = SummaryWriter(log_dir=opt.tensorboard_dir)
+writer = utils.create_tensorboard_writer(opt)
 
 print('[training]')
 for i in range(200):
@@ -204,13 +204,14 @@ for i in range(200):
     train_losses = train(opt.epoch_size, opt.npred)
     valid_losses = test(int(opt.epoch_size / 2))
 
-    writer.add_scalar('Loss/train_state_img', train_losses[0], i)
-    writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
-    writer.add_scalar('Loss/train_relative_entropy', train_losses[2], i)
+    if writer is not None:
+        writer.add_scalar('Loss/train_state_img', train_losses[0], i)
+        writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
+        writer.add_scalar('Loss/train_relative_entropy', train_losses[2], i)
 
-    writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
-    writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
-    writer.add_scalar('Loss/validation_relative_entropy', valid_losses[2], i)
+        writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
+        writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
+        writer.add_scalar('Loss/validation_relative_entropy', valid_losses[2], i)
 
     n_iter += opt.epoch_size
     model.cpu()
@@ -226,4 +227,5 @@ for i in range(200):
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
-writer.close()
+if writer is not None:
+    writer.close()

@@ -7,7 +7,6 @@ import ipdb
 import random
 import torch
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 from os import path
 
 import planning
@@ -133,17 +132,18 @@ losses = OrderedDict(
     π='policy',
 )
 
-writer = SummaryWriter(log_dir=opt.tensorboard_dir)
+writer = utils.create_tensorboard_writer(opt)
 
 for i in range(500):
     train_losses = start('train', opt.epoch_size, opt.npred)
     with torch.no_grad():  # Torch, please please please, do not track computations :)
         valid_losses = start('valid', opt.epoch_size // 2, opt.npred)
 
-    for key in train_losses:
-        writer.add_scalar(f'Loss/train_{key}', train_losses[key], i)
-    for key in valid_losses:
-        writer.add_scalar(f'Loss/valid_{key}', valid_losses[key], i)
+    if writer is not None:
+        for key in train_losses:
+            writer.add_scalar(f'Loss/train_{key}', train_losses[key], i)
+        for key in valid_losses:
+            writer.add_scalar(f'Loss/valid_{key}', valid_losses[key], i)
 
     n_iter += opt.epoch_size
     model.to('cpu')
@@ -169,4 +169,5 @@ for i in range(500):
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
-writer.close()
+if writer is not None:
+    writer.close()

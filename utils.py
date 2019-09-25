@@ -6,6 +6,7 @@ import numpy
 import os
 import pdb
 import re
+import sys
 from datetime import datetime
 from os import path
 
@@ -14,6 +15,7 @@ import scipy
 import sklearn.manifold as manifold
 import torch
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 from PIL import Image, ImageDraw
 from sklearn import decomposition
 
@@ -501,8 +503,10 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
-    parser.add_argument('-tensorboard_dir', type=str, default=None,
-                        help='path to the directory where to save tensorboard log')
+    parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
+                        help='path to the directory where to save tensorboard log. If passed empty path' \
+                             ' no logs are saved.')
+
     opt = parser.parse_args()
     opt.n_inputs = 4
     opt.n_actions = 2
@@ -539,3 +543,21 @@ def build_model_file_name(opt):
         opt.model_file += '-novalue'
 
     print(f'[will save as: {opt.model_file}]')
+
+def create_tensorboard_writer(opt):
+    tensorboard_enabled = opt.tensorboard_dir != ''
+    if tensorboard_enabled:
+        date_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        if hasattr(opt, 'model_file'):
+            model_name = os.path.basename(opt.model_file)
+        elif hasattr(opt, 'mfile'):
+            model_name = os.path.basename(opt.mfile) # eval_policy has mfile
+        else:
+            raise AttributeError("options doesn't contain neither model_file nor mfile field")
+        script_name = os.path.splitext(sys.argv[0])[0]
+        tensorboard_log_dir = os.path.join(opt.tensorboard_dir, 'tb_log_{}_{}_{}'.format(script_name, model_name, date_str))
+        print('saving tensorboard logs to', tensorboard_log_dir)
+        writer = SummaryWriter(log_dir=tensorboard_log_dir)
+        return writer
+    else:
+        return None
