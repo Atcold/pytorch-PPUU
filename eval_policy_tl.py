@@ -12,8 +12,6 @@ import utils
 from dataloader import DataLoader
 
 opt = utils.parse_command_line()
-# parser.add_argument('-seed', type=int, default=333333, help=' ')
-# parser.add_argument('-batch_size', type=int, default=1, help=' ')
 random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
@@ -84,10 +82,8 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
-# n_test = len(splits['test_indx'])
-n_test = 2
-# for j in range(n_test):
-for j in range(1, n_test):
+n_test = len(splits['test_indx'])
+for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
@@ -109,7 +105,6 @@ for j in range(1, n_test):
             # Target y = average of car's true y position from now and 30 (opt.npred) steps into the future
             target_y = torch.tensor(car_trajectory[cntr:cntr + opt.npred, 1].mean()).to(device)
             print(f'(cntr={cntr}) target y: {target_y}')
-            # print(f'(cntr={cntr}) Last input state y: {input_states[-1][1]} vs. target y: {target_y}')
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,
                                                            controls=dict(target_lanes=target_y))

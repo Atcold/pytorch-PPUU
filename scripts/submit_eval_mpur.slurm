@@ -1,8 +1,6 @@
 #!/bin/bash
 #
 #SBATCH --job-name=eval_MPUR
-#SBATCH --output=logs/eval_MPUR_%j.out
-#SBATCH --error=logs/eval_MPUR_%j.err
 #SBATCH --time=48:00:00
 #SBATCH --gres gpu:1
 #SBATCH --constraint="gpu_12gb&pascal"
@@ -10,14 +8,18 @@
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=48000
-#SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
+#SBATCH --mail-type=FAIL # notifications for job done & fail
+#SBATCH --mail-user=yzs208@nyu.edu
 
-eval "$(conda shell.bash hook)"
-conda activate PPUU
+#eval "$(conda shell.bash hook)"
+#conda activate PPUU
+
+source activate PPUU
 
 cd ../
-srun python eval_policy.py \
+srun python eval_policy_tl.py \
+    -seed 333333 \
+    -batch_size 1 \
     -method policy-MPUR \
     -policy_model $policy
 
