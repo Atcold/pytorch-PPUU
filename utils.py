@@ -89,23 +89,33 @@ def lane_cost(images, car_size):
     return costs.view(bsize, npred)
 
 
-def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+def calculate_safe_dist(states, unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     safe_factor = 1.5
-    bsize, npred, nchannels, crop_h, crop_w = images.size()
-    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
-    states = states.view(bsize * npred, 4).clone()
+    states = states.view(-1, 4).clone()
 
     if unnormalize:
-        states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
-        states = states + s_mean.view(1, 4).expand(states.size()).cuda()
+        states = states * (1e-8 + s_std.view(1, 4)).cuda()
+        states = states + s_mean.view(1, 4).cuda()
 
     speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
+
+    safe_distance = torch.abs(speed) * safe_factor + (1 * 24 / 3.7) * SCALE  # plus one metre (TODO change)
+    # print(safe_distance.mean())
+    # with open('safe_distance.txt', 'a') as the_file:
+    #     the_file.write(f'{safe_distance.mean()}\n')
+    
+    return safe_distance
+
+def proximity_cost(images, prev_states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+    SCALE = 0.25
+    safe_distance = calculate_safe_dist(prev_states, unnormalize, s_mean, s_std)
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
+    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
+
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels 
-
-    safe_distance = torch.abs(speed) * safe_factor + (1 * 24 / 3.7) * SCALE  # plus one metre (TODO change)
 
     # Compute x/y minimum distance to other vehicles (pixel version)
     # Account for 1 metre overlap (low data accuracy)
@@ -117,7 +127,10 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
     max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
-    min_x = torch.clamp(max_x - safe_distance, min=0)
+    min_x = torch.clamp(
+        max_x - safe_distance.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred),
+        min=0
+     )
     min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
@@ -138,8 +151,8 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    costs_adj = costs * safe_distance.view(bsize, npred)
-    costs_adj -= (costs_adj - costs).detach()
+    costs_adj = costs * safe_distance.view(bsize, 1)
+    # costs_adj -= (costs_adj - costs).detach()
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs_adj, proximity_mask
@@ -485,6 +498,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-u_reg', type=float, default=0.05, help='coefficient of uncertainty regularization term')
     parser.add_argument('-u_hinge', type=float, default=0.5)
     parser.add_argument('-lambda_a', type=float, default=0.0, help='l2 regularization on actions')
+    parser.add_argument('-lambda_p', type=float, default=0.05, help='coefficient of prox cost')
     parser.add_argument('-lambda_l', type=float, default=0.2, help='coefficient of lane cost')
     parser.add_argument('-lrt_z', type=float, default=0.0)
     parser.add_argument('-z_updates', type=int, default=0)
@@ -527,6 +541,7 @@ def build_model_file_name(opt):
     opt.model_file += f'-bsize={opt.batch_size}'
     opt.model_file += f'-npred={opt.npred}'
     opt.model_file += f'-ureg={opt.u_reg}'
+    opt.model_file += f'-lambdap={opt.lambda_p}'
     opt.model_file += f'-lambdal={opt.lambda_l}'
     opt.model_file += f'-lambdaa={opt.lambda_a}'
     opt.model_file += f'-gamma={opt.gamma}'

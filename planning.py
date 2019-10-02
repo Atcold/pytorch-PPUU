@@ -31,7 +31,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         Z = model.sample_z(bsize * npred, method='fp')
         if type(Z) is list: Z = Z[0]
         Z = Z.view(bsize, npred, -1)
-
+    
     input_images = input_images.unsqueeze(0)
     input_states = input_states.unsqueeze(0)
     actions      = actions.     unsqueeze(0)
@@ -48,7 +48,8 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     input_states = input_states.view(bsize * n_models, model.opt.ncond, 4)
     actions      = actions.     view(bsize * n_models, npred, 2)
     Z_rep        = Z_rep.       view(n_models * bsize, npred, -1)
-
+    input_states_orig = input_states.clone()
+    
     model.train()  # turn on dropout, for uncertainty estimation
     pred_images, pred_states = [], []
     for t in range(npred):
@@ -79,7 +80,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     else:
         # ipdb.set_trace()
         pred_costs, _ = utils.proximity_cost(
-            pred_images, pred_states.data,
+            pred_images, input_states_orig[:,-1],
             car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2),
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
         )
@@ -173,7 +174,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         actions = torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda()
     elif actions is None:
         actions = torch.zeros(npred, model.opt.n_actions).cuda()
-
+    
     if normalize:
         input_images = input_images.clone().float().div_(255.0)
         input_states -= model.stats['s_mean'].view(1, 4).expand(input_states.size())
@@ -202,7 +203,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
     gamma_mask = torch.from_numpy(
         numpy.array([0.99 ** t for t in range(npred + 1)])
     ).float().cuda().unsqueeze(0).expand(n_futures, npred + 1)
-
+    input_states_orig = input_states.clone()
     for i in range(bprop_niter):
         optimizer_a.zero_grad()
         model.zero_grad()
@@ -212,7 +213,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         pred, _ = model.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
         pred_images, pred_states = pred[0], pred[1]
         proximity_cost, _ = utils.proximity_cost(
-            pred_images, pred_states.data, car_sizes.expand(n_futures, 2),
+            pred_images, input_states_orig[:,-1], car_sizes.expand(n_futures, 2),
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
         )
 
@@ -311,7 +312,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             optimizer_z.zero_grad()
             pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
                                     z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
-            pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
+            pred_cost_adv, _ = utils.proximity_cost(pred[0], input_states_orig[:,-1], car_sizes, unnormalize=True,
                                                     s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 
             if k < n_updates_z + 1:
@@ -330,7 +331,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     gamma_mask = torch.tensor([0.99 ** t for t in range(npred + 1)]).cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
-        proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
+        proximity_cost, _ = utils.proximity_cost(pred_images, input_states_orig[:,-1], car_sizes, unnormalize=True,
                                                  s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()

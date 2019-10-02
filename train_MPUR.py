@@ -89,7 +89,7 @@ def start(what, nbatches, npred):
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
             n_updates_z=opt.z_updates, infer_z=opt.infer_z
         )
-        pred['policy'] = pred['proximity'] + \
+        pred['policy'] = opt.lambda_p * pred['proximity'] + \
                          opt.u_reg * pred['uncertainty'] + \
                          opt.lambda_l * pred['lane'] + \
                          opt.lambda_a * pred['action']
