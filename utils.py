@@ -48,7 +48,7 @@ def read_images(dirname, pytorch=True):
     return imgs
 
 
-def lane_cost(images, car_size):
+def lane_cost(images, car_size, return_c_max=False):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
@@ -86,10 +86,12 @@ def lane_cost(images, car_size):
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)[0]
+    if return_c_max:
+        return costs.view(bsize, npred), None
     return costs.view(bsize, npred)
 
 
-def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None, return_c_max=False):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
@@ -135,10 +137,13 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     x_filter = x_filter.cuda()
     y_filter = y_filter.cuda()
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
-    proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
-    proximity_mask += 3 * proximity_mask.pow(7)
+    proximity_mask_orig = proximity_mask.view(bsize, npred, crop_h, crop_w)
+    proximity_mask = proximity_mask_orig + 3 * proximity_mask_orig.pow(7)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+    if return_c_max:
+        c_max = torch.max((proximity_mask_orig * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+        return costs, proximity_mask, c_max
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
@@ -477,7 +482,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-nfeature', type=int, default=256)
     parser.add_argument('-n_hidden', type=int, default=256)
     parser.add_argument('-dropout', type=float, default=0.0, help='regular dropout')
-    parser.add_argument('-lrt', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('-lrt', type=float, default=0.00001, help='learning rate')
     parser.add_argument('-grad_clip', type=float, default=50.0)
     parser.add_argument('-epoch_size', type=int, default=500)
     parser.add_argument('-n_futures', type=int, default=10)

@@ -166,6 +166,36 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
     dataloader.opt.batch_size = data_bsize
 
 
+def adjust_grad_scale(model, dataloader, optimizer, opt, nbatches=100, npred=30):
+    model.train()
+    model.policy_net.train()
+
+    l1_pl, l1_plmax, l1_ll, l1_llmax = 0, 0, 0, 0
+    # ipdb.set_trace()
+    for j in range(nbatches):
+        inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
+        proximity_loss, lane_loss, l_max_loss, p_max_loss, actions = train_policy_net_mpur(
+            model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
+            n_updates_z=opt.z_updates, infer_z=opt.infer_z, return_c_max=True
+        )
+        actions.retain_grad()
+
+        optimizer.zero_grad()
+        proximity_loss.backward(retain_graph=True)
+        l1_pl += model.policy_net.fc[-1].weight.grad.norm(1) + model.policy_net.fc[-1].bias.grad.norm(1)
+        #optimizer.zero_grad()
+        #lane_loss.backward(retain_graph=True)
+        #l1_ll += model.policy_net.fc[-1].weight.grad.norm(1) + model.policy_net.fc[-1].bias.grad.norm(1)
+        #optimizer.zero_grad()
+        #l_max_loss.backward(retain_graph=True)
+        #l1_llmax += model.policy_net.fc[-1].weight.grad.norm(1) + model.policy_net.fc[-1].bias.grad.norm(1)
+        optimizer.zero_grad()
+        p_max_loss.backward(retain_graph=True)
+        l1_plmax += model.policy_net.fc[-1].weight.grad.norm(1) + model.policy_net.fc[-1].bias.grad.norm(1)
+
+    return l1_plmax/l1_pl, 1. #l1_llmax/l1_ll
+
+
 def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True,
                           bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10,
                           save_opt_stats=True, nexec=1, lambda_l=0.0):
@@ -259,7 +289,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
 
 
 def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
-                          n_updates_z=10, infer_z=False):
+                          n_updates_z=10, infer_z=False, return_c_max=False):
     input_images_orig, input_states_orig = inputs
     target_images, target_states, target_costs = targets
 
@@ -330,10 +360,20 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     gamma_mask = torch.tensor([0.99 ** t for t in range(npred + 1)]).cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
-        proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
-                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        if return_c_max: 
+            proximity_cost, _, pc_max = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
+                                                     s_mean=model.stats['s_mean'], s_std=model.stats['s_std'],
+                                                     return_c_max=True)
+        else:
+            proximity_cost, _ = utils.proximity_cost(pred_images, pred_states.data, car_sizes, unnormalize=True,
+                                                     s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
+            if return_c_max:
+                pc_max = 0.5 * pc_max + 0.5 * pred_cost_adv.squeeze()
+        #if return_c_max:
+        #    lane_cost, lc_max = utils.lane_cost(pred_images, car_sizes, return_c_max=True)
+        #else:
         lane_cost = utils.lane_cost(pred_images, car_sizes)
         if hasattr(model, 'value_function'):
             v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(),
@@ -352,6 +392,10 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     else:
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+        if return_c_max:
+            l_max_loss = 1. # torch.mean(lc_max * gamma_mask[:, :npred])
+            p_max_loss = torch.mean(pc_max * gamma_mask[:, :npred])
+            return proximity_loss, lane_loss, l_max_loss, p_max_loss, pred_actions
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,

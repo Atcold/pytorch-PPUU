@@ -68,6 +68,7 @@ dataloader = DataLoader(None, opt, opt.dataset)
 model.train()
 model.opt.u_hinge = opt.u_hinge
 planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)
+scale_pl, scale_ll = planning.adjust_grad_scale(model, dataloader, optimizer, opt, nbatches=150, npred=30)
 model.eval()
 
 
@@ -89,9 +90,9 @@ def start(what, nbatches, npred):
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
             n_updates_z=opt.z_updates, infer_z=opt.infer_z
         )
-        pred['policy'] = pred['proximity'] + \
+        pred['policy'] = scale_pl * pred['proximity'] + \
                          opt.u_reg * pred['uncertainty'] + \
-                         opt.lambda_l * pred['lane'] + \
+                         scale_ll * opt.lambda_l * pred['lane'] + \
                          opt.lambda_a * pred['action']
 
         if not math.isnan(pred['policy'].item()):
