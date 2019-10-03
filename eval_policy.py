@@ -50,6 +50,9 @@ parser.add_argument('-mfile', type=str, default=M1, help=' ')
 parser.add_argument('-value_model', type=str, default='', help=' ')
 parser.add_argument('-policy_model', type=str, default='', help=' ')
 parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
+parser.add_argument('-tensorboard_dir', type=str, default='models/planning_results',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 
 opt = parser.parse_args()
 
@@ -175,7 +178,10 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
+writer = utils.create_tensorboard_writer(opt)
+
 n_test = len(splits['test_indx'])
+outcomes = []
 for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
@@ -190,6 +196,8 @@ for j in range(n_test):
     input_state_t0 = inputs['state'].contiguous()[-1]
     action_sequences.append([])
     state_sequences.append([])
+    has_collided = False
+    off_screen = False
     while not done:
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
@@ -237,11 +245,13 @@ for j in range(n_test):
         while (t < T) and not done:
             inputs, cost, done, info = env.step(a[t])
             if info.collisions_per_frame > 0:
+                has_collided = True
                 print(f'[collision after {cntr} frames, ending]')
                 done = True
             print('(action: ({:.4f}, {:.4f}) | true costs: ({:.4f}, {:.4f})]'.format(
                 a[t][0], a[t][1], cost['pixel_proximity_cost'], cost['lane_cost'])
             )
+            off_screen = info.off_screen
 
             images.append(input_images[-1])
             states.append(input_states[-1])
@@ -286,12 +296,30 @@ for j in range(n_test):
     else:
         mu_list, std_list = None, None
 
+    outcome = 0
+    if has_collided:
+        outcome = 1
+    if off_screen:
+        outcome = 2
+
     if len(images) > 3:
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
+        outcomes.append(outcome)
+        if writer is not None:
+            writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)
+            writer.add_scalar('ByEpisode/Success', road_completed[-1], j)
+            writer.add_scalar('ByEpisode/Collision', has_collided, j)
+            writer.add_scalar('ByEpisode/OffScreen', off_screen, j)
+            writer.add_scalar('ByEpisode/Distance', distance_travelled[-1], j)
         if opt.save_sim_video:
             sim_path = path.join(movie_dir, 'sim')
             print(f'[saving simulator movie to {sim_path}]')
             os.mkdir(sim_path)
             for n, img in enumerate(info.frames):
                 imwrite(path.join(sim_path, f'im{n:05d}.png'), img)
+
+if writer is not None:
+    writer.add_histogram('Success/Hist', road_completed)
+    writer.add_histogram('Success/Outcomes', outcomes)
+    writer.close()

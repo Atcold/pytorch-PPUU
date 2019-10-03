@@ -132,10 +132,19 @@ losses = OrderedDict(
     π='policy',
 )
 
+writer = utils.create_tensorboard_writer(opt)
+
 for i in range(500):
     train_losses = start('train', opt.epoch_size, opt.npred)
     with torch.no_grad():  # Torch, please please please, do not track computations :)
         valid_losses = start('valid', opt.epoch_size // 2, opt.npred)
+
+    if writer is not None:
+        for key in train_losses:
+            writer.add_scalar(f'Loss/train_{key}', train_losses[key], i)
+        for key in valid_losses:
+            writer.add_scalar(f'Loss/valid_{key}', valid_losses[key], i)
+
     n_iter += opt.epoch_size
     model.to('cpu')
     torch.save(dict(
@@ -159,3 +168,6 @@ for i in range(500):
     log_string += 'valid: [' + ', '.join(f'{k}: {valid_losses[v]:.4f}' for k, v in losses.items()) + ']'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
+
+if writer is not None:
+    writer.close()
