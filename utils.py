@@ -547,7 +547,7 @@ def build_model_file_name(opt):
 def create_tensorboard_writer(opt):
     tensorboard_enabled = opt.tensorboard_dir != ''
     if tensorboard_enabled:
-        date_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        date_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
         if hasattr(opt, 'model_file'):
             model_name = os.path.basename(opt.model_file)
         elif hasattr(opt, 'mfile'):
@@ -555,7 +555,7 @@ def create_tensorboard_writer(opt):
         else:
             raise AttributeError("options doesn't contain neither model_file nor mfile field")
         script_name = os.path.splitext(sys.argv[0])[0]
-        tensorboard_log_dir = os.path.join(opt.tensorboard_dir, 'tb_log_{}_{}_{}'.format(script_name, model_name, date_str))
+        tensorboard_log_dir = os.path.join(opt.tensorboard_dir, f'tb_log_{script_name}_{model_name}_{date_str}')
         print('saving tensorboard logs to', tensorboard_log_dir)
         writer = SummaryWriter(log_dir=tensorboard_log_dir)
         return writer
