@@ -181,7 +181,7 @@ for j in range(n_test):
     print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
-    inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    inputs, _ = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
