@@ -680,7 +680,7 @@ for policy in ${target_lane_policies[*]}; do
     sbatch \
       --output ../logs/target_lane/planning_results/${policy}.out \
       --error ../logs/target_lane/planning_results/${policy}.err \
-      submit_eval_mpur.slurm \
+      submit_eval_mpur_tl.slurm \
         policy=$policy
 done
 

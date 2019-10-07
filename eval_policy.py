@@ -12,10 +12,10 @@ from imageio import imwrite
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-map', type=str, default='i80', help=' ')
-parser.add_argument('-v', type=str, default='3', help=' ')
+parser.add_argument('-v', type=str, default='0', help=' ')
 parser.add_argument('-seed', type=int, default=333333, help=' ')
 # planning params
-parser.add_argument('-method', type=str, default='bprop', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
+parser.add_argument('-method', type=str, default='policy-MPUR', help='[bprop|policy-MPUR|policy-MPER|policy-IL]')
 parser.add_argument('-batch_size', type=int, default=1, help=' ')
 parser.add_argument('-n_batches', type=int, default=200, help=' ')
 parser.add_argument('-lrt', type=float, default=0.01, help=' ')

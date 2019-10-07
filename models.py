@@ -927,8 +927,9 @@ class DeterministicPolicy(nn.Module):
             if state_images.dim() == 4:  # if processing single vehicle
                 state_images = state_images.cuda().unsqueeze(0)
                 states = states.cuda().unsqueeze(0)
-            controls['target_lanes'] -= self.stats['s_mean'][1]
-            controls['target_lanes'] /= self.stats['s_std'][1]
+            if controls:
+                controls['target_lanes'] -= self.stats['s_mean'][1]
+                controls['target_lanes'] /= self.stats['s_std'][1]
 
         bsize = state_images.size(0)
 
