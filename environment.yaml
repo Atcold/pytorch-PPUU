@@ -11,9 +11,12 @@ dependencies:
   - matplotlib
   - pip
   - jupyter
+  - scikit-learn
+  - scikit-image
   - pip:
     - gym
     - pygame
-    - scikit-learn
     - jupytext
     - ipdb
+    - tb-nightly
+    - moviepy

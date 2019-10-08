@@ -35,6 +35,9 @@ parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-grad_clip', type=float, default=50)
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 
@@ -102,6 +105,7 @@ def test(nbatches):
 
 
 
+writer = utils.create_tensorboard_writer(opt)
 
 print('[training]')
 best_valid_loss = 1e6
@@ -114,6 +118,13 @@ for i in range(200):
         torch.save(policy, opt.model_file + '.model')
         policy.intype('gpu')
 
+    if writer is not None:
+        writer.add_scalar('Loss/train', train_loss, i)
+        writer.add_scalar('Loss/valid', valid_loss, i)
+
     log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
+
+    if writer is not None:
+        writer.close()

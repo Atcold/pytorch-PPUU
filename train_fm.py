@@ -7,6 +7,10 @@ import importlib
 import models
 import torch.nn as nn
 
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 #################################################
 # Train an action-conditional forward model
 #################################################
@@ -34,6 +38,9 @@ parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-tensorboard_dir', type=str, default='models',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)
@@ -109,7 +116,7 @@ model.cuda()
 # training and testing functions. We will compute several losses:
 # loss_i: images
 # loss_s: states
-# loss_p: prior (optional)
+# loss_p: relative entropy (optional)
 
 def compute_loss(targets, predictions, reduction='mean'):
     target_images = targets[0]
@@ -189,12 +196,23 @@ def test(nbatches):
     total_loss_p /= nbatches
     return total_loss_i, total_loss_s, total_loss_p
 
+writer = utils.create_tensorboard_writer(opt)
 
 print('[training]')
 for i in range(200):
     t0 = time.time()
     train_losses = train(opt.epoch_size, opt.npred)
     valid_losses = test(int(opt.epoch_size / 2))
+
+    if writer is not None:
+        writer.add_scalar('Loss/train_state_img', train_losses[0], i)
+        writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
+        writer.add_scalar('Loss/train_relative_entropy', train_losses[2], i)
+
+        writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
+        writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
+        writer.add_scalar('Loss/validation_relative_entropy', valid_losses[2], i)
+
     n_iter += opt.epoch_size
     model.cpu()
     torch.save({'model': model,
@@ -209,3 +227,5 @@ for i in range(200):
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
+if writer is not None:
+    writer.close()
