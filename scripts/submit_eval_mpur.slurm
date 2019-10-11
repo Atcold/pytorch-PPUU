@@ -7,6 +7,7 @@
 #SBATCH --gres gpu:1
 #SBATCH --constraint="gpu_12gb&pascal"
 #SBATCH --exclude="weaver1, weaver2, weaver3, weaver4, weaver5, vine5, vine11"
+#SBATCH --cpus-per-task=3
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=48000
@@ -15,8 +16,12 @@
 eval "$(conda shell.bash hook)"
 conda activate PPUU
 
+# These exports are needed to stop numpy from spawning processes
+# that end up slowing down multiprocessing.
+export NUMEXPR_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+
 cd ../
 srun python eval_policy.py \
     -method policy-MPUR \
     -policy_model $policy
-

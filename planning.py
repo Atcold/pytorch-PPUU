@@ -2,7 +2,6 @@ import torch
 import torch.optim as optim
 import numpy
 import utils
-import ipdb
 
 ##################################################################################
 # functions for planning and training policy networks using the forward model
