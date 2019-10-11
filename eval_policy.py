@@ -320,6 +320,4 @@ for j in range(n_test):
                 imwrite(path.join(sim_path, f'im{n:05d}.png'), img)
 
 if writer is not None:
-    writer.add_histogram('Success/Hist', road_completed)
-    writer.add_histogram('Success/Outcomes', outcomes)
     writer.close()
