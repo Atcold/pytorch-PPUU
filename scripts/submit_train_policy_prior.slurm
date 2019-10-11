@@ -1,5 +1,6 @@
 #!/bin/bash
 #
+source notif_config
 #SBATCH --job-name=train_policy_prior
 #SBATCH --output=logs/train_policy_prior_%j.out
 #SBATCH --error=logs/train_policy_prior_%j.err
@@ -11,7 +12,7 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=mbh305@nyu.edu
+#SBATCH --mail-user="$emailaddress"
 
 module load python-3.6
 cd ../

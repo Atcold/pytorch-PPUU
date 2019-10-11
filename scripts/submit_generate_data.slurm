@@ -1,5 +1,6 @@
 #!/bin/bash
 #
+source notif_config
 #SBATCH --job-name=datagen
 #SBATCH --output=datagen.out
 #SBATCH --error=datagen.err
@@ -10,7 +11,7 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=mbh305@nyu.edu
+#SBATCH --mail-user="$emailaddress"
 
 source activate py35
 cd ../

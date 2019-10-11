@@ -1,5 +1,6 @@
 #!/bin/bash
 #
+source notif_config
 #SBATCH --job-name=eval_MPUR
 #SBATCH --output=logs/eval_MPUR_%j.out
 #SBATCH --error=logs/eval_MPUR_%j.err
@@ -11,7 +12,7 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
+#SBATCH --mail-user="$emailaddress"
 
 eval "$(conda shell.bash hook)"
 conda activate PPUU

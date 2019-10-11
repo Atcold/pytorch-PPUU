@@ -1,5 +1,6 @@
 #!/bin/bash
 #
+source notif_config
 #SBATCH --job-name=lanker-datagen
 #SBATCH --time=24:00:00
 #SBATCH --gres gpu:0
@@ -8,7 +9,7 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
+#SBATCH --mail-user="$emailaddress"
 
 cd ../
 srun python -u generate_trajectories.py -time_slot $time_slot -map lanker
