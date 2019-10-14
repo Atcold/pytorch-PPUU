@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-source notif_config
 #SBATCH --job-name=plan
 #SBATCH --output=logs/plan_%j.out
 #SBATCH --error=logs/plan_%j.err
@@ -12,7 +11,6 @@ source notif_config
 #SBATCH --nodes=1
 #SBATCH --mem=70000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user="$emailaddress"
 
 cd ../
 srun python plan_with_uncertainty.py -method policy-il -npred 1

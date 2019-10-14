@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-source notif_config
 #SBATCH --job-name=peach-datagen
 #SBATCH --time=24:00:00
 #SBATCH --gres gpu:0
@@ -9,7 +8,6 @@ source notif_config
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user="$emailaddress"
 
 cd ../
 srun python -u generate_trajectories.py -time_slot $time_slot -map peach
