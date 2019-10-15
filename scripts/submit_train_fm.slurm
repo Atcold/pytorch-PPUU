@@ -11,7 +11,6 @@
 #SBATCH --nodes=1
 #SBATCH --mem=50000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
 
 eval "$(conda shell.bash hook)"
 conda activate PPUU

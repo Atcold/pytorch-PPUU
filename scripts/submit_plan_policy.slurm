@@ -11,7 +11,6 @@
 #SBATCH --nodes=1
 #SBATCH --mem=70000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=mbh305@nyu.edu
 
 cd ../
 srun python plan_with_uncertainty.py -method $1 -model_dir $2 -policy_model_tm $3
