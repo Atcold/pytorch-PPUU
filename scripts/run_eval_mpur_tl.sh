@@ -676,11 +676,16 @@ target_lane_policies=(
 "MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False-learnedcost=False-lambdatl=0.7-seed=3-novaluestep105000.model"
 )
 
+target_lane_policies=(
+"MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False-learnedcost=False-lambdatl=0.6-seed=2-novaluestep80000.model"
+)
+
 for policy in ${target_lane_policies[*]}; do
     sbatch \
-      --output ../logs/target_lane/planning_results/${policy}.out \
-      --error ../logs/target_lane/planning_results/${policy}.err \
+      --output ../logs/target_lane_one_step/planning_results/${policy}.out \
+      --error ../logs/target_lane_one_step/planning_results/${policy}.err \
       submit_eval_mpur_tl.slurm \
+        model_dir=models_one_step_tl \
         policy=$policy
 done
 

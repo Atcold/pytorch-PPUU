@@ -1,8 +1,6 @@
 #!/bin/bash
 #
 #SBATCH --job-name=train_MPUR
-##SBATCH --output=logs/train_MPUR_%j.out
-##SBATCH --error=logs/train_MPUR_%j.err
 #SBATCH --time=48:00:00
 #SBATCH --gres gpu:1
 #SBATCH --constraint="gpu_12gb&pascal"
@@ -19,6 +17,8 @@ source activate PPUU
 
 cd ../
 srun python train_MPUR.py \
+    -model_dir $model_dir \
+    -learned_cost \
     -npred $npred \
     -u_reg $u_reg \
     -batch_size $batch_size \

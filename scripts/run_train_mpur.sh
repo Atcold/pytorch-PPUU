@@ -5,13 +5,14 @@ for npred in 30; do
     for batch_size in 6; do
         for u_reg in 0.05; do
             for lambda_a in 0.0; do
-                for lambda_l in 0.2; do
-                    for lambda_tl in 0.1 0.2 0.3 0.4 0.5 0.6 0.7; do
+                for lambda_l in 0.1 0.2 0.0; do
+                    for lambda_tl in 1.0 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1; do
                         for seed in 1 2 3; do
                             sbatch \
-                              --output ../logs/target_lane/train_MPUR_seed${seed}_lambdatl${lambda_tl}.out \
-                              --error ../logs/target_lane/train_MPUR_seed${seed}_lambdatl${lambda_tl}.err \
+                              --output ../logs/target_lane/train_MPUR_seed${seed}_lambdal${lambda_l}_lambdatl${lambda_tl}.out \
+                              --error ../logs/target_lane/train_MPUR_seed${seed}_lambdal${lambda_l}_lambdatl${lambda_tl}.err \
                               submit_train_mpur.slurm \
+                              model_dir=models_learned_cost \
                               npred=$npred \
                               u_reg=$u_reg \
                               lrt_z=$lrt_z \
