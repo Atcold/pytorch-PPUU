@@ -1,4 +1,5 @@
 import copy
+import math
 import random
 from os import mkdir, path
 
@@ -83,13 +84,14 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
 n_test = len(splits['test_indx'])
-for j in range(n_test):
+for j in range(40, n_test):
+# for j in [1, 5]:
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
-    inputs, info = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
-    car_trajectory = copy.deepcopy(info._trajectory)  # copy the test car's true trajectory
+    inputs, first_frame = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
+    car_trajectory = copy.deepcopy(env.controlled_car['locked']._trajectory)  # copy the test car's true trajectory
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
     images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
@@ -103,8 +105,34 @@ for j in range(n_test):
         input_states = inputs['state'].contiguous()
         if opt.method == 'policy-MPUR':
             # Target y = average of car's true y position from now and 30 (opt.npred) steps into the future
-            target_y = torch.tensor(car_trajectory[cntr:cntr + opt.npred, 1].mean()).to(device)
-            print(f'(cntr={cntr}) target y: {target_y}')
+            # target_y = torch.tensor(car_trajectory[cntr:cntr + opt.npred, 1].mean()).to(device)
+
+            # Exaggerated target y
+            pain_factor = 25
+            try:
+                target = target if math.isnan(car_trajectory[env.frame - first_frame + 10, 1]) \
+                    else car_trajectory[env.frame - first_frame + 10, 1]
+            except IndexError:
+                target = target
+            # target = car_trajectory[env.frame - first_frame, 1]
+            distance_to_target = env.controlled_car["locked"]._position[1] - target
+            # if abs(distance_to_target) > env.LANE_W / 2:
+            #     exaggerated_target_y = env.controlled_car["locked"]._position[1] - pain_factor * distance_to_target
+            # else:
+            #     exaggerated_target_y = target
+            # exaggerated_target_y = max(48.0, min(168.0, exaggerated_target_y))
+            exaggerated_target_y = env.controlled_car["locked"]._position[1] - pain_factor * distance_to_target
+            # exaggerated_target_y = env.controlled_car["locked"]._position[1] - \
+            #                        distance_to_target**2 * (1 if distance_to_target > 0 else -1)
+            target_y = torch.tensor(exaggerated_target_y).to(device)
+            # target_y = torch.tensor(target).to(device)
+            if env.ghost:
+                print(f'(cntr={cntr}) Ghost Car: {env.ghost._position[1]} vs. '
+                      f'Controlled Car {env.controlled_car["locked"]._position[1]} vs. '
+                      f'Target y: {target} (True) {exaggerated_target_y} (Exaggerated)')
+            else:
+                print(f'(cntr={cntr}) Controlled Car {env.controlled_car["locked"]._position[1]} vs. '
+                      f'Target y: {target} (True) {exaggerated_target_y} (Exaggerated)')
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,
                                                            controls=dict(target_lanes=target_y))
