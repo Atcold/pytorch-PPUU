@@ -471,10 +471,6 @@ class I80(Simulator):
                 self.ghost = None
             if self.ghost:
                 self.ghost.step(self.ghost.policy())
-                try:
-                    print(f'True y: {self.ghost._position[1]} vs. Controlled y: {self.controlled_car["locked"]._position[1]}')
-                except:
-                    print(f'Ghost y: {self.ghost._position[1]}')
 
         self.frame += int(self.delta_t * 10)
 
@@ -490,6 +486,9 @@ class I80(Simulator):
                 gamma=self.gamma,
             )
             if return_:
+                # return_with_true_y = return_[0], return_[1], return_[2],\
+                #                      {"info": return_[3], "true_y": self.ghost._position[1] if self.ghost else None}
+                # return return_with_true_y
                 return return_
 
         # return observation, reward, done, info
