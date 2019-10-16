@@ -67,6 +67,7 @@ class ControlledI80(I80):
     def reset(self, **kwargs):
         super().reset(**kwargs)
         observation = None
+        first_frame = self.frame
         while observation is None:
-            observation, reward, done, info = self.step()
-        return observation, info
+            observation, reward, done, _ = self.step()
+        return observation, first_frame
