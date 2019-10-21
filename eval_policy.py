@@ -177,6 +177,7 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 
 # different performance metrics
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
+cost_sequences = []
 
 writer = utils.create_tensorboard_writer(opt)
 
@@ -196,6 +197,7 @@ for j in range(n_test):
     input_state_t0 = inputs['state'].contiguous()[-1]
     action_sequences.append([])
     state_sequences.append([])
+    cost_sequences.append([])
     has_collided = False
     off_screen = False
     while not done:
@@ -256,6 +258,7 @@ for j in range(n_test):
             images.append(input_images[-1])
             states.append(input_states[-1])
             costs.append([cost['pixel_proximity_cost'], cost['lane_cost']])
+            cost_sequences[-1].append(cost)
             if opt.mfile == 'no-action':
                 actions.append(a[t])
                 mu_list.append(mu)
@@ -284,6 +287,8 @@ for j in range(n_test):
     utils.log(path.join(opt.save_dir, f'{plan_file}.log'), log_string)
     torch.save(action_sequences, path.join(opt.save_dir, f'{plan_file}.actions'))
     torch.save(state_sequences, path.join(opt.save_dir, f'{plan_file}.states'))
+
+    torch.save(cost_sequences, path.join(opt.save_dir, f'{plan_file}.costs'))
 
     images  = torch.stack(images)
     states  = torch.stack(states)
