@@ -92,11 +92,14 @@ def load_models():
         forward_model.policy_net.stats = stats
         forward_model.policy_net.actor_critic = False
     if opt.method == 'policy-MPUR':
-        policy_network_mpur = torch.load(model_path)['model']
+        checkpoint = torch.load(model_path)
+        policy_network_mpur = checkpoint['model']
         policy_network_mpur.stats = stats
         forward_model.policy_net = policy_network_mpur.policy_net
         forward_model.policy_net.stats = stats
+        forward_model.policy_net.options = checkpoint['opt']
         forward_model.policy_net.actor_critic = False
+        del checkpoint
 
     forward_model.intype('gpu')
     forward_model.stats = stats
@@ -199,7 +202,7 @@ for j in range(n_test):
     inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
-    images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
+    images, states, costs, actions, mu_list, std_list, grad_list = [], [], [], [], [], [], []
     cntr = 0
     # inputs, cost, done, info = env.step(numpy.zeros((2,)))
     input_state_t0 = inputs['state'].contiguous()[-1]
@@ -208,7 +211,6 @@ for j in range(n_test):
     has_collided = False
     off_screen = False
     while not done:
-        ipdb.set_trace()
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
@@ -236,12 +238,15 @@ for j in range(n_test):
         elif opt.method == 'policy-MPUR':
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True)
-            images_copy, states_copy = utils.normalize_inputs(
-                input_images, input_states, forward_model.policy_net.stats, device=device)
-            pred, actions = planning.get_gradients_mpur(
-                forward_model, (images_copy, states_copy),
-                torch.tensor(
-                    dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id])[None,:])
+            if opt.save_grad_vid:
+                grad_list.append(planning.get_grad_vid(
+                    grad_movie_dir, forward_model, input_images, input_states,
+                    torch.tensor(
+                        dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
+                    )[None, :],
+                    n_models=10,
+                    device=device
+                ))
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'bprop+policy-IL':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True,
@@ -305,6 +310,7 @@ for j in range(n_test):
     states  = torch.stack(states)
     costs   = torch.tensor(costs)
     actions = torch.stack(actions)
+    grads   = torch.cat(grad_list)
 
     if mu is not None:
         mu_list = numpy.stack(mu_list)
@@ -321,6 +327,8 @@ for j in range(n_test):
     if len(images) > 3:
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
+        if opt.save_grad_vid:
+            utils.save_movie(grad_movie_dir, grads/255., None, None, None, None, None, pytorch=True)
         outcomes.append(outcome)
         if writer is not None:
             writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)

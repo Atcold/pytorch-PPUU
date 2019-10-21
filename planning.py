@@ -371,13 +371,18 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
 
     return predictions, pred_actions
 
-def get_gradients_mpur(model, inputs, car_sizes, n_models=10, sampling_method='fp'):
-    input_images, input_states = inputs[0].clone(), inputs[1].clone()
+
+def get_grad_vid(path, model, input_images, input_states, car_sizes, n_models=10, sampling_method='fp', device='cuda'):
+    input_images, input_states = utils.normalize_inputs(
+        input_images, input_states, model.policy_net.stats, device=device)
+    input_images, input_states = input_images.clone(), input_states.clone()
+    input_images.requires_grad = True
+    input_states.requires_grad = True
     input_images.retain_grad()
     input_states.retain_grad()
 
     z_t = model.sample_z(1, method=sampling_method)
-    Z = z_t[None,:]
+    Z = z_t[None, :]
     model.eval()
     actions, _, _, _ = model.policy_net(input_images, input_states)
     pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, z_t)
@@ -385,12 +390,11 @@ def get_gradients_mpur(model, inputs, car_sizes, n_models=10, sampling_method='f
     pred_states = pred_state[:,None]
     pred_actions = actions[:,None]
 
-
     proximity_cost, _ = utils.proximity_cost(pred_image, pred_states.data, car_sizes, unnormalize=True,
                                              s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+    proximity_loss = torch.mean(proximity_cost)
     lane_cost = utils.lane_cost(pred_image, car_sizes)
     lane_loss = torch.mean(lane_cost)
-    proximity_loss = torch.mean(proximity_cost)
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, None, car_sizes, npred=1, n_models=n_models,
         detach=False, Z=Z, compute_total_loss=True
@@ -398,11 +402,15 @@ def get_gradients_mpur(model, inputs, car_sizes, n_models=10, sampling_method='f
 
     loss_a = pred_actions.norm(2, 2).pow(2).mean()
 
+    opt = model.policy_net.options
+    loss = proximity_loss + \
+           opt.u_reg * total_u_loss + \
+           opt.lambda_l * lane_loss + \
+           opt.lambda_a * loss_a
+    loss.backward()
 
-    temp = lane_loss + proximity_loss
-    temp.backward()
-    assert input_images.grad is not None, "something is going wrong"
-    return None
+    return input_images.grad[:, -1]
+    utils.save_movie(path, input_images.grad[:, -1], None, None, None, None, None, pytorch=True)
 
 
 def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
