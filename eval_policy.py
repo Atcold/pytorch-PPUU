@@ -8,6 +8,7 @@ import planning
 import utils
 from dataloader import DataLoader
 from imageio import imwrite
+import ipdb
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -53,6 +54,7 @@ parser.add_argument('-save_sim_video', action='store_true', help='Save simulator
 parser.add_argument('-tensorboard_dir', type=str, default='models/planning_results',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')
+parser.add_argument('-save_grad_vid', action='store_true', help='save gradients wrt states')
 
 opt = parser.parse_args()
 
@@ -102,10 +104,14 @@ def load_models():
         forward_model.p_z = torch.load(path.join(opt.model_dir, f'{opt.mfile}.pz'))
     return forward_model, value_function, policy_network_il, policy_network_mper, stats
 
-
+device = 'cuda' if torch.cuda.is_available else 'cpu'
 dataloader = DataLoader(None, opt, 'i80')
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
+forward_model.train()
+forward_model.opt.u_hinge = opt.u_hinge
+planning.estimate_uncertainty_stats(forward_model, dataloader, n_batches=50, npred=opt.npred)
+forward_model.eval()
 
 
 if opt.u_reg > 0.0:
@@ -185,6 +191,9 @@ outcomes = []
 for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
+    if opt.save_grad_vid:
+        grad_movie_dir = path.join(opt.save_dir, 'grad_videos_simulator', plan_file, f'ep{j + 1}')
+        print(f'[gradient videos will be saved to: {grad_movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
     inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
@@ -199,6 +208,7 @@ for j in range(n_test):
     has_collided = False
     off_screen = False
     while not done:
+        ipdb.set_trace()
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
@@ -226,6 +236,12 @@ for j in range(n_test):
         elif opt.method == 'policy-MPUR':
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True)
+            images_copy, states_copy = utils.normalize_inputs(
+                input_images, input_states, forward_model.policy_net.stats, device=device)
+            pred, actions = planning.get_gradients_mpur(
+                forward_model, (images_copy, states_copy),
+                torch.tensor(
+                    dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id])[None,:])
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'bprop+policy-IL':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True,
