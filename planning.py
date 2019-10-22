@@ -387,30 +387,30 @@ def get_grad_vid(path, model, input_images, input_states, car_sizes, n_models=10
     actions, _, _, _ = model.policy_net(input_images, input_states)
     pred_image, pred_state = model.forward_single_step(input_images, input_states, actions, z_t)
 
-    pred_states = pred_state[:,None]
-    pred_actions = actions[:,None]
+    pred_states = pred_state[:, None]
+    pred_actions = actions[:, None]
 
     proximity_cost, _ = utils.proximity_cost(pred_image, pred_states.data, car_sizes, unnormalize=True,
                                              s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
     proximity_loss = torch.mean(proximity_cost)
     lane_cost = utils.lane_cost(pred_image, car_sizes)
     lane_loss = torch.mean(lane_cost)
-    _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
-        model, input_images, input_states, pred_actions, None, car_sizes, npred=1, n_models=n_models,
-        detach=False, Z=Z, compute_total_loss=True
-    )
+    # _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
+    #     model, input_images, input_states, pred_actions, None, car_sizes, npred=1, n_models=n_models,
+    #     detach=False, Z=Z, compute_total_loss=True
+    # )
 
-    loss_a = pred_actions.norm(2, 2).pow(2).mean()
+    # loss_a = pred_actions.norm(2, 2).pow(2).mean()
 
     opt = model.policy_net.options
     loss = proximity_loss + \
-           opt.u_reg * total_u_loss + \
-           opt.lambda_l * lane_loss + \
-           opt.lambda_a * loss_a
+           opt.lambda_l * lane_loss
+           # opt.u_reg * total_u_loss + \
+           # opt.lambda_a * loss_a
     loss.backward()
 
-    return input_images.grad[:, -1]
-    utils.save_movie(path, input_images.grad[:, -1], None, None, None, None, None, pytorch=True)
+    return input_images.grad[:, -1].abs().clamp(max=1.)
+    # utils.save_movie(path, input_images.grad[:, -1], None, None, None, None, None, pytorch=True)
 
 
 def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):

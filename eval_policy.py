@@ -236,6 +236,7 @@ for j in range(n_test):
                                                            normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'policy-MPUR':
+            # ipdb.set_trace()
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True)
             if opt.save_grad_vid:
@@ -328,7 +329,7 @@ for j in range(n_test):
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
         if opt.save_grad_vid:
-            utils.save_movie(grad_movie_dir, grads/255., None, None, None, None, None, pytorch=True)
+            utils.save_movie(grad_movie_dir, grads/grads.max()., None, None, None, None, None, pytorch=True)
         outcomes.append(outcome)
         if writer is not None:
             writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)
