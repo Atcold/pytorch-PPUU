@@ -6,7 +6,6 @@ import re
 import torch
 import numpy as np
 import pandas
-import imageio
 import matplotlib.pyplot as plt
 from bqplot.marks import Pie, Bars
 from bqplot import Figure
@@ -70,6 +69,34 @@ class Visualization:
                 )
         self.bars_plot = Bars(x = np.arange(10), y = np.arange(10), scales={'x':LinearScale(), 'y':LinearScale()})
 
+        self.episode_play = widgets.Play(
+        #     interval=10,
+            value=0,
+            min=0,
+            max=100,
+            step=1,
+            description="Press play",
+            disabled=False
+        )
+
+        self.episode_slider = widgets.IntSlider()
+        widgets.jslink((self.episode_play, 'value'), (self.episode_slider, 'value'))
+        widgets.jslink((self.episode_play, 'max'), (self.episode_slider, 'max'))
+        widgets.jslink((self.episode_play, 'min'), (self.episode_slider, 'min'))
+        self.episode_hbox = widgets.HBox([self.episode_play, self.episode_slider])
+
+        self.episode_gradient_image = widgets.Image(format='png',
+                                                    width=120,
+                                                    height=600,
+                                                    )
+
+        self.episode_image = widgets.Image(format='png',
+                                           width=120,
+                                           height=600,
+                                           )
+
+        self.images_hbox = widgets.HBox([self.episode_gradient_image, self.episode_image])
+
         # figures containing plots definition
         self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
         self.bars_figure = Figure(title='Success rate per episode', marks=[self.bars_plot], layout=widgets.Layout(width='100%', height='300'))
@@ -77,6 +104,8 @@ class Visualization:
         self.policy_plot = plt.subplots(figsize=(9.5, 4))
         self.costs_plot = plt.subplots(figsize=(9.5, 4))
         self.costs_plot = *self.costs_plot, self.costs_plot[1].twinx()
+
+        self.success_matrix = plt.subplots(figsize=(9.5, 4))
 
         # callbacks definitions
         # They're defined in the initializer so that we have access to self.
@@ -152,10 +181,22 @@ class Visualization:
                 self.costs_plot[1].grid(True)
                 plt.show()
 
-                images = self.get_gradients(self.select_experiment.value,
-                                            self.seed_dropdown.value,
-                                            self.checkpoint_dropdown.value,
-                                            self.episode_dropdown.value)
+                self.gradient_images = self.get_gradients(
+                                                             self.select_experiment.value,
+                                                             self.seed_dropdown.value,
+                                                             self.checkpoint_dropdown.value,
+                                                             self.episode_dropdown.value
+                                                         )
+                self.images = self.get_images(self.select_experiment.value,
+                                              self.seed_dropdown.value,
+                                              self.checkpoint_dropdown.value,
+                                              self.episode_dropdown.value)
+
+                self.episode_gradient_image.value = self.gradient_images[0]
+                self.episode_image.value = self.images[0]
+                self.episode_slider.min = 0
+                self.episode_slider.value = 0
+                self.episode_slider.max = len(self.gradient_images)
 
 
         def pie_plot_click_callback(x, y):
@@ -170,12 +211,18 @@ class Visualization:
             self.policy_plot[1].cla()
             plt.show()
 
+        def episode_slider_callback(change):
+            if change.name == 'value' and change.new is not None:
+                self.episode_gradient_image.value = self.gradient_images[change.new]
+                self.episode_image.value = self.images[change.new]
+
         self.select_experiment.observe(select_experiment_change_callback, type='change')
         self.seed_dropdown.observe(seed_dropdown_change_callback, type='change')
         self.checkpoint_dropdown.observe(checkpoint_dropdown_change_callback, type='change')
         self.pie_plot.on_element_click(pie_plot_click_callback)
         self.clean_button.on_click(clean_button_click_callback)
         self.episode_dropdown.observe(episode_dropdown_change_callback ,type='change')
+        self.episode_slider.observe(episode_slider_callback, type='change')
 
     def find_option_values(self, option, policy=None, seed=None, checkpoint=None):
     #     ipdb.set_trace()
@@ -252,9 +299,12 @@ class Visualization:
                 one_hot = np.sum(one_hot, axis=0),
                 one_hot = np.squeeze(one_hot)
                 result += one_hot
-        k = len(result)
-        self.bars_plot.y = result[:k]
-        self.bars_plot.x = np.arange(k)
+
+        self.bars_plot.y = result
+        self.bars_plot.x = np.arange(len(result))
+
+        print('result type is', type(result))
+        self.success_matrix[1].matshow(result.reshape(11, 51))
 
     def build_success_rate_table(self, policy):
         experiment = self.select_experiment.value
@@ -302,20 +352,35 @@ class Visualization:
         # gradient_path = f'{path}/planning_results/grad_videos_simulator/{model_name}-seed={seed}-novaluestep-{checkpoint}.model/'
         gradient_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/grad_videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model/ep{episode}/*.png'
         images = []
-        for image_path in glob(gradient_paths):
-           images.append(imageio.imread(image_path))
+        for image_path in sorted(glob(gradient_paths)):
+            with open(image_path, 'rb') as f:
+                images.append(f.read())
+        return images
+
+    def get_images(self, policy, seed, checkpoint, episode):
+        path = self.policies_mapping[policy][0]
+        model_name = self.policies_mapping[policy][1]
+        # gradient_path = f'{path}/planning_results/grad_videos_simulator/{model_name}-seed={seed}-novaluestep-{checkpoint}.model/'
+        image_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model/ep{episode}/ego/*.png'
+        images = []
+        for image_path in sorted(glob(image_paths)):
+            with open(image_path, 'rb') as f:
+                images.append(f.read())
         return images
 
 
     def display(self):
         display(self.select_experiment)
+        display(self.policy_plot[0])
+        display(self.clean_button)
         display(self.seed_dropdown)
         display(self.checkpoint_dropdown)
         display(self.episode_dropdown)
         display(self.pie_figure)
         display(self.bars_figure)
-        display(self.policy_plot[0])
-        display(self.clean_button)
+        display(self.success_matrix[0])
         display(self.costs_plot[0])
-        
+        display(self.episode_hbox)
+        display(self.images_hbox)
+
         # display(self.episode_dropdown)
