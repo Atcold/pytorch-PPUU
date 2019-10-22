@@ -4,11 +4,14 @@ from IPython.display import display
 from glob import glob
 import re
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
-from bqplot.marks import Pie
+from bqplot.marks import Pie, Bars
 from bqplot import Figure
+from bqplot.scales import LinearScale
 
 SUCCESS_INDEX_PIE_PLOT = 0
+EPISODES = 561
 
 class Visualization:
 
@@ -55,7 +58,10 @@ class Visualization:
                 font_size='14px',
                 )
 
-        self.figure = Figure(title='Success rate', marks=[self.pie_plot])
+        self.bars_plot = Bars(x = np.arange(10), y = np.arange(10), scales={'x':LinearScale(), 'y':LinearScale()})
+
+        self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
+        self.bars_figure = Figure(title='Success rate per episode', marks=[self.bars_plot], layout=widgets.Layout(width='100%', height='300'))
 
         # self.episode_dropdown = widgets.Dropdown(
         #     description='Episode:',
@@ -65,17 +71,22 @@ class Visualization:
         def select_experiment_change_callback(change):
             if change.name == 'value' and change.new is not None:
                 self.ignore_udpates = True
-                self.seed_dropdown.options = self.find_option_values('seed')
+                self.seed_dropdown.options = self.find_option_values('seed', 
+                                                                     policy=self.select_experiment.value)
                 self.seed_dropdown.value = None
                 self.checkpoint_dropdown.value = None
                 self.ignore_udpates = False
+
+                self.update_bars_plot()
 
         def seed_dropdown_change_callback(change):
             if self.ignore_udpates:
                 return
             if change.name == 'value' and change.new is not None:
                 self.ignore_udpates = True
-                self.checkpoint_dropdown.options = self.find_option_values('checkpoint')
+                self.checkpoint_dropdown.options = self.find_option_values('checkpoint', 
+                                                                           policy=self.select_experiment.value,
+                                                                           seed=self.seed_dropdown.value)
                 self.checkpoint_dropdown.value = None
                 self.ignore_udpates = False
 
@@ -117,19 +128,19 @@ class Visualization:
         self.pie_plot.on_element_click(pie_plot_click_callback)
         # self.episode_dropdown.observe(plot_episode_state,type='change')
 
-    def find_option_values(self, option=None, option_arg=0):
+    def find_option_values(self, option, policy=None, seed=None, checkpoint=None):
     #     ipdb.set_trace()
         if option == 'seed':
-            path = self.policies_mapping[self.select_experiment.value]
+            path = self.policies_mapping[policy]
             logs = glob(path[0] + 'policy_networks/' + path[1] + '*.log')
             regexp = r"seed=(\d+)-"
         elif option == 'checkpoint':
-            path = self.policies_mapping[self.select_experiment.value]
-            logs = glob(path[0] + 'planning_results/' + path[1] + f'-seed={self.seed_dropdown.value}' + '*.model.log')
+            path = self.policies_mapping[policy]
+            logs = glob(path[0] + 'planning_results/' + path[1] + f'-seed={seed}' + '*.model.log')
             regexp = r'-novaluestep(\d+)\.'
         elif option == 'episode':
-            path = self.policies_mapping[self.select_experiment.value]
-            logs = glob(path[0] + 'planning_results/videos_simulator/' + path[1] + f'-seed={self.seed_dropdown.value}-novaluestep{self.checkpoint_dropdown.value}.model/ep*')
+            path = self.policies_mapping[policy]
+            logs = glob(path[0] + 'planning_results/videos_simulator/' + path[1] + f'-seed={seed}-novaluestep{checkpoint}.model/ep*')
             regexp = r'model/ep(\d+)'
 
         values = []
@@ -170,10 +181,37 @@ class Visualization:
                 if int(match.group(2)) == outcome:
                     result.append(int(match.group(1)))
         return result
+
+    def update_bars_plot(self):
+        if self.select_experiment.value is None:
+            return
+        experiment = self.select_experiment.value
+        seeds = self.find_option_values('seed', experiment)
+        result = np.zeros(EPISODES)
+        for seed in seeds:
+            checkpoints = self.find_option_values('checkpoint', experiment, seed)
+            for checkpoint in checkpoints:
+                success = self.get_episodes_with_outcome(self.select_experiment.value,
+                                                         seed, 
+                                                         checkpoint,
+                                                         1)
+                success = np.array(success)
+                success = success - 1
+                one_hot = np.zeros((len(success), EPISODES))
+                one_hot[np.arange(len(success)), success] = 1
+                one_hot = np.sum(one_hot, axis=0),
+                one_hot = np.squeeze(one_hot)
+                result += one_hot
+        k = len(result)
+        self.bars_plot.y = result[:k]
+        self.bars_plot.x = np.arange(k)
+
     
     def display(self):
         display(self.select_experiment)
         display(self.seed_dropdown)
         display(self.checkpoint_dropdown)
-        display(self.figure)
+        display(self.pie_figure)
+        display(self.bars_figure)
+        
         # display(self.episode_dropdown)
