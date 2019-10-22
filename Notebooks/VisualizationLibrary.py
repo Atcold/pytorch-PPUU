@@ -5,6 +5,8 @@ from glob import glob
 import re
 import torch
 import numpy as np
+import pandas
+import imageio
 import matplotlib.pyplot as plt
 from bqplot.marks import Pie, Bars
 from bqplot import Figure
@@ -34,6 +36,8 @@ class Visualization:
     def __init__(self):
         self.ignore_udpates = False
 
+        # ipywidget definitions
+
         self.select_experiment = widgets.Select(
             options=list(self.policies_mapping.keys()),
             rows=10,
@@ -49,7 +53,14 @@ class Visualization:
             description='Checkpoint:',
             disabled=False,
         )
+        self.clean_button = widgets.Button(description="Clean the plot")
 
+        self.episode_dropdown = widgets.Dropdown(
+            description='Successful Episode:',
+            disabled=False,
+        )
+
+        # plots definitions
         self.pie_plot = Pie(radius=150,
                 inner_radius=80,
                 interactions={'click': 'select'},
@@ -57,17 +68,18 @@ class Visualization:
                 label_color='black',
                 font_size='14px',
                 )
-
         self.bars_plot = Bars(x = np.arange(10), y = np.arange(10), scales={'x':LinearScale(), 'y':LinearScale()})
 
+        # figures containing plots definition
         self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
         self.bars_figure = Figure(title='Success rate per episode', marks=[self.bars_plot], layout=widgets.Layout(width='100%', height='300'))
+        plt.ioff()
+        self.policy_plot = plt.subplots(figsize=(9.5, 4))
+        self.costs_plot = plt.subplots(figsize=(9.5, 4))
+        self.costs_plot = *self.costs_plot, self.costs_plot[1].twinx()
 
-        # self.episode_dropdown = widgets.Dropdown(
-        #     description='Episode:',
-        #     disabled=False,
-        # )
-
+        # callbacks definitions
+        # They're defined in the initializer so that we have access to self.
         def select_experiment_change_callback(change):
             if change.name == 'value' and change.new is not None:
                 self.ignore_udpates = True
@@ -78,6 +90,7 @@ class Visualization:
                 self.ignore_udpates = False
 
                 self.update_bars_plot()
+                self.build_success_rate_table(self.select_experiment.value)
 
         def seed_dropdown_change_callback(change):
             if self.ignore_udpates:
@@ -93,12 +106,20 @@ class Visualization:
         def checkpoint_dropdown_change_callback(change):
             if self.ignore_udpates:
                 return
-            # self.episode_dropdown.options = self.find_option_values('episode')
             if change.name == 'value' and change.new is not None:
+                self.ignore_udpates = True
+                self.episode_dropdown.options = self.find_option_values('episode', 
+                                                                        policy=self.select_experiment.value,
+                                                                        seed=self.seed_dropdown.value,
+                                                                        checkpoint=self.checkpoint_dropdown.value)
+                self.episode_dropdown.value = None
+                self.ignore_udpates = False
                 self.get_success_rate(self.select_experiment.value, self.seed_dropdown.value, self.checkpoint_dropdown.value)
 
-        def plot_episode_state(episode):
-            if self.episode_dropdown.value is not None:
+        def episode_dropdown_change_callback(change):
+            if self.ignore_udpates:
+                return
+            if change.name == 'value' and change.new is not None:
                 path = self.policies_mapping[self.select_experiment.value]
                 regex = path[0] + 'planning_results/' + path[1] + f'-seed={self.seed_dropdown.value}-novaluestep{self.checkpoint_dropdown.value}' + '.model.states'
                 states_paths = glob(regex)
@@ -111,8 +132,31 @@ class Visualization:
                 episode_states = list(map(lambda x : x[-1], episode_states))
                 episode_states = torch.stack(episode_states)
                 episode_states[:, 2:].norm(dim=1)
-                plt.plot(episode_states[:, 2:].norm(dim=1))
+
+                self.costs_plot[1].cla()
+                self.costs_plot[2].cla()
+                self.costs_plot[1].set_ylim([-0.1, 1.1])
+                self.costs_plot[2].plot(episode_states[:, 2:].norm(dim=1), color='C4')
+                self.costs_plot[2].set_ylabel('speed', color='C4')
+                self.costs_plot[2].tick_params(axis='y', labelcolor='C4')
                 plt.show()
+
+                file_name = '/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model.costs'
+                raw_costs = torch.load(file_name)
+                costs = [pandas.DataFrame(c) for c in raw_costs]  # list of DataFrame, one per episode
+
+                # Plot last N rows of episode E
+                N = 50
+                costs[self.episode_dropdown.value].tail(N).plot(ax=self.costs_plot[1])
+                self.costs_plot[1].legend(loc='upper center', ncol=4)
+                self.costs_plot[1].grid(True)
+                plt.show()
+
+                images = self.get_gradients(self.select_experiment.value,
+                                            self.seed_dropdown.value,
+                                            self.checkpoint_dropdown.value,
+                                            self.episode_dropdown.value)
+
 
         def pie_plot_click_callback(x, y):
             if y['data']['index'] == SUCCESS_INDEX_PIE_PLOT:
@@ -122,11 +166,16 @@ class Visualization:
                 # success cases
                 print(self.get_episodes_with_outcome(self.select_experiment.value, self.seed_dropdown.value, self.checkpoint_dropdown.value, 0))
 
+        def clean_button_click_callback(b):
+            self.policy_plot[1].cla()
+            plt.show()
+
         self.select_experiment.observe(select_experiment_change_callback, type='change')
         self.seed_dropdown.observe(seed_dropdown_change_callback, type='change')
         self.checkpoint_dropdown.observe(checkpoint_dropdown_change_callback, type='change')
         self.pie_plot.on_element_click(pie_plot_click_callback)
-        # self.episode_dropdown.observe(plot_episode_state,type='change')
+        self.clean_button.on_click(clean_button_click_callback)
+        self.episode_dropdown.observe(episode_dropdown_change_callback ,type='change')
 
     def find_option_values(self, option, policy=None, seed=None, checkpoint=None):
     #     ipdb.set_trace()
@@ -168,6 +217,7 @@ class Visualization:
             success_rate = float(last_line[(last_colon + 2):])
         self.pie_plot.sizes = [success_rate, 1 - success_rate]
         self.pie_plot.labels = [str(round(success_rate, 2)), str(round(1 - success_rate, 2))]
+        return success_rate
 
     def get_episodes_with_outcome(self, policy, seed, step, outcome):
         path = self.get_evaluation_log_file(policy, seed, step)
@@ -206,12 +256,66 @@ class Visualization:
         self.bars_plot.y = result[:k]
         self.bars_plot.x = np.arange(k)
 
-    
+    def build_success_rate_table(self, policy):
+        experiment = self.select_experiment.value
+        seeds = self.find_option_values('seed', experiment)
+        result = {} 
+        steps = []
+        for seed in seeds:
+            result[seed] = []
+            checkpoints = self.find_option_values('checkpoint', experiment, seed)
+            if len(steps) < len(checkpoints):
+                steps = checkpoints
+
+            for checkpoint in checkpoints:
+                success = self.get_success_rate(policy, seed, checkpoint)
+                result[seed].append(success)
+
+        result = np.stack([np.array(result[seed]) for seed in result])
+        steps = np.array(steps)
+
+        self.policy_plot[1].plot(
+            np.array(steps) / 1e3, np.median(result, 0),
+            label=f'{policy}',
+            linewidth=2,
+        )
+        self.policy_plot[1].fill_between(
+            np.array(steps) / 1e3, result.min(0), result.max(0),
+            alpha=.5,
+        )
+        self.policy_plot[1].grid(True)
+        self.policy_plot[1].set_xlabel('steps [k–]')
+        self.policy_plot[1].set_ylabel('success rate')
+        self.policy_plot[1].legend()
+        self.policy_plot[1].set_ylim([0.50, 0.85])
+        self.policy_plot[1].set_xlim([5, 105])
+        self.policy_plot[1].set_title('Regressed vs. hardwired cost policy success rate min-max')
+        self.policy_plot[1].set_xticks(range(10, 100 + 10, 10))
+        plt.show()
+
+        return result
+
+
+    def get_gradients(self, policy, seed, checkpoint, episode):
+        path = self.policies_mapping[policy][0]
+        model_name = self.policies_mapping[policy][1]
+        # gradient_path = f'{path}/planning_results/grad_videos_simulator/{model_name}-seed={seed}-novaluestep-{checkpoint}.model/'
+        gradient_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/grad_videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model/ep{episode}/*.png'
+        images = []
+        for image_path in glob(gradient_paths):
+           images.append(imageio.imread(image_path))
+        return images
+
+
     def display(self):
         display(self.select_experiment)
         display(self.seed_dropdown)
         display(self.checkpoint_dropdown)
+        display(self.episode_dropdown)
         display(self.pie_figure)
         display(self.bars_figure)
+        display(self.policy_plot[0])
+        display(self.clean_button)
+        display(self.costs_plot[0])
         
         # display(self.episode_dropdown)
