@@ -561,3 +561,16 @@ def create_tensorboard_writer(opt):
         return writer
     else:
         return None
+
+
+def denormalise_state(state, model_stats):
+    return (model_stats['s_mean'] + model_stats['s_std'] * state.detach().cpu())[:,:,2:] / 24 * 3.7 * 3.6
+
+def normalize_inputs(images, states, stats, device='cuda'):
+    images = images.clone().float().div_(255.0)
+    states -= stats['s_mean'].view(1, 4).expand(states.size())
+    states /= stats['s_std'].view(1, 4).expand(states.size())
+    if images.dim() == 4:  # if processing single vehicle
+        images = images.to(device).unsqueeze(0)
+        states = states.to(device).unsqueeze(0)
+    return images, states

@@ -53,6 +53,7 @@ parser.add_argument('-save_sim_video', action='store_true', help='Save simulator
 parser.add_argument('-tensorboard_dir', type=str, default='models/planning_results',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')
+parser.add_argument('-save_grad_vid', action='store_true', help='save gradients wrt states')
 
 opt = parser.parse_args()
 
@@ -90,11 +91,14 @@ def load_models():
         forward_model.policy_net.stats = stats
         forward_model.policy_net.actor_critic = False
     if opt.method == 'policy-MPUR':
-        policy_network_mpur = torch.load(model_path)['model']
+        checkpoint = torch.load(model_path)
+        policy_network_mpur = checkpoint['model']
         policy_network_mpur.stats = stats
         forward_model.policy_net = policy_network_mpur.policy_net
         forward_model.policy_net.stats = stats
+        forward_model.policy_net.options = checkpoint['opt']
         forward_model.policy_net.actor_critic = False
+        del checkpoint
 
     forward_model.intype('gpu')
     forward_model.stats = stats
@@ -102,10 +106,11 @@ def load_models():
         forward_model.p_z = torch.load(path.join(opt.model_dir, f'{opt.mfile}.pz'))
     return forward_model, value_function, policy_network_il, policy_network_mper, stats
 
-
+device = 'cuda' if torch.cuda.is_available else 'cpu'
 dataloader = DataLoader(None, opt, 'i80')
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
+forward_model.eval()
 
 
 if opt.u_reg > 0.0:
@@ -186,12 +191,15 @@ outcomes = []
 for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
+    if opt.save_grad_vid:
+        grad_movie_dir = path.join(opt.save_dir, 'grad_videos_simulator', plan_file, f'ep{j + 1}')
+        print(f'[gradient videos will be saved to: {grad_movie_dir}]')
     car_path = dataloader.ids[splits['test_indx'][j]]
     timeslot, car_id = utils.parse_car_path(car_path)
     inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
-    images, states, costs, actions, mu_list, std_list = [], [], [], [], [], []
+    images, states, costs, actions, mu_list, std_list, grad_list = [], [], [], [], [], [], []
     cntr = 0
     # inputs, cost, done, info = env.step(numpy.zeros((2,)))
     input_state_t0 = inputs['state'].contiguous()[-1]
@@ -203,6 +211,14 @@ for j in range(n_test):
     while not done:
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
+        if opt.save_grad_vid:
+            grad_list.append(planning.get_grad_vid(
+                forward_model, input_images, input_states,
+                torch.tensor(
+                    dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
+                )[None, :],
+                device=device
+            ))
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
@@ -294,6 +310,7 @@ for j in range(n_test):
     states  = torch.stack(states)
     costs   = torch.tensor(costs)
     actions = torch.stack(actions)
+    grads   = torch.cat(grad_list)
 
     if mu is not None:
         mu_list = numpy.stack(mu_list)
@@ -310,6 +327,8 @@ for j in range(n_test):
     if len(images) > 3:
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
+        if opt.save_grad_vid:
+            utils.save_movie(grad_movie_dir, grads, None, None, None, None, None, pytorch=True)
         outcomes.append(outcome)
         if writer is not None:
             writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)
