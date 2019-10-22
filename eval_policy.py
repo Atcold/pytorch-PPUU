@@ -8,7 +8,6 @@ import planning
 import utils
 from dataloader import DataLoader
 from imageio import imwrite
-import ipdb
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -111,9 +110,6 @@ device = 'cuda' if torch.cuda.is_available else 'cpu'
 dataloader = DataLoader(None, opt, 'i80')
 forward_model, value_function, policy_network_il, policy_network_mper, data_stats = load_models()
 splits = torch.load(path.join(data_path, 'splits.pth'))
-forward_model.train()
-forward_model.opt.u_hinge = opt.u_hinge
-planning.estimate_uncertainty_stats(forward_model, dataloader, n_batches=50, npred=opt.npred)
 forward_model.eval()
 
 
