@@ -213,6 +213,14 @@ for j in range(n_test):
     while not done:
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
+        if opt.save_grad_vid:
+            grad_list.append(planning.get_grad_vid(
+                forward_model, input_images, input_states,
+                torch.tensor(
+                    dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
+                )[None, :],
+                device=device
+            ))
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
@@ -236,18 +244,8 @@ for j in range(n_test):
                                                            normalize_inputs=True, normalize_outputs=True)
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'policy-MPUR':
-            # ipdb.set_trace()
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True)
-            if opt.save_grad_vid:
-                grad_list.append(planning.get_grad_vid(
-                    grad_movie_dir, forward_model, input_images, input_states,
-                    torch.tensor(
-                        dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
-                    )[None, :],
-                    n_models=10,
-                    device=device
-                ))
             a = a.cpu().view(1, 2).numpy()
         elif opt.method == 'bprop+policy-IL':
             _, _, _, a = policy_network_il(input_images, input_states, sample=True,
@@ -329,7 +327,7 @@ for j in range(n_test):
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
         if opt.save_grad_vid:
-            utils.save_movie(grad_movie_dir, grads/grads.max()., None, None, None, None, None, pytorch=True)
+            utils.save_movie(grad_movie_dir, grads, None, None, None, None, None, pytorch=True)
         outcomes.append(outcome)
         if writer is not None:
             writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)
