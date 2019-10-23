@@ -1,5 +1,5 @@
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, clear_output
 
 from glob import glob
 import re
@@ -101,11 +101,15 @@ class Visualization:
         self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
         self.bars_figure = Figure(title='Success rate per episode', marks=[self.bars_plot], layout=widgets.Layout(width='100%', height='300'))
         plt.ioff()
-        self.policy_plot = plt.subplots(figsize=(9.5, 4))
-        self.costs_plot = plt.subplots(figsize=(9.5, 4))
-        self.costs_plot = *self.costs_plot, self.costs_plot[1].twinx()
+        self.policy_plot = plt.subplots(figsize=(18, 4))
+        self.policy_plot_output = widgets.Output()
 
-        self.success_matrix = plt.subplots(figsize=(9.5, 4))
+        self.costs_plot = plt.subplots(figsize=(18, 4))
+        self.costs_plot = *self.costs_plot, self.costs_plot[1].twinx()
+        self.costs_plot_output = widgets.Output()
+
+        self.success_matrix = plt.subplots(figsize=(18, 4))
+        self.success_matrix_output = widgets.Output()
 
         # callbacks definitions
         # They're defined in the initializer so that we have access to self.
@@ -162,24 +166,26 @@ class Visualization:
                 episode_states = torch.stack(episode_states)
                 episode_states[:, 2:].norm(dim=1)
 
-                self.costs_plot[1].cla()
-                self.costs_plot[2].cla()
-                self.costs_plot[1].set_ylim([-0.1, 1.1])
-                self.costs_plot[2].plot(episode_states[:, 2:].norm(dim=1), color='C4')
-                self.costs_plot[2].set_ylabel('speed', color='C4')
-                self.costs_plot[2].tick_params(axis='y', labelcolor='C4')
-                plt.show()
+                with self.costs_plot_output:
+                    clear_output()
+                    self.costs_plot[1].cla()
+                    self.costs_plot[2].cla()
+                    self.costs_plot[1].set_ylim([-0.1, 1.1])
+                    self.costs_plot[2].plot(episode_states[:, 2:].norm(dim=1), color='C4')
+                    self.costs_plot[2].set_ylabel('speed', color='C4')
+                    self.costs_plot[2].tick_params(axis='y', labelcolor='C4')
+                    display(self.costs_plot[2])
 
-                file_name = '/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model.costs'
-                raw_costs = torch.load(file_name)
-                costs = [pandas.DataFrame(c) for c in raw_costs]  # list of DataFrame, one per episode
+                    file_name = '/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model.costs'
+                    raw_costs = torch.load(file_name)
+                    costs = [pandas.DataFrame(c) for c in raw_costs]  # list of DataFrame, one per episode
 
-                # Plot last N rows of episode E
-                N = 50
-                costs[self.episode_dropdown.value].tail(N).plot(ax=self.costs_plot[1])
-                self.costs_plot[1].legend(loc='upper center', ncol=4)
-                self.costs_plot[1].grid(True)
-                plt.show()
+                    # Plot last N rows of episode E
+                    N = 50
+                    costs[self.episode_dropdown.value].tail(N).plot(ax=self.costs_plot[1])
+                    self.costs_plot[1].legend(loc='upper center', ncol=4)
+                    self.costs_plot[1].grid(True)
+                    display(self.costs_plot[0])
 
                 self.gradient_images = self.get_gradients(
                                                              self.select_experiment.value,
@@ -208,8 +214,10 @@ class Visualization:
                 print(self.get_episodes_with_outcome(self.select_experiment.value, self.seed_dropdown.value, self.checkpoint_dropdown.value, 0))
 
         def clean_button_click_callback(b):
-            self.policy_plot[1].cla()
-            plt.show()
+            with self.policy_plot_output:
+                clear_output()
+                self.policy_plot[1].cla()
+                display(self.policy_plot[0])
 
         def episode_slider_callback(change):
             if change.name == 'value' and change.new is not None:
@@ -224,8 +232,17 @@ class Visualization:
         self.episode_dropdown.observe(episode_dropdown_change_callback ,type='change')
         self.episode_slider.observe(episode_slider_callback, type='change')
 
+        self.policy_plot_box = widgets.VBox([self.policy_plot_output, self.clean_button])
+        self.episode_images_box = widgets.VBox([self.episode_hbox, self.images_hbox])
+
+        self.tab = widgets.Tab()
+        self.tab.children = [self.policy_plot_box, self.episode_images_box, self.pie_figure, self.bars_figure, 
+                self.costs_plot_output, self.success_matrix_output]
+        titles = ['Policy performance', 'Episode review', 'Success Pie', 'Success Bars', 'Costs', 'Success Matrix']
+        for i in range(len(self.tab.children)):
+            self.tab.set_title(i, titles[i])
+
     def find_option_values(self, option, policy=None, seed=None, checkpoint=None):
-    #     ipdb.set_trace()
         if option == 'seed':
             path = self.policies_mapping[policy]
             logs = glob(path[0] + 'policy_networks/' + path[1] + '*.log')
@@ -303,8 +320,10 @@ class Visualization:
         self.bars_plot.y = result
         self.bars_plot.x = np.arange(len(result))
 
-        print('result type is', type(result))
-        self.success_matrix[1].matshow(result.reshape(11, 51))
+        with self.success_matrix_output:
+            clear_output()
+            self.success_matrix[1].matshow(result.reshape(11, 51))
+            display(self.success_matrix[0])
 
     def build_success_rate_table(self, policy):
         experiment = self.select_experiment.value
@@ -324,24 +343,26 @@ class Visualization:
         result = np.stack([np.array(result[seed]) for seed in result])
         steps = np.array(steps)
 
-        self.policy_plot[1].plot(
-            np.array(steps) / 1e3, np.median(result, 0),
-            label=f'{policy}',
-            linewidth=2,
-        )
-        self.policy_plot[1].fill_between(
-            np.array(steps) / 1e3, result.min(0), result.max(0),
-            alpha=.5,
-        )
-        self.policy_plot[1].grid(True)
-        self.policy_plot[1].set_xlabel('steps [k–]')
-        self.policy_plot[1].set_ylabel('success rate')
-        self.policy_plot[1].legend()
-        self.policy_plot[1].set_ylim([0.50, 0.85])
-        self.policy_plot[1].set_xlim([5, 105])
-        self.policy_plot[1].set_title('Regressed vs. hardwired cost policy success rate min-max')
-        self.policy_plot[1].set_xticks(range(10, 100 + 10, 10))
-        plt.show()
+        with self.policy_plot_output:
+            clear_output()
+            self.policy_plot[1].plot(
+                np.array(steps) / 1e3, np.median(result, 0),
+                label=f'{policy}',
+                linewidth=2,
+            )
+            self.policy_plot[1].fill_between(
+                np.array(steps) / 1e3, result.min(0), result.max(0),
+                alpha=.5,
+            )
+            self.policy_plot[1].grid(True)
+            self.policy_plot[1].set_xlabel('steps [k–]')
+            self.policy_plot[1].set_ylabel('success rate')
+            self.policy_plot[1].legend()
+            self.policy_plot[1].set_ylim([0.50, 0.85])
+            self.policy_plot[1].set_xlim([5, 105])
+            self.policy_plot[1].set_title('Regressed vs. hardwired cost policy success rate min-max')
+            self.policy_plot[1].set_xticks(range(10, 100 + 10, 10))
+            display(self.policy_plot[0])
 
         return result
 
@@ -371,16 +392,19 @@ class Visualization:
 
     def display(self):
         display(self.select_experiment)
-        display(self.policy_plot[0])
-        display(self.clean_button)
+        # display(self.policy_plot[0])
+        # display(self.clean_button)
+        # display(self.policy_plot_box)
         display(self.seed_dropdown)
         display(self.checkpoint_dropdown)
         display(self.episode_dropdown)
-        display(self.pie_figure)
-        display(self.bars_figure)
-        display(self.success_matrix[0])
-        display(self.costs_plot[0])
-        display(self.episode_hbox)
-        display(self.images_hbox)
+        # display(self.pie_figure)
+        # display(self.bars_figure)
+        # display(self.success_matrix_output)
+        # display(self.costs_plot_output)
+        # display(self.episode_hbox)
+        # display(self.images_hbox)
+        # display(self.episode_images_box)
+        display(self.tab)
 
         # display(self.episode_dropdown)
