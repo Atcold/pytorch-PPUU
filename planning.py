@@ -373,9 +373,9 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
 
 
 def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
+    input_images, input_states = input_images.clone(), input_states.clone()
     input_images, input_states = utils.normalize_inputs(
         input_images, input_states, model.policy_net.stats, device=device)
-    input_images, input_states = input_images.clone(), input_states.clone()
     input_images.requires_grad = True
     input_states.requires_grad = True
     input_images.retain_grad()
