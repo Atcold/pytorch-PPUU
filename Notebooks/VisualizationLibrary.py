@@ -7,16 +7,18 @@ import torch
 import numpy as np
 import pandas
 import matplotlib.pyplot as plt
-from bqplot.marks import Pie, Bars, GridHeatMap
+from bqplot.marks import Pie, GridHeatMap, Label
 from bqplot import Figure
 from bqplot.scales import LinearScale, ColorScale
 
 SUCCESS_INDEX_PIE_PLOT = 0
 EPISODES = 561
 
+
 class Visualization:
 
     def __init__(self):
+
         self.data_reader = DataReader()
         self.ignore_updates = False
 
@@ -50,7 +52,6 @@ class Visualization:
                 label_color='black',
                 font_size='14px',
                 )
-        self.bars_plot = Bars(x = np.arange(10), y = np.arange(10), scales={'x':LinearScale(), 'y':LinearScale()})
         self.episode_play = widgets.Play(
             value=0,
             min=0,
@@ -60,7 +61,8 @@ class Visualization:
             disabled=False
         )
         # self.episode_grid_heat_map = GridHeatMap(scales={'row': LinearScale(), 'column': LinearScale(), 'color': ColorScale()}, color=np.(1, 1))
-        self.episode_grid_heat_map = GridHeatMap(color=np.random.rand(11, 51), scales={'row': LinearScale(), 'column': LinearScale(), 'color': ColorScale()})
+        self.episode_grid_heat_map = GridHeatMap(color=np.random.rand(11, 51) * 0, scales={'row': LinearScale(), 'column': LinearScale(), 'color': ColorScale()})
+        self.episode_grid_heat_map_label = widgets.Label()
 
         self.episode_slider = widgets.IntSlider()
         widgets.jslink((self.episode_play, 'value'), (self.episode_slider, 'value'))
@@ -79,10 +81,8 @@ class Visualization:
 
         # figures containing plots definition
         self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
-        self.bars_figure = Figure(title='Success rate per episode', marks=[self.bars_plot], layout=widgets.Layout(width='100%', height='300'))
         self.episode_grid_heat_map_figure = Figure(title='Episode grid heat map', marks=[self.episode_grid_heat_map], layout=widgets.Layout(width='100%', height='300'))
 
-        plt.ioff()
         self.experiment_plot = plt.subplots(figsize=(18, 4))
         self.experiment_plot_output = widgets.Output()
 
@@ -90,8 +90,7 @@ class Visualization:
         self.costs_plot = *self.costs_plot, self.costs_plot[1].twinx()
         self.costs_plot_output = widgets.Output()
 
-        self.success_matrix = plt.subplots(figsize=(18, 4))
-        self.success_matrix_output = widgets.Output()
+        plt.ioff()
 
         # callbacks definitions
         # They're defined in the initializer so that we have access to self.
@@ -152,7 +151,10 @@ class Visualization:
                 self.episode_image.value = self.images[change.new]
 
         def heat_map_click_callback(a, b):
-            print('a', a)
+            if self.result_permutation is not None:
+                episode = self.result_permutation[b['data']['_cell_num']] + 1
+                color = b['data']['color']
+                self.episode_grid_heat_map_label.value = f'clicked on episode {episode} with {color} successful cases'
 
         self.select_experiment.observe(select_experiment_change_callback, type='change')
         self.seed_dropdown.observe(seed_dropdown_change_callback, type='change')
@@ -167,11 +169,12 @@ class Visualization:
         # layout
         self.experiment_plot_box = widgets.VBox([self.experiment_plot_output, self.clean_button])
         self.episode_images_box = widgets.VBox([self.episode_hbox, self.images_hbox])
+        self.heatmap_box = widgets.VBox([self.episode_grid_heat_map_figure, self.episode_grid_heat_map_label])
 
         self.tab = widgets.Tab()
-        self.tab.children = [self.experiment_plot_box, self.episode_images_box, self.pie_figure, self.bars_figure, 
-                self.costs_plot_output, self.success_matrix_output, self.episode_grid_heat_map_figure]
-        titles = ['Policy performance', 'Episode review', 'Success Pie', 'Success Bars', 'Costs', 'Success Matrix', 'Success Heatmap']
+        self.tab.children = [self.experiment_plot_box, self.episode_images_box, self.pie_figure, 
+                self.costs_plot_output, self.heatmap_box]
+        titles = ['Policy performance', 'Episode review', 'Success Pie', 'Costs', 'Success Heatmap']
         for i in range(len(self.tab.children)):
             self.tab.set_title(i, titles[i])
 
@@ -180,16 +183,12 @@ class Visualization:
         if self.select_experiment.value is None:
             return
         result = self.data_reader.get_episodes_success_counts(self.select_experiment.value)
-        self.bars_plot.y = result
-        self.bars_plot.x = np.arange(len(result))
+        self.result_permutation = np.argsort(result)
+        result = np.sort(result)
         self.episode_grid_heat_map.color = result.reshape(11, 51)
+        self.color_result = result
         # self.episode_grid_heat_map = GridHeatMap(color=result.reshape(11, 51))
         # self.episode_grid_heat_map_figure.marks = [self.episode_grid_heat_map]
-        with self.success_matrix_output:
-            clear_output()
-            self.success_matrix[1].matshow(result.reshape(11, 51))
-            display(self.success_matrix[0])
-
 
     def update_experiment_plot(self):
         steps, result = self.data_reader.get_success_rates_for_experiment(self.select_experiment.value)
@@ -303,8 +302,8 @@ class DataReader:
         path = self.experiments_mapping[experiment][0]
         model_name = self.experiments_mapping[experiment][1]
         # gradient_path = f'{path}/planning_results/grad_videos_simulator/{model_name}-seed={seed}-novaluestep-{checkpoint}.model/'
-        # image_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model/ep{episode}/ego/*.png'
-        image_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v13/planning_results/videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=False-seed=1-novaluestep70000.model/ep{episode}/ego/*.png'
+        image_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/eval_with_cost/planning_results/videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=1-seed=3-novaluestep25000.model/ep{episode}/ego/*.png'
+        # image_paths = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v13/planning_results/videos_simulator/MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=0-learnedcost=False-seed=1-novaluestep70000.model/ep{episode}/ego/*.png'
         images = []
         for image_path in sorted(glob(image_paths)):
             with open(image_path, 'rb') as f:
