@@ -310,7 +310,8 @@ for j in range(n_test):
     states  = torch.stack(states)
     costs   = torch.tensor(costs)
     actions = torch.stack(actions)
-    grads   = torch.cat(grad_list)
+    if opt.save_grad_vid:
+        grads = torch.cat(grad_list)
 
     if mu is not None:
         mu_list = numpy.stack(mu_list)
