@@ -5,7 +5,7 @@ import gym
 parser = argparse.ArgumentParser()
 parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-display', type=int, default=1)
-parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'simI80'})
 parser.add_argument('-state_image', type=int, default=0)
 parser.add_argument('-store', type=int, default=0)
 parser.add_argument('-nb_episodes', type=int, default=1)
@@ -53,12 +53,19 @@ gym.envs.registration.register(
     kwargs=kwargs,
 )
 
+gym.envs.registration.register(
+    id='I80-Simulation-v0',
+    entry_point='map_i80_ctrl:SimI80',
+    kwargs=kwargs,
+)
+
 env_names = {
     'ai': 'Traffic-v0',
     'i80': 'I-80-v0',
     'us101': 'US-101-v0',
     'lanker': 'Lankershim-v0',
     'peach': 'Peachtree-v0',
+    'simI80': 'I80-Simulation-v0',
 }
 
 print('Building the environment (loading data, if any)')

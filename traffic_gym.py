@@ -842,7 +842,6 @@ class Simulator(core.Env):
                     # if len(v._states_image) >= 10 and self.policy_type == 'imitation':
                     #     state_ = v.get_last_state_image(10)
                     #     action = v.policy(state_, 'imitation')
-                    #     # print('here')
                     # else:
                     #     # if len(v._states_image) > 15:
                     #     #     pdb.set_trace()
@@ -937,9 +936,10 @@ class Simulator(core.Env):
 
             pygame.display.flip()
 
-            # # save surface as image, for visualisation only
-            # pygame.image.save(self.screen, "screen_surface.png")
-            # pygame.image.save(self.screen, f'screen-dumps/{self.dump_folder}/{self.frame:08d}.png')
+            # save surface as image, for visualisation only
+            if self.store:
+                # pygame.image.save(self.screen, "screen_surface.png")
+                pygame.image.save(self.screen, f'screen-dumps/{self.dump_folder}/{self.frame:08d}.png')
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
