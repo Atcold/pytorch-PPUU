@@ -144,7 +144,7 @@ class SimI80(MergingMap):
         self.npred = 20
         self.LANE_W = 24
         self.nb_states = 20
-        self.dump_folder = 'train-of-cars'
+        self.dump_folder = path.join('train-of-cars', self.policy_model)
 
     def load_models(self):
         stats = torch.load(path.join(self.data_path, 'data_stats.pth'))  # , map_location=self.device)
