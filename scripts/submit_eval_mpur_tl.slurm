@@ -22,6 +22,5 @@ srun python eval_policy_tl.py \
     -batch_size 1 \
     -method policy-MPUR \
     -model_dir $model_dir \
-    -policy_model $policy \
-    -save_sim_video
+    -policy_model $policy
 
