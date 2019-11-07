@@ -5,7 +5,7 @@ from traffic_gym import Car, Simulator
 import bisect
 import pygame
 import torch
-import ipdb
+# import ipdb
 
 
 class ControlledI80Car(I80Car):
@@ -137,8 +137,8 @@ class SimI80(MergingMap):
         self.mfile = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-' + \
                      'nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
         self.policy_model = 'MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30' + \
-                            '-ureg=0.05-lambdal=0.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False' + \
-                            '-learnedcost=True-lambdatl=1.0-seed=2-novaluestep100000.model'
+                            '-ureg=0.05-lambdal=0.2-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False' + \
+                            '-learnedcost=True-lambdatl=1.0-seed=2-novaluestep105000.model'
         self.forward_model, self.data_stats = self.load_models()
         self.forward_model.to(self.device)
         self.npred = 20
@@ -178,17 +178,22 @@ class SimI80(MergingMap):
                 self.next_car_id += 1
                 self.vehicles.append(car)
                 self.counter += 1
-                if self.next_car_id == 3:
-                    car = self.EnvCar(self.lanes, [3], self.delta_t, self.next_car_id,
+                if self.next_car_id <= 3:
+                    for i in [0, 1, 3, 4, 5]:
+                        car = self.EnvCar(self.lanes, [i], self.delta_t, self.next_car_id,
+                                          self.look_ahead, self.screen_size[0], self.font[20],
+                                          policy_type='straight',
+                                          is_controlled=False,
+                                          bot_speed=self.BotCarSpeed)
+                        self.vehicles.append(car)
+                elif self.next_car_id == 4:
+                    car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
                                       self.look_ahead, self.screen_size[0], self.font[20],
                                       policy_type='straight',
                                       is_controlled=False,
                                       bot_speed=self.BotCarSpeed)
-                    car._speed = self.BotCarSpeed
-                    self.next_car_id += 1
                     self.vehicles.append(car)
-                    self.counter += 1
-                if self.next_car_id == 6:
+                elif self.next_car_id == 5:
                     controlled_car = self.EnvCar(self.lanes, [3], self.delta_t, self.next_car_id,
                                                  self.look_ahead, self.screen_size[0], self.font[20],
                                                  policy_type='controlled',
@@ -196,11 +201,32 @@ class SimI80(MergingMap):
                                                  bot_speed=self.BotCarSpeed)
                     self.next_car_id += 1
                     self.vehicles.append(controlled_car)
-            # Create space after first 3 train cars
-        if self.frame == 25:
+                    car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
+                                      self.look_ahead, self.screen_size[0], self.font[20],
+                                      policy_type='straight',
+                                      is_controlled=False,
+                                      bot_speed=self.BotCarSpeed)
+                    self.vehicles.append(car)
+                elif self.next_car_id > 6:
+                    for i in [0, 1, 3, 4, 5]:
+                        car = self.EnvCar(self.lanes, [i], self.delta_t, self.next_car_id,
+                                          self.look_ahead, self.screen_size[0], self.font[20],
+                                          policy_type='straight',
+                                          is_controlled=False,
+                                          bot_speed=self.BotCarSpeed)
+                        self.vehicles.append(car)
+            elif self.frame < 55:
+                car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
+                                  self.look_ahead, self.screen_size[0], self.font[20],
+                                  policy_type='straight',
+                                  is_controlled=False,
+                                  bot_speed=self.BotCarSpeed)
+                self.vehicles.append(car)
+        # Create space after first 3 train cars
+        if self.frame == 30:
             self.counter = 0
 
-        if self.frame == 77:
+        if self.frame == 82:
             self.controlled_car['locked'] = self.vehicles[5]
 
         if self.show_frame_count:
@@ -249,7 +275,7 @@ class SimI80(MergingMap):
                 # if abs(distance_to_target) > 10:
                 #     target_y = torch.tensor(5.0).to(self.device)
                 # else:
-                target_y = torch.tensor(96.0).to(self.device)
+                target_y = torch.tensor(48.0).to(self.device)
                 a, _, _, _ = self.forward_model.policy_net(state_images, states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,
                                                            controls=dict(target_lanes=target_y))
