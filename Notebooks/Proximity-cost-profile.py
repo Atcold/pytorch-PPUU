@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.2'
-#       jupytext_version: 1.2.4
+#       jupytext_version: 1.2.3
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -23,6 +23,16 @@ rc('axes', facecolor='k')
 rc('figure', facecolor='k')          
 rc('figure', figsize=(10,7))         
 
+
+# %%
+def get_quad_func(minima=1, zero_at=1, one_at=0):
+    t0 = (zero_at - minima)**2
+    t1 = (one_at - minima)**2
+    mult = 1 / (t1 - t0)
+    bias = -mult*((zero_at - minima)**2)
+    return lambda x: mult * (x - minima)**2 + bias
+
+
 # %%
 # Linear and quadratic proximity profile design
 x = linspace(0, 2)
@@ -32,7 +42,10 @@ y['quad SF=1.5'] = maximum((1 - x / 1.5), 0) ** 2
 y['quad SF=2.0'] = (1 - x / 2.0) ** 2
 
 # ✏️TODO: write function for analytical computation of shifts
-y['quad SF=1.5-shift'] = maximum(maximum((1.06 - x / 2.0), 0) ** 2 - .1, 0)  # find correct values
+quad_with_shift = get_quad_func(minima=2, zero_at=1.5)
+y['quad SF=1.5-shift_min_to_2'] = maximum(quad_with_shift(x), 0)  # find correct values
+quad_with_shift = get_quad_func(minima=3, zero_at=1.5)
+y['quad SF=1.5-shift_min_to_3'] = maximum(quad_with_shift(x), 0)  # find correct values
 
 for k in y: plot(x, y[k], label=k)
 
