@@ -15,7 +15,7 @@ class Visualization:
             Tabs.PiePlotTab(),
             Tabs.HeatMapTab(),
             Tabs.HeatMapComparisonTab(),
-            Tabs.PCAPlotTab(),
+            Tabs.DimensionalityReductionPlotTab(),
             Tabs.ExperimentsDirectoryTab()
         ]
         titles = ['Policy performance',

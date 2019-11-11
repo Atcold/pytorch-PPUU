@@ -6,7 +6,7 @@ to form visualizations, for example episode picker and episode review.
 All widgets can roughly be split into two types: pickers and viewers.
 
 Pickers are widgets that allow us to pick what to visualize, such as
-Picker widget, or PCA widget.
+Picker widget, or DimensionalityReduction widget.
 
 Viewers are widgets that are built for viewing data for the selected
 experiment, model, or episode. Examples include success plot, episode
@@ -24,7 +24,7 @@ from collections import OrderedDict
 import traitlets
 
 from DataReader import DataReader
-from PCA import PCA
+from DimensionalityReduction import DimensionalityReduction
 
 
 class Picker(widgets.VBox):
@@ -450,7 +450,7 @@ class EpisodeReview(widgets.VBox):
         self.update_costs_plot(experiment, seed, checkpoint, episode)
 
 
-class PCAPlot(widgets.VBox):
+class DimensionalityReductionPlot(widgets.VBox):
     """Clustering picker for episodes for a given model.
     This contains a scatter plot for episodes, obtained by
     dimensionality reduction of different episode's evaluations.
@@ -463,7 +463,7 @@ class PCAPlot(widgets.VBox):
         self.callback = callback
         self.widget = widget
 
-        self.PCA = PCA()
+        self.DimensionalityReduction = DimensionalityReduction()
         self.x_scale = LinearScale()
         self.y_scale = LinearScale()
 
@@ -502,7 +502,7 @@ class PCAPlot(widgets.VBox):
         traitlets.link((self.toggle_buttons, 'value'),
                        (self.scatter_figure, 'interaction'))
 
-        super(PCAPlot, self).__init__(
+        super(DimensionalityReductionPlot, self).__init__(
             [self.scatter_figure, self.toggle_buttons])
 
     def update2(self, experiment, seed, step):
@@ -510,17 +510,17 @@ class PCAPlot(widgets.VBox):
         self.experiment = experiment
         self.seed = seed
         self.step = step
-        features = PCA.get_model_failing_features(experiment, seed, step)
+        features = DimensionalityReduction.get_model_failing_features(experiment, seed, step)
         self.failures_indices = DataReader.get_episodes_with_outcome(
             experiment, seed, step, 0)
 
         failure_features = features[np.array(failures[:-1]) - 1]
 
-        res = self.PCA.transform(features)
+        res = self.DimensionalityReduction.transform(features)
         colors = ['gray'] * res.shape[0]
         opacities = [0.3] * res.shape[0]
 
-        classes = self.PCA.cluster(failure_features)
+        classes = self.DimensionalityReduction.cluster(failure_features)
 
         category = bq.colorschemes.CATEGORY20[2:]
         for i, f in enumerate(failures):
@@ -545,17 +545,17 @@ class PCAPlot(widgets.VBox):
         self.failures_indices = DataReader.get_episodes_with_outcome(
             experiment, seed, step, 0)
 
-        features = PCA.get_model_failing_features(experiment, seed, step)
+        features = DimensionalityReduction.get_model_failing_features(experiment, seed, step)
 
         costs = DataReader.get_model_states(experiment, seed, step)
         print('costs shape', len(costs))
         print('max failure indices', max(self.failures_indices))
 
-        res = self.PCA.transform(features)
+        res = self.DimensionalityReduction.transform(features)
         colors = ['gray'] * res.shape[0]
         opacities = [0.3] * res.shape[0]
 
-        classes = self.PCA.cluster(features)
+        classes = self.DimensionalityReduction.cluster(features)
 
         category = bq.colorschemes.CATEGORY20[2:]
         for f in range(len(features)):

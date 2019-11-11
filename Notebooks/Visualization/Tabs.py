@@ -8,7 +8,7 @@ import traitlets
 from Widgets import (
     Picker,
     EpisodeReview,
-    PCAPlot,
+    DimensionalityReductionPlot,
     PiePlot,
     HeatMap,
     HeatMapComparison,
@@ -40,17 +40,18 @@ class PiePlotTab(widgets.VBox):
         super(PiePlotTab, self).__init__([self.picker, self.pie_plot])
 
 
-class PCAPlotTab(widgets.VBox):
+class DimensionalityReductionPlotTab(widgets.VBox):
     """A tab for visualizing episodes using with scatter plot and
     dimensionality reduction."""
 
     def __init__(self):
         self.episode_review = EpisodeReview()
-        self.pca_plot = PCAPlot(widget=self.episode_review)
+        self.dimensionality_reduction_plot = DimensionalityReductionPlot(
+            widget=self.episode_review)
         self.picker = Picker(Picker.MODEL_LEVEL,
-                             widget=self.pca_plot)
-        super(PCAPlotTab, self).__init__(
-            [self.picker, self.pca_plot, self.episode_review])
+                             widget=self.dimensionality_reduction_plot)
+        super(DimensionalityReductionPlotTab, self).__init__(
+            [self.picker, self.dimensionality_reduction_plot, self.episode_review])
 
 
 class HeatMapTab(widgets.VBox):
