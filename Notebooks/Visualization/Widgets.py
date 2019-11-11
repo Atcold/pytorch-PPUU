@@ -278,11 +278,27 @@ class EpisodeReview(widgets.VBox):
             max=100,
             step=1,
             description="Press play",
-            disabled=False
+            disabled=False,
+            interval=10,
         )
+        self.update_interval_slider = widgets.IntSlider(
+            min=1,
+            max=100,
+            value=30,
+        )
+        self.update_interval_box = widgets.HBox([
+            widgets.Label("Animation update interval:"),
+            self.update_interval_slider
+        ])
         self.episode_slider = widgets.IntSlider()
-        self.episode_hbox = widgets.HBox(
-            [self.episode_play, self.episode_slider])
+        self.episode_hbox = widgets.HBox([
+            self.episode_play,
+            self.episode_slider
+        ])
+        self.episode_vbox = widgets.VBox([
+            self.episode_hbox,
+            self.update_interval_box
+        ])
 
         widgets.jslink((self.episode_play, 'value'),
                        (self.episode_slider, 'value'))
@@ -290,6 +306,9 @@ class EpisodeReview(widgets.VBox):
                        (self.episode_slider, 'max'))
         widgets.jslink((self.episode_play, 'min'),
                        (self.episode_slider, 'min'))
+
+        widgets.jslink((self.update_interval_slider, 'value'),
+                       (self.episode_play, 'interval'))
 
         self.episode_gradient_image = widgets.Image(format='png',
                                                     width=120,
@@ -308,7 +327,7 @@ class EpisodeReview(widgets.VBox):
 
         self.x_sc = x_sc
 
-        ax_x = bq.Axis(label='step', scale=x_sc, grid_lines='solid')
+        ax_x = bq.Axis(label='step', scale=x_sc, grid_lines='none')
         ax_x.min = 0
         ax_x.max = 100
         ax_y = bq.Axis(label='costs',
@@ -363,7 +382,9 @@ class EpisodeReview(widgets.VBox):
         )
 
         self.costs_plot_box = widgets.VBox(
-            [self.costs_plot_figure, self.plot_controls_hbox])
+            [self.costs_plot_figure, self.plot_controls_hbox],
+            layout=widgets.Layout(width='100%')
+        )
 
         self.images_hbox = widgets.HBox(
             [
@@ -386,7 +407,7 @@ class EpisodeReview(widgets.VBox):
         self.episode_slider.observe(episode_slider_callback, type='change')
 
         super(EpisodeReview, self).__init__(
-            [self.episode_hbox, self.images_hbox])
+            [self.episode_vbox, self.images_hbox])
 
     def update_costs_plot(self, experiment, seed, checkpoint, episode):
         speeds = DataReader.get_episode_speeds(
@@ -510,7 +531,8 @@ class DimensionalityReductionPlot(widgets.VBox):
         self.experiment = experiment
         self.seed = seed
         self.step = step
-        features = DimensionalityReduction.get_model_failing_features(experiment, seed, step)
+        features = DimensionalityReduction.get_model_failing_features(
+            experiment, seed, step)
         self.failures_indices = DataReader.get_episodes_with_outcome(
             experiment, seed, step, 0)
 
@@ -545,7 +567,8 @@ class DimensionalityReductionPlot(widgets.VBox):
         self.failures_indices = DataReader.get_episodes_with_outcome(
             experiment, seed, step, 0)
 
-        features = DimensionalityReduction.get_model_failing_features(experiment, seed, step)
+        features = DimensionalityReduction.get_model_failing_features(
+            experiment, seed, step)
 
         costs = DataReader.get_model_states(experiment, seed, step)
         print('costs shape', len(costs))
@@ -667,7 +690,7 @@ class HeatMapComparison(widgets.VBox):
             },
             display_legend=False)
         self.episode_grid_heat_map_help = widgets.HTML(
-            value= '<br><br><ul>\
+            value='<br><br><ul>\
                     <li>orange - both models failed.</li>\
                     <li>red - first model succeeded, second failed</li>\
                     <li>green - first model failed, second succeeded</li>\
