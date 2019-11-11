@@ -1,17 +1,24 @@
+import glob
+import math
+import numpy
+import os
+import pickle
+import random
+import re
 import sys
-import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
 
 
 class DataLoader:
-    def __init__(self, fname, opt, dataset='simulator', single_shard=False):
+    def __init__(self, fname, opt, dataset='ai', single_shard=False):
         if opt.debug:
             single_shard = True
         self.opt = opt
         self.random = random.Random()
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
-        if dataset == 'i80' or dataset == 'us101':
+        acceptable_maps = {'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'}
+        assert dataset in acceptable_maps, 'Data set not supported'
             data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
             if single_shard:
                 # quick load for debugging
@@ -71,8 +78,6 @@ class DataLoader:
                     self.costs += costs
                     self.states += states
                     self.ids += ids
-        else:
-            assert False, 'Data set not supported'
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
@@ -253,3 +258,4 @@ if __name__ == '__main__':
     d = DataLoader(None, opt=DataSettings, dataset='i80')
     # Retrieve first training batch
     x = d.get_batch_fm('train', cuda=False)
+

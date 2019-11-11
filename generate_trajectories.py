@@ -1,11 +1,10 @@
-import argparse, pdb
+import argparse
+import os
+import random
+
 import gym
 import numpy as np
-import os
-import pickle
-import random
 import torch
-import scipy.misc
 from gym.envs.registration import register
 
 parser = argparse.ArgumentParser()
@@ -19,8 +18,10 @@ parser.add_argument('-store', type=int, default=1)
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/')
 parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
-parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach'})
+parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
 parser.add_argument('-delta_t', type=float, default=0.1)
+parser.add_argument('-recording', type=str, default="01",
+                    help='Use this argument with highD maps to choose from recordings \'01\' to \'60\'')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -43,6 +44,10 @@ kwargs = dict(
     delta_t=opt.delta_t,
 )
 
+# HighD dataset will use recordings IDs rather than time slots
+if opt.map == 'highD':
+    kwargs['rec'] = opt.recording
+
 register(
     id='Traffic-v0',
     entry_point='traffic_gym:Simulator',
@@ -55,22 +60,28 @@ register(
     kwargs=kwargs
 )
 
-gym.envs.registration.register(
+register(
     id='US-101-v0',
     entry_point='map_us101:US101',
     kwargs=kwargs,
 )
 
-gym.envs.registration.register(
+register(
     id='Lankershim-v0',
     entry_point='map_lanker:Lankershim',
     kwargs=kwargs,
 )
 
-gym.envs.registration.register(
+register(
     id='Peachtree-v0',
     entry_point='map_peach:Peachtree',
     kwargs=kwargs,
+)
+
+register(
+    id='HighD-v0',
+    entry_point='map_highD:HighD',
+    kwargs=kwargs
 )
 
 env_names = {
@@ -79,6 +90,7 @@ env_names = {
     'us101': 'US-101-v0',
     'lanker': 'Lankershim-v0',
     'peach': 'Peachtree-v0',
+    'highD': 'HighD-v0',
 }
 
 print('Building the environment (loading data, if any)')
