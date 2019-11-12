@@ -25,16 +25,45 @@ from jupyterthemes import jtplot
 jtplot.style('oceans16')
 
 # %%
-act_grads = torch.load('../../actions_grads.pkl')
-
-# %%
+act_grads = torch.load('../actions_grads_orig.pkl')
 data = [np.array(k) for k in act_grads]
 data = np.concatenate(data, axis=0)
-
-# %%
 xedges = [np.quantile(data[:,0], p) for p in np.linspace(0,1,21)]
 
+df = pd.DataFrame(data)
+df.columns = ['speed', 'grad_proximity', 'grad_lane']
+df.speed = (df.speed//5 * 5).astype(int)
+
+# %% [markdown]
+# ## Original Implementation
+
 # %%
+df_new = df.copy()
+
+# %%
+df_new.boxplot(column='grad_proximity', by='speed', figsize=(14,8),)
+
+# %%
+df_new.boxplot(column='grad_lane', by='speed', figsize=(14,8))
+
+# %%
+df_new[['grad_proximity', 'grad_lane']] = np.log10(df_new[['grad_proximity', 'grad_lane']])
+
+# %%
+df_new.boxplot(column='grad_proximity', by='speed', figsize=(14,8))
+
+# %%
+df_new.boxplot(column='grad_lane', by='speed', figsize=(14,8))
+
+# %% [markdown]
+# ## Constant Speed
+
+# %%
+act_grads = torch.load('../actions_grads.pkl')
+data = [np.array(k) for k in act_grads]
+data = np.concatenate(data, axis=0)
+xedges = [np.quantile(data[:,0], p) for p in np.linspace(0,1,21)]
+
 df = pd.DataFrame(data)
 df.columns = ['speed', 'grad_proximity', 'grad_lane']
 df.speed = (df.speed//5 * 5).astype(int)
@@ -56,3 +85,5 @@ df_new.boxplot(column='grad_proximity', by='speed', figsize=(14,8))
 
 # %%
 df_new.boxplot(column='grad_lane', by='speed', figsize=(14,8))
+
+# %%
