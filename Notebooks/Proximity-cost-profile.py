@@ -135,9 +135,9 @@ y = dict()
 c = 1 - x
 c[:start] = 0
 y['cost profile'] = 1 - x
-y['cost profile'].requires_grad = True
 y['car'] = torch.zeros(N)
 y['car'][start:] = 1
+y['car'].requires_grad = True
 for e in range(-1, 5):
     β = 10 ** (e / 2)
     if e == -1: β = 0
@@ -145,8 +145,8 @@ for e in range(-1, 5):
     
     cost = torch.logsumexp(β * y['cost profile'] * y['car'], dim=0 ) / β
     cost.backward()
-    y[f'log-sum-exp β={β:.1f}'] = y['cost profile'].grad.clone()
-    y['cost profile'].grad.zero_()
+    y[f'log-sum-exp β={β:.1f}'] = y['car'].grad.clone()
+    y['car'].grad.zero_()
 
 for k in y: 
     if hasattr(y[k],'grad'): y[k] = y[k].detach().numpy()
@@ -159,9 +159,6 @@ ylabel('∂proximity_cost / ∂s')
 savefig('normalised_attention.png')
 
 # %%
-torch.softmax(torch.tensor(y['cost profile']), dim=0)
-
-# %%
 # Max, softmax, sum
 N = 100
 start = 30
@@ -170,9 +167,9 @@ y = dict()
 c = 1 - x
 c[:start] = 0
 y['cost profile'] = 1 - x
-y['cost profile'].requires_grad = True
 y['car'] = torch.zeros(N)
 y['car'][start:] = 1
+y['car'].requires_grad = True
 for e in range(-1, 5):
     β = 10 ** (e / 2)
     if e == -1: β = 0
@@ -180,8 +177,8 @@ for e in range(-1, 5):
     logit = y['cost profile'] * y['car']
     cost = torch.softmax(β *logit, dim=0)*logit 
     cost.sum().backward()
-    y[f'self-attention β={β:.1f}'] = y['cost profile'].grad.clone()
-    y['cost profile'].grad.zero_()
+    y[f'self-attention β={β:.1f}'] = y['car'].grad.clone()
+    y['car'].grad.zero_()
 
 for k in y: 
     if hasattr(y[k],'grad'): y[k] = y[k].detach().numpy()
