@@ -54,6 +54,8 @@ parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-test_only', type=int, default=0)
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
 parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')
