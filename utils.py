@@ -549,7 +549,7 @@ def build_model_file_name(opt):
 def create_tensorboard_writer(opt):
     tensorboard_enabled = opt.tensorboard_dir != '' and opt.enable_tensorboard
     if tensorboard_enabled:
-        date_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+        date_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f')
         if hasattr(opt, 'model_file'):
             model_name = os.path.basename(opt.model_file)
         elif hasattr(opt, 'mfile'):
