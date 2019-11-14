@@ -32,6 +32,8 @@ parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
 parser.add_argument('-tensorboard_dir', type=str, default='models',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')

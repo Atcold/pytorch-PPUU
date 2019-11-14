@@ -503,6 +503,8 @@ def parse_command_line(parser=None):
     parser.add_argument('-save_movies', action='store_true')
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
+    parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
     parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
@@ -545,13 +547,13 @@ def build_model_file_name(opt):
     print(f'[will save as: {opt.model_file}]')
 
 def create_tensorboard_writer(opt):
-    tensorboard_enabled = opt.tensorboard_dir != ''
+    tensorboard_enabled = opt.tensorboard_dir != '' and opt.enable_tensorboard
     if tensorboard_enabled:
-        date_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+        date_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f')
         if hasattr(opt, 'model_file'):
             model_name = os.path.basename(opt.model_file)
         elif hasattr(opt, 'mfile'):
-            model_name = os.path.basename(opt.mfile) # eval_policy has mfile
+            model_name = os.path.basename(opt.policy_model) # eval_policy has mfile
         else:
             raise AttributeError("options doesn't contain neither model_file nor mfile field")
         script_name = os.path.splitext(sys.argv[0])[0]

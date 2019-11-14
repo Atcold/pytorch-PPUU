@@ -50,6 +50,8 @@ parser.add_argument('-mfile', type=str, default=M1, help=' ')
 parser.add_argument('-value_model', type=str, default='', help=' ')
 parser.add_argument('-policy_model', type=str, default='', help=' ')
 parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
 parser.add_argument('-tensorboard_dir', type=str, default='models/planning_results',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')
