@@ -121,6 +121,8 @@ class DataReader:
             path = DataReader.get_experiments_mapping()[experiment]
             logs = glob(path[0] + 'planning_results/' + path[1] + '*.log')
             regexp = r"seed=(\d+)-"
+            print('logs with seed', path[0] + 'planning_results/' + path[1] + '*.log',
+                    logs)
         elif option == 'checkpoint':
             path = DataReader.get_experiments_mapping()[experiment]
             logs = glob(path[0] + 'planning_results/' +
@@ -183,10 +185,13 @@ class DataReader:
 
             min_length = min(min_length, len(result[seed]))
 
-        result = np.stack([np.array(result[seed])[:min_length]
-                           for seed in result])
-        steps = np.array(steps)
-        return steps, result
+        if len(result) > 0:
+            result = np.stack([np.array(result[seed])[:min_length]
+                               for seed in result])
+            steps = np.array(steps)
+            return steps, result
+        else:
+            return None, None
 
     @staticmethod
     def get_episodes_with_outcome(experiment, seed, step, outcome):

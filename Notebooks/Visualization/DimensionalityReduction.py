@@ -23,12 +23,17 @@ class DimensionalityReduction:
     """ Path for saving clustering class state for faster loading"""
 
     def __init__(self):
+        """Lazy initialization, in order not to waste time every time we open the notebook"""
+        self.initialized = False
+
+    def initialize(self):
         """If no saved state data found, loads the data for dimensionality
         reduction and fit the dimensionality reduction and clustering
         algorithms on the data. Fitting the data may take time.
         Otherwise loads the saved state data.
         """
-
+        if self.initialized:
+            return
         if os.path.exists(DimensionalityReduction.SAVE_DIMENSIONALITY_REDUCTION_PATH):
             with open(DimensionalityReduction.SAVE_DIMENSIONALITY_REDUCTION_PATH, 'rb') as f:
                 self.dimensionality_reduction = pickle.load(f)
@@ -48,13 +53,16 @@ class DimensionalityReduction:
                 pickle.dump(self.dimensionality_reduction, f)
             with open(DimensionalityReduction.SAVE_KM_PATH, 'wb') as f:
                 pickle.dump(self.km, f)
+        self.initialized = True
 
     def transform(self, value):
         """ Performs dimensionality reduction on given values"""
+        self.initialize()
         return self.dimensionality_reduction.fit_transform(value)
 
     def cluster(self, value):
         """ Performs clustering on given values"""
+        self.initialize()
         return self.km.predict(value)
 
     @staticmethod
