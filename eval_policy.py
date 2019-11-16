@@ -187,6 +187,7 @@ writer = utils.create_tensorboard_writer(opt)
 
 n_test = len(splits['test_indx'])
 outcomes = []
+full_a_grad_list = []
 for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
@@ -198,7 +199,7 @@ for j in range(n_test):
     inputs = env.reset(time_slot=timeslot, vehicle_id=car_id)  # if None => picked at random
     forward_model.reset_action_buffer(opt.npred)
     done, mu, std = False, None, None
-    images, states, costs, actions, mu_list, std_list, grad_list = [], [], [], [], [], [], []
+    images, states, costs, actions, mu_list, std_list, grad_list, a_grad_list = [], [], [], [], [], [], [], []
     cntr = 0
     # inputs, cost, done, info = env.step(numpy.zeros((2,)))
     input_state_t0 = inputs['state'].contiguous()[-1]
@@ -210,13 +211,21 @@ for j in range(n_test):
         input_images = inputs['context'].contiguous()
         input_states = inputs['state'].contiguous()
         if opt.save_grad_vid:
-            grad_list.append(planning.get_grad_vid(
+            # grad_list.append(planning.get_grad_vid(
+            #     forward_model, input_images, input_states,
+            #     torch.tensor(
+            #         dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
+            #     )[None, :],
+            #     device=device
+            # ))
+            a_grad_list.append(planning.get_grad_actions(
                 forward_model, input_images, input_states,
                 torch.tensor(
                     dataloader.car_sizes[sorted(list(dataloader.car_sizes.keys()))[timeslot]][car_id]
                 )[None, :],
                 device=device
             ))
+
 #        input_images, input_states = inputs[0].contiguous(), inputs[1].contiguous()
         if opt.method == 'no-action':
             a = numpy.zeros((1, 2))
@@ -283,6 +292,7 @@ for j in range(n_test):
                     std_list.append(std.data.cpu().numpy())
             t += 1
         costs_ = numpy.stack(costs)
+    full_a_grad_list.append(a_grad_list)
     input_state_tfinal = inputs['state'][-1]
     time_travelled.append(len(images))
     distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
@@ -305,8 +315,8 @@ for j in range(n_test):
     states  = torch.stack(states)
     costs   = torch.tensor(costs)
     actions = torch.stack(actions)
-    if opt.save_grad_vid:
-        grads = torch.cat(grad_list)
+    # if opt.save_grad_vid:
+    #     grads = torch.cat(grad_list)
 
     if mu is not None:
         mu_list = numpy.stack(mu_list)
@@ -323,8 +333,8 @@ for j in range(n_test):
     if len(images) > 3:
         utils.save_movie(path.join(movie_dir, 'ego'), images.float() / 255.0, states, costs,
                          actions=actions, mu=mu_list, std=std_list, pytorch=True)
-        if opt.save_grad_vid:
-            utils.save_movie(grad_movie_dir, grads, None, None, None, None, None, pytorch=True)
+        # if opt.save_grad_vid:
+        #     utils.save_movie(grad_movie_dir, grads, None, None, None, None, None, pytorch=True)
         outcomes.append(outcome)
         if writer is not None:
             writer.add_video(f'Video/success={road_completed[-1]:d}_{j}', images.unsqueeze(0), j)
@@ -338,6 +348,6 @@ for j in range(n_test):
             os.mkdir(sim_path)
             for n, img in enumerate(info.frames):
                 imwrite(path.join(sim_path, f'im{n:05d}.png'), img)
-
+torch.save(full_a_grad_list, 'actions_grads_orig.pkl')
 if writer is not None:
     writer.close()

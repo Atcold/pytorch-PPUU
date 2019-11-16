@@ -58,7 +58,7 @@ def lane_cost(images, car_size):
 
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
-    length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels 
+    length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
     # Create separable proximity mask
     width.fill_(24 * SCALE / 2)
@@ -91,7 +91,7 @@ def lane_cost(images, car_size):
     return costs.view(bsize, npred)
 
 
-def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None, return_speed=False):
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
@@ -105,7 +105,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
-    length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels 
+    length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
     safe_distance = torch.abs(speed) * safe_factor + (1 * 24 / 3.7) * SCALE  # plus one metre (TODO change)
 
@@ -140,8 +140,11 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+    costs = costs * safe_distance.view(bsize, npred)
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+    if return_speed:
+        return costs, proximity_mask, torch.cat([speed[:,None], states[:, 2:] * SCALE], dim=-1)
     return costs, proximity_mask
 
 
@@ -157,11 +160,11 @@ def parse_car_path(path):
 
 
 def plot_mean_and_CI(mean, lb, ub, color_mean=None, color_shading=None):
-    # plot the shaded range of the confidence intervals                                                                                                                                                   
+    # plot the shaded range of the confidence intervals
     time_steps = [i + 3 for i in range(len(mean))]
     plt.fill_between(time_steps, ub, lb,
                      color=color_shading, alpha=0.2)
-    # plot the mean on top                                                                                                                                                                                
+    # plot the mean on top
     plt.plot(time_steps, mean, color_mean)
 
 
@@ -368,9 +371,9 @@ def hinge_loss(u, z):
 
 # second represents the prior
 def kl_criterion(mu1, logvar1, mu2, logvar2):
-    # KL( N(mu_1, sigma2_1) || N(mu_2, sigma2_2)) = 
+    # KL( N(mu_1, sigma2_1) || N(mu_2, sigma2_2)) =
     #   log( sqrt(
-    # 
+    #
     bsize = mu1.size(0)
     sigma1 = logvar1.mul(0.5).exp()
     sigma2 = logvar2.mul(0.5).exp()
