@@ -84,7 +84,7 @@ print(f'[saving to {path.join(opt.save_dir, plan_file)}]')
 time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
 n_test = len(splits['test_indx'])
-# for j in [1, 5]:
+# for j in [3]:
 for j in range(n_test):
     movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
     print(f'[new episode, will save to: {movie_dir}]')
@@ -161,7 +161,10 @@ for j in range(n_test):
     input_state_tfinal = inputs['state'][-1]
     time_travelled.append(len(images))
     distance_travelled.append(input_state_tfinal[0] - input_state_t0[0])
-    road_completed.append(1 if cost['arrived_to_dst'] else 0)
+    in_target_lane = target - 12 <= env.controlled_car["locked"]._position[1] <= target + 12
+    road_completed.append(1 if cost['arrived_to_dst'] and in_target_lane else 0)
+    if cost['arrived_to_dst'] and not in_target_lane:
+        print(f'Car survived but was not in correct lane: Actual pos: {env.controlled_car["locked"]._position[1]} vs Target: {target}.')
     log_string = ' | '.join((
         f'ep: {j + 1:3d}/{n_test}',
         f'time: {time_travelled[-1]}',
