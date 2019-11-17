@@ -682,12 +682,14 @@ set -k
 
 #for policy in ${target_lane_policies[*]}; do
 policy_dir="/misc/vlgscratch4/LecunGroup/nvidia-collab/yairschiff/pytorch-PPUU/models_learned_cost/policy_networks"
-for policy in $policy_dir/*lambdal\=0.0*lambdatl=1.0*.model; do
-    echo "Working on policy: ${policy:103}..."
-    sbatch \
-      --output ../logs/target_lane_learned_cost/planning_results/${policy:103}.out \
-      --error ../logs/target_lane_learned_cost/planning_results/${policy:103}.err \
-      submit_eval_mpur_tl.slurm \
-        model_dir=models_learned_cost \
-        policy=${policy:103}
+for tl in 0.9 0.8 0.7; do
+    for policy in $policy_dir/*lambdatl=${tl}*.model; do
+        echo "Working on policy: ${policy:103}..."
+        sbatch \
+        --output ../logs/target_lane_learned_cost/planning_results/${policy:103}.out \
+         --error ../logs/target_lane_learned_cost/planning_results/${policy:103}.err \
+        submit_eval_mpur_tl.slurm \
+            model_dir=models_learned_cost \
+            policy=${policy:103}
+    done
 done
