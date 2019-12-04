@@ -73,13 +73,21 @@ env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
     # env.reset(frame=int(input('Frame: ')), time_slot=0)
+    # 1.
+    # obs = ...
     env.reset(frame=0, time_slot=0)
 
     done = False
     while not done:
+        # 2.
+        # action = policy(obs)
         observation, reward, done, info = env.step(numpy.zeros((2,)))
+        # 3.
+        # obs, ... = env.step(action)
         # print(observation, reward, done, info)
-        env.render()
+        # env.render()
+    # 4.
+    # info.dump_state(dir)
 
     print('Episode completed!')
 
