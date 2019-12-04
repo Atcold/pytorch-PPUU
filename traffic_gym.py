@@ -103,7 +103,8 @@ class Car:
         self.pid_k2 = np.random.normal(1e-3, 1e-4)
         self.look_ahead = look_ahead
         self.screen_w = screen_w
-        self._text = self.get_text(self.id, font)
+        if font is not None:
+            self._text = self.get_text(self.id, font)
         self._policy_type = policy_type
         self.policy_network = policy_network
         self.is_controlled = False
