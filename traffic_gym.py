@@ -939,10 +939,10 @@ class Simulator(core.Env):
 
             # save surface as image, for visualisation only
             if self.store:
-                # pygame.image.save(self.screen, "screen_surface.png")
-                if not os.path.isdir(f'screen-dumps/{self.dump_folder}'):
-                    os.makedirs(f'screen-dumps/{self.dump_folder}')
-                pygame.image.save(self.screen, f'screen-dumps/{self.dump_folder}/im{self.frame:05d}.png')
+                screen_dir = os.path.join(self.dump_folder, 'screen')
+                if not os.path.isdir(screen_dir):
+                    os.makedirs(screen_dir)
+                pygame.image.save(self.screen, os.path.join(screen_dir, f'im{self.frame:05d}.png'))
 
             # capture the closing window and mouse-button-up event
             for event in pygame.event.get():
