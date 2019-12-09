@@ -1,11 +1,9 @@
-from os import path
-from map_i80 import I80, I80Car
-from traffic_gym_v2 import PatchedCar, MergingMap
-from traffic_gym import Car, Simulator
 import bisect
-import pygame
-import torch
-#import ipdb
+import os
+
+from map_i80 import I80, I80Car
+from traffic_gym import Car, Simulator
+from traffic_gym_v2 import PatchedCar
 
 
 class ControlledI80Car(I80Car):
@@ -80,32 +78,35 @@ class ControlledI80(I80):
 class Sim80Car(Car):
     current_lane = ControlledI80Car.current_lane
 
-    def __init__(self, lanes, free_lanes, dt, car_id, look_ahead, screen_w, font, policy_type,
-                 is_controlled=False, bot_speed=0):
-        super().__init__(lanes, free_lanes, dt, car_id, look_ahead, screen_w, font, policy_type, policy_network=None)
+    def __init__(self, lanes, free_lanes, dt, car_id, look_ahead, screen_w, font, is_controlled=False, bot_speed=0):
+        super().__init__(lanes, free_lanes, dt, car_id, look_ahead, screen_w, font,
+                         policy_type=None, policy_network=None)
         self.buffer_size = 0
         self.is_controlled = is_controlled
         self._speed = bot_speed
         self.lanes = lanes
         self.LANE_W = 24  # pixels / 3.7 m, lane width
         self.SCALE = self.LANE_W / 3.7  # pixels per metre
+        self.arrived_to_dst = False
+        self.off_screen = False
+        self.frames = list()
 
     def count_collisions(self, state):
         self.collisions_per_frame = 0
-        alpha = 1 * self.SCALE  # 1 m overlap collision
-        for cars in state:
-            if cars:
-                behind, ahead = cars
-                if behind:
-                    d = self - behind
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
-                        self.collisions_per_frame += 1
-                        print(f'Collision {self.collisions_per_frame}/6, behind, vehicle {behind.id}')
-                if ahead:
-                    d = ahead - self
-                    if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
-                        self.collisions_per_frame += 1
-                        print(f'Collision {self.collisions_per_frame}/6, ahead, vehicle {ahead.id}')
+        # alpha = 1 * self.SCALE  # 1 m overlap collision
+        # for cars in state:
+        #     if cars:
+        #         behind, ahead = cars
+        #         if behind:
+        #             d = self - behind
+        #             if d[0] < -alpha and abs(d[1]) + alpha < (self._width + behind._width) / 2:
+        #                 self.collisions_per_frame += 1
+        #                 print(f'Collision {self.collisions_per_frame}/6, behind, vehicle {behind.id}')
+        #         if ahead:
+        #             d = ahead - self
+        #             if d[0] < -alpha and abs(d[1]) + alpha < (self._width + ahead._width) / 2:
+        #                 self.collisions_per_frame += 1
+        #                 print(f'Collision {self.collisions_per_frame}/6, ahead, vehicle {ahead.id}')
 
         beta = 0.99
         if self._states_image and self._states_image[-1][2] > beta:
@@ -114,65 +115,47 @@ class Sim80Car(Car):
             print(f'Accident! Check vehicle {self}. Proximity of {self._states_image[-1][2]}.')
 
 
-class SimI80(MergingMap):
+class SimI80(Simulator):
     EnvCar = Sim80Car
 
-    # ControlledCar = ControlledI80Car
+    # Import map from Simulator
+    _draw_lanes = I80._draw_lanes
 
     def __init__(self, **kwargs):
+        kwargs['nb_lanes'] = 6
+        kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
-        #self.screen_size = (170 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
+        self.nb_lanes = 7
         self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
         self.counter = 0
         self.BotCarSpeed = 117
         self.input_images = None
         self.input_states = None
-        if self.display:  # if display is required
-            self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.action_sequences = []
-        self.data_path = 'traffic-data/state-action-cost/data_i80_v0'
-        # self.model_dir = '/Users/yairschiff/nvidia-collab/yairschiff/pytorch-PPUU/models_learned_cost'
-        self.model_dir = 'models_learned_cost'
-        self.mfile = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-' + \
-                     'nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
-        self.policy_model = 'MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30' + \
-                            '-ureg=0.05-lambdal=0.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False' + \
-                            '-learnedcost=True-lambdatl=0.9-seed=3-novaluestep85000.model'
-        self.forward_model, self.data_stats = self.load_models()
-        self.forward_model.to(self.device)
-        self.npred = 20
-        self.LANE_W = 24
-        self.nb_states = 20
-        self.dump_folder = path.join('train-of-cars', self.policy_model)
-
-    def load_models(self):
-        stats = torch.load(path.join(self.data_path, 'data_stats.pth'))  # , map_location=self.device)
-        forward_model = torch.load(path.join(self.model_dir, self.mfile))  # , map_location=self.device)
-        if type(forward_model) is dict: forward_model = forward_model['model']
-        model_path = path.join(self.model_dir, f'policy_networks/{self.policy_model}')
-        policy_network_mpur = torch.load(model_path)['model']  # , map_location=self.device)['model']
-        policy_network_mpur.stats = stats
-        forward_model.policy_net = policy_network_mpur.policy_net
-        forward_model.policy_net.stats = stats
-        forward_model.policy_net.actor_critic = False
-        return forward_model, stats
+        self.controlled_car = dict(locked=False)
+        # Conversion LANE_W from real world to pixels: US highway lane width is 3.7 metres, here 50 pixels
+        self.LANE_W = 24  # pixels / 3.7 m, lane width
+        self.SCALE = self.LANE_W / 3.7  # pixels per metre
+        self.screen_size = (160 * self.LANE_W, self.nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
+        self.policy = 'MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-' \
+             'lambdal=0.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False-learnedcost=True-lambdatl=1.0' \
+             '-seed=3-novaluestep85000.model'
+        self.dump_folder = os.path.join('simulator-dumps', 'train-of-cars', self.policy)
 
     def reset(self, **kwargs):
         super().reset(**kwargs)
-        self.controlled_car = {
-            'locked': None,
-        }
+        observation = None
+        while observation is None:
+            observation, reward, done, _ = self.step()
+        return observation
 
     def step(self, policy_action=None):
         assert not self.done, 'Trying to step on an exhausted environment!'
+        f = self.font[20] if self.display else None
         if self.frame % 5 == 0:
             # Add 3 train cars in a row
-            f = self.font[20] if self.display else None
             if self.counter < 4:
                 car = self.EnvCar(self.lanes, [2], self.delta_t, self.next_car_id,
                                   self.look_ahead, self.screen_size[0], f,
-                                  policy_type='straight',
                                   is_controlled=False,
                                   bot_speed=self.BotCarSpeed)
                 car._speed = self.BotCarSpeed
@@ -183,28 +166,25 @@ class SimI80(MergingMap):
                     for i in [0, 1, 3, 4, 5]:
                         car = self.EnvCar(self.lanes, [i], self.delta_t, self.next_car_id,
                                           self.look_ahead, self.screen_size[0], f,
-                                          policy_type='straight',
                                           is_controlled=False,
                                           bot_speed=self.BotCarSpeed)
                         self.vehicles.append(car)
                 elif self.next_car_id == 4:
                     car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
                                       self.look_ahead, self.screen_size[0], f,
-                                      policy_type='straight',
                                       is_controlled=False,
                                       bot_speed=self.BotCarSpeed)
                     self.vehicles.append(car)
                 elif self.next_car_id == 5:
                     controlled_car = self.EnvCar(self.lanes, [3], self.delta_t, self.next_car_id,
                                                  self.look_ahead, self.screen_size[0], f,
-                                                 policy_type='controlled',
                                                  is_controlled=True,
                                                  bot_speed=self.BotCarSpeed)
+                    self.controlled_car['locked'] = controlled_car
                     self.next_car_id += 1
                     self.vehicles.append(controlled_car)
                     car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
                                       self.look_ahead, self.screen_size[0], f,
-                                      policy_type='straight',
                                       is_controlled=False,
                                       bot_speed=self.BotCarSpeed)
                     self.vehicles.append(car)
@@ -212,23 +192,23 @@ class SimI80(MergingMap):
                     for i in [0, 1, 3, 4, 5]:
                         car = self.EnvCar(self.lanes, [i], self.delta_t, self.next_car_id,
                                           self.look_ahead, self.screen_size[0], f,
-                                          policy_type='straight',
                                           is_controlled=False,
                                           bot_speed=self.BotCarSpeed)
                         self.vehicles.append(car)
             elif self.frame < 55:
+                car = self.EnvCar(self.lanes, [0], self.delta_t, self.next_car_id,
+                                  self.look_ahead, self.screen_size[0], f,
+                                  is_controlled=False,
+                                  bot_speed=self.BotCarSpeed)
+                self.vehicles.append(car)
                 car = self.EnvCar(self.lanes, [4], self.delta_t, self.next_car_id,
                                   self.look_ahead, self.screen_size[0], f,
-                                  policy_type='straight',
                                   is_controlled=False,
                                   bot_speed=self.BotCarSpeed)
                 self.vehicles.append(car)
         # Create space after first 3 train cars
         if self.frame == 30:
             self.counter = 0
-
-        if self.frame == 82:
-            self.controlled_car['locked'] = self.vehicles[5]
 
         if self.show_frame_count:
             print(f'\r[t={self.frame}]', end='')
@@ -251,40 +231,8 @@ class SimI80(MergingMap):
             # Bot cars should not apply any acceleration
             action = (0, 0)
             # Controlled car should execute action based on policy
-            if v.is_controlled and self.controlled_car['locked']:
-                transpose = list(zip(*v._states_image))
-                state_images = transpose[0]
-                state_images = torch.stack(state_images).permute(0, 3, 1, 2)[-self.nb_states:]
-
-                zip_ = list(zip(*v._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
-                states = torch.stack(zip_[0])[:, 0][
-                         -self.nb_states:]  # select the ego-state (of 1 + 6 states we keep track)
-                # if self.norm_state is not False:  # normalise the states, if requested
-                # states = states.sub(self.data_stats['s_mean']).div(self.data_stats['s_std'])  # N(0, 1) range
-                # state_images = state_images.float().div(255)  # [0, 1] range
-
-                # Get action based on policy
-                self.forward_model.reset_action_buffer(self.npred)
-                self.action_sequences.append([])
-                # target = 96.0
-                # pain_factor = 7
-                # distance_to_target = v._position[1] - target
-                # exaggerated_target_y = v._position[1] - \
-                #                        distance_to_target*pain_factor * (1 if distance_to_target > 0 else -1)
-                # target_y = torch.tensor(exaggerated_target_y).to(self.device)
-                # print(f'Target y: {exaggerated_target_y}')
-                # if abs(distance_to_target) > 10:
-                #     target_y = torch.tensor(5.0).to(self.device)
-                # else:
-                target_y = torch.tensor(48.0).to(self.device)
-                # ipdb.set_trace()
-                a, _, _, _ = self.forward_model.policy_net(state_images, states, sample=True,
-                                                           normalize_inputs=True, normalize_outputs=True,
-                                                           controls=dict(target_lanes=target_y))
-                action = a.cpu().view(1, 2).numpy()
-                action = (action[0][0], action[0][1])
-                self.action_sequences[-1].append(action)
-                print(f'Frame {self.frame}: Action - {action}; Y-pos - {v._position[1]}')
+            if v.is_controlled and self.controlled_car['locked'] and policy_action is not None:
+                action = policy_action
 
             # Perform such action
             v.step(action)
@@ -301,15 +249,17 @@ class SimI80(MergingMap):
                 state = left_vehicles, mid_vehicles, right_vehicles
                 v.store('state', state)
                 v.store('action', action)
+                print(f' Current y position: {self.controlled_car["locked"]._position[1]}; Action: {action}')
 
             if v.is_controlled and self.controlled_car['locked']:
                 v.count_collisions(state)
                 if v.collisions_per_frame > 0:
                     self.collision = True
                     self.done = True  # stop when an accident occurs
-                    print('Dumping state images')
-                    v.dump_state_image(self.dump_folder + '/state/')
-                    #ipdb.set_trace()
 
         self.frame += 1
+        if self.controlled_car and self.controlled_car['locked']:
+            return_ = self.controlled_car['locked'].get_last(n=self.nb_states, done=self.done)
+            if return_:
+                return return_
         return None, None, self.done, None
