@@ -85,7 +85,7 @@ for episode in range(opt.nb_episodes):
         # 3.
         # obs, ... = env.step(action)
         # print(observation, reward, done, info)
-        # env.render()
+        env.render()
     # 4.
     # info.dump_state(dir)
 
