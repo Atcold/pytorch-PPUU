@@ -18,8 +18,7 @@ numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 device = torch.device('cuda' if torch.cuda.is_available() and not opt.no_cuda else 'cpu')
 
-# opt.save_dir = path.join(opt.model_dir, 'planning_results')
-opt.save_dir = '/misc/vlgscratch4/LecunGroup/nvidia-collab/yairschiff/pytorch-PPUU/models_learned_cost/planning_results_baseline'
+opt.save_dir = path.join(opt.model_dir, 'planning_results')
 opt.height = 117
 opt.width = 24
 opt.h_height = 14
@@ -127,7 +126,7 @@ for j in range(n_test):
                       f'Target y: {target}')
             a, entropy, mu, std = forward_model.policy_net(input_images, input_states, sample=True,
                                                            normalize_inputs=True, normalize_outputs=True,
-                                                           controls=None)  # controls=dict(target_lanes=target_y))
+                                                           controls=dict(target_lanes=target_y))
             a = a.cpu().view(1, 2).numpy()
 
         action_sequences[-1].append(a)
