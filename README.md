@@ -210,6 +210,11 @@ python eval_policy.py -model_dir <load_path> -policy_model <policy_filename> -me
 
 You can also specify `-method bprop` to perform "brute force" planning, which will be computationally expensive.
 
+### Parallel evaluation
+Evaluation happens in parallel. By default, evaluator script uses min(10, #cores_available) processes. It doesn't go above 10 because then it hits GPU memory limits.
+To change the number of processes, you can pass `-num-processes` argument to `eval_policy.py` script. Also, for this to work, you need to request cpu cores using `--cpus-per-task=X` argument for slurm.
+The slurm limits cpu usage to 64 cores per user, and gpus to 18 per user, therefore 3 is a reasonable limit to enable us to use all the gpus without hitting the gpu limit when running multiple evaluations. The CPU limit can be extended, but you need to email the IT helpdesk.
+
 ## Pre-trained models
 
 [Here](https://drive.google.com/file/d/1XahspfgFlBVF6ne479LCJgBr0luZGQt7/) you can download the predictive model and the policy we've trained on our servers (they are bundled together in the `model` field of this *Python* dictionary). The agent achieves 82.0% of success rate.  
