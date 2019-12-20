@@ -1,5 +1,12 @@
-import argparse
 import os
+
+# These environment variables need to be set before
+# import numpy to prevent numpy from spawning a lot of processes
+# which end up clogging up the system.
+os.environ["NUMEXPR_NUM_THREADS"]="1"
+os.environ["OMP_NUM_THREADS"]="1"
+
+import argparse
 import random
 import torch
 import torch.nn

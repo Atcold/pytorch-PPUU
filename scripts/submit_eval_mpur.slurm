@@ -16,11 +16,6 @@
 eval "$(conda shell.bash hook)"
 conda activate PPUU
 
-# These exports are needed to stop numpy from spawning processes
-# that end up slowing down multiprocessing.
-export NUMEXPR_NUM_THREADS=1
-export OMP_NUM_THREADS=1
-
 cd ../
 srun python eval_policy.py \
     -method policy-MPUR \
