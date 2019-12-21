@@ -19,4 +19,5 @@ conda activate PPUU
 cd ../
 srun python eval_policy.py \
     -method policy-MPUR \
-    -policy_model $policy
+    -policy_model $policy \
+    -save_grad_vid
