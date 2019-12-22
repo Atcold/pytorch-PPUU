@@ -121,8 +121,6 @@ class DataReader:
             path = DataReader.get_experiments_mapping()[experiment]
             logs = glob(path[0] + 'planning_results/' + path[1] + '*.log')
             regexp = r"seed=(\d+)-"
-            print('logs with seed', path[0] + 'planning_results/' + path[1] + '*.log',
-                    logs)
         elif option == 'checkpoint':
             path = DataReader.get_experiments_mapping()[experiment]
             logs = glob(path[0] + 'planning_results/' +
@@ -140,8 +138,11 @@ class DataReader:
 
         for log in logs:
             m = re.search(regexp, log)
-            result = m.group(1)
-            values.append(int(result))
+            if m:
+                result = m.group(1)
+                values.append(int(result))
+            else:
+                print(f'{log} doesn\'t contain {option}')
 
         # log files for each step are generated for seeds
         values = list(set(values))
