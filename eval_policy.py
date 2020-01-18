@@ -152,7 +152,9 @@ def build_plan_file_name(opt):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        fromfile_prefix_chars='@'
+    )
     parser.add_argument('-map', type=str, default='i80', help=' ')
     parser.add_argument('-v', type=str, default='3', help=' ')
     parser.add_argument('-seed', type=int, default=333333, help=' ')

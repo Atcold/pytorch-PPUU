@@ -9,7 +9,7 @@ import torch.nn.functional as fun
 import utils
 from dataloader import DataLoader
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-batch_size', type=int, default=4)

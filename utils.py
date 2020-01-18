@@ -463,7 +463,7 @@ def embed(Z, ztop, ndim=3):
 
 
 def parse_command_line(parser=None):
-    if parser is None: parser = argparse.ArgumentParser()
+    if parser is None: parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
     # data params
     parser.add_argument('-seed', type=int, default=1)
     parser.add_argument('-dataset', type=str, default='i80')
