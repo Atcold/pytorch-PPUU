@@ -78,11 +78,11 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     else:
         # ipdb.set_trace()
         car_sizes_temp = car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2)
-        pred_costs, _ = utils.proximity_cost(
+        pred_costs = utils.proximity_cost(
             pred_images, pred_states.data,
             car_sizes_temp,
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
-        )
+        )['costs']
         lane_cost, prox_map_l = utils.lane_cost(pred_images, car_sizes_temp)
         offroad_cost = utils.offroad_cost(pred_images, prox_map_l)
         pred_costs += model.opt.lambda_l * lane_cost + model.opt.lambda_o * offroad_cost
@@ -214,10 +214,10 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         model.eval()
         pred, _ = model.forward([input_images, input_states], actions_rep, None, sampling='fp', z_seq=Z)
         pred_images, pred_states = pred[0], pred[1]
-        proximity_cost, _ = utils.proximity_cost(
+        proximity_cost = utils.proximity_cost(
             pred_images, pred_states.data, car_sizes.expand(n_futures, 2),
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
-        )
+        )['costs']
 
         if hasattr(model, 'value_function'):
             v = model.value_function(pred[0][:, -model.value_function.opt.ncond:].contiguous(),
@@ -320,8 +320,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             optimizer_z.zero_grad()
             pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
                                     z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
-            pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
-                                                    s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+            pred_cost_adv = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
+                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])['costs']
 
             if k < n_updates_z + 1:
                 _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
@@ -339,8 +339,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     gamma_mask = torch.tensor([0.99 ** t for t in range(npred + 1)]).cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
-        proximity_cost, _ = utils.proximity_cost(pred_images[:, :, :3].contiguous(), pred_states.data, car_sizes, unnormalize=True,
-                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        proximity_cost = utils.proximity_cost(pred_images[:, :, :3].contiguous(), pred_states.data, car_sizes, unnormalize=True,
+                                              s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])['costs']
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
         lane_cost, prox_map_l = utils.lane_cost(pred_images[:, :, :3].contiguous(), car_sizes)
@@ -394,9 +394,9 @@ def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
     input_images.retain_grad()
     input_states.retain_grad()
 
-    proximity_cost, _ = utils.proximity_cost(
+    proximity_cost = utils.proximity_cost(
         input_images[:, -1:], input_states.data[:, -1:], car_sizes, unnormalize=True,
-        s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])['costs']
     proximity_loss = torch.mean(proximity_cost)
     lane_cost, _ = utils.lane_cost(input_images[:, -1:], car_sizes)
     lane_loss = torch.mean(lane_cost)

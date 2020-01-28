@@ -99,9 +99,39 @@ def offroad_cost(images, proximity_mask):
 
 
 def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnormalize=False, s_mean=None, s_std=None):
+
+    def compute_contours(images):
+        device=images.device
+
+        horizontal_filter = torch.tensor([[[0.], [0.]], [[-1.], [1.]], [[0.], [0.]]], device=device)
+        horizontal_filter = horizontal_filter.expand(1,3,2,1)
+
+        vertical_filter = torch.tensor([[0., 0.], [1., -1.], [0., 0.]], device=device).view(3, 1, 2)
+        vertical_filter = vertical_filter.expand(1, 3, 1, 2)
+
+        horizontal = F.conv2d(images, horizontal_filter, stride=1, padding=(1, 0))
+        horizontal = horizontal[:, :, :-1, :]
+
+        vertical = F.conv2d(images, vertical_filter, stride=1, padding=(0, 1))
+        vertical = vertical[:, :, :, :-1]
+
+        _, _, height, width = horizontal.shape
+
+        horizontal_mask = torch.ones((1, 1, height, width), device=device)
+        horizontal_mask[:, :, :(height // 2), :] = -1
+        horizontal_masked = F.relu(horizontal_mask * horizontal)
+
+        vertical_mask = torch.ones((1, 1, height, width), device=device)
+        vertical_mask[:, :, :, (width // 2):] = -1
+        vertical_masked = F.relu(vertical_mask * vertical)
+
+        result = vertical_masked[:][:] + horizontal_masked[:][:]
+        return result
+
     SCALE = 0.25
     safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
+
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
     states = states.view(bsize * npred, 4).clone()
 
@@ -145,11 +175,30 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     y_filter = y_filter.cuda()
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
+    images = images.view(-1, nchannels, crop_h, crop_w)
+    green_contours = compute_contours(images)
+    green_contours = green_contours.view(bsize, npred, crop_h, crop_w)
+    # pre_max = (proximity_mask * (green_image ** 2))
+    # green_contours[green_contours < 0.5] = 0
+    proximity_mask = proximity_mask ** 2
+    pre_max = (proximity_mask * (green_contours ** 2))
+    #costs = torch.max(pre_max.view(bsize, npred, -1), 2)[0]
+    costs = torch.sum(pre_max.view(bsize, npred, -1), 2)
+    # costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
+    # costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
-    #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    return costs, proximity_mask
+    green_image = images[:, :, green_channel].float()
+    pre_max_old = (proximity_mask * green_image)
+    costs_old = torch.max(pre_max_old.view(bsize, npred, -1), 2)[0]
+
+    result = {}
+    result['costs'] = costs
+    result['costs_old'] = costs_old
+    result['masks'] = proximity_mask
+    result['pre_max'] = pre_max
+    result['contours'] = green_contours
+    return result
 
 
 def parse_car_path(path):
