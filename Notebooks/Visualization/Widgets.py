@@ -283,7 +283,7 @@ class EpisodeReview(widgets.VBox):
         )
         self.update_interval_slider = widgets.IntSlider(
             min=1,
-            max=100,
+            max=300,
             value=30,
         )
         self.update_interval_box = widgets.HBox([
@@ -356,7 +356,9 @@ class EpisodeReview(widgets.VBox):
                                         axes=[ax_x, ax_y, ax_y2],
                                         title='Costs and speed',
                                         legend_location='top-left',
-                                        interaction=pan_zoom)
+                                        interaction=pan_zoom,
+                                        layout=widgets.Layout(width='100%', height='100%')
+                                       )
 
         self.follow_present = widgets.ToggleButton(
             value=False,
@@ -391,7 +393,8 @@ class EpisodeReview(widgets.VBox):
                 self.episode_gradient_image,
                 self.episode_image,
                 self.costs_plot_box
-            ]
+            ],
+            layout=widgets.Layout(width='100%')
         )
 
         def episode_slider_callback(change):

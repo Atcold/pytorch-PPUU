@@ -290,7 +290,7 @@ class DataReader:
         else:
             raw_costs = torch.load(costs_paths[0])
             # list of DataFrame, one per episode
-            costs = [pandas.DataFrame(cost) for cost in raw_costs]
+            costs = [pandas.DataFrame(cost if type(cost) == type([]) else cost.tolist()) for cost in raw_costs]
             return costs
 
     @staticmethod
