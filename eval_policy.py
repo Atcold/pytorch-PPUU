@@ -58,7 +58,15 @@ def get_optimal_pool_size():
 
 def load_models(opt, data_path, device='cuda'):
     stats = torch.load(path.join(data_path, 'data_stats.pth'))
-    forward_model = torch.load(path.join(opt.model_dir, opt.mfile))
+
+    model_path = path.join(opt.model_dir, opt.mfile)
+    if path.exists(model_path):
+        forward_model = torch.load(model_path)
+    elif path.exists(opt.mfile):
+        forward_model = torch.load(opt.mfile)
+    else:
+        raise runtime_error(f'couldn\'t find file {opt.mfile}')
+
     if type(forward_model) is dict:
         forward_model = forward_model['model']
     value_function, policy_network_il, policy_network_mper = None, None, None
