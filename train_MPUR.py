@@ -38,7 +38,6 @@ if torch.cuda.is_available() and opt.no_cuda:
     print('WARNING: You have a CUDA device, so you should probably run without -no_cuda')
 
 # load the model
-
 model_path = path.join(opt.model_dir, opt.mfile)
 if path.exists(model_path):
     model = torch.load(model_path)
