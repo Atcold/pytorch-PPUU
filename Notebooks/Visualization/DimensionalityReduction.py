@@ -23,7 +23,7 @@ class DimensionalityReduction:
     """ Path for saving clustering class state for faster loading"""
 
     def __init__(self):
-        """Lazy initialization, in order not to waste time every time we open the notebook"""
+        """Lazy initialization, in order to not waste time every time we open the notebook"""
         self.initialized = False
 
     def initialize(self):

@@ -172,6 +172,8 @@ class DataReader:
         result = {}
         steps = []
         min_length = 100
+        max_length = 0
+
         for seed in seeds:
             result[seed] = []
             checkpoints = DataReader.find_option_values(
@@ -185,9 +187,10 @@ class DataReader:
                 result[seed].append(success)
 
             min_length = min(min_length, len(result[seed]))
+            max_length = max(max_length, len(result[seed]))
 
         if len(result) > 0:
-            result = np.stack([np.array(result[seed])[:min_length]
+            result = np.stack([np.pad(np.array(result[seed]), (0, max_length - len(result[seed])), 'edge')
                                for seed in result])
             steps = np.array(steps)
             return steps, result
