@@ -563,7 +563,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-l2reg', type=float, default=0.0)
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-enable_tensorboard', action='store_true',
-                    help='Enables tensorboard logging.')
+                        help='Enables tensorboard logging.')
     parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
