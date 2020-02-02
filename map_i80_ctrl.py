@@ -126,7 +126,7 @@ class SimI80(Simulator):
         kwargs['delta_t'] = 1/10
         super().__init__(**kwargs)
         self.nb_lanes = 7
-        self.screen_size = (85 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
+        self.screen_size = (170 * self.LANE_W, self.nb_lanes * self.LANE_W + 5 * self.LANE_W)
         self.counter = 0
         self.BotCarSpeed = 117
         self.input_images = None
@@ -135,10 +135,10 @@ class SimI80(Simulator):
         # Conversion LANE_W from real world to pixels: US highway lane width is 3.7 metres, here 50 pixels
         self.LANE_W = 24  # pixels / 3.7 m, lane width
         self.SCALE = self.LANE_W / 3.7  # pixels per metre
-        self.screen_size = (160 * self.LANE_W, self.nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
+        # self.screen_size = (160 * self.LANE_W, self.nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
         self.policy = 'MPUR-policy-deterministic-model=vae-zdropout=0.5-nfeature=256-bsize=6-npred=30-ureg=0.05-' \
              'lambdal=0.0-lambdaa=0.0-gamma=0.99-lrtz=0.0-updatez=0-inferz=False-learnedcost=True-lambdatl=1.0' \
-             '-seed=3-novaluestep85000.model'
+             '-seed=2-novaluestep90000.model'
         self.dump_folder = os.path.join('simulator-dumps', 'train-of-cars', self.policy)
 
     def reset(self, **kwargs):
