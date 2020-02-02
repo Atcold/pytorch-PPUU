@@ -511,6 +511,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-display', type=int, default=0, help=' ')
     parser.add_argument('-policy_model', type=str, default='', help=' ')
     parser.add_argument('-save_sim_video', action='store_true', help='Save simulator video in <frames> info attribute')
+    parser.add_argument('-save_dir', type=str, help='Directory for saving evaluation results.')
 
     opt = parser.parse_args()
     opt.n_inputs = 4
