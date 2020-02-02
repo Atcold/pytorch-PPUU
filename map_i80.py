@@ -440,7 +440,6 @@ class I80(Simulator):
             if (self.store or v.is_controlled) and v.valid:
                 v.store('state', state)
                 v.store('action', action)
-                # TODO: Add store target lane cost?
 
             if v.is_controlled and v.valid:
                 v.count_collisions(state)
