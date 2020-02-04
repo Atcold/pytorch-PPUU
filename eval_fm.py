@@ -52,7 +52,7 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 opt.save_video = (opt.save_video == 1)
-opt.eval_dir = opt.model_dir + f'/eval/'
+opt.eval_dir = opt.model_dir + f'eval/'
 
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
@@ -67,7 +67,7 @@ dataloader = DataLoader(None, opt, opt.dataset)
 # model.opt.npred = opt.npred  # instruct the model about how many predictions we want it to produce
 model.opt.alpha = 0
 
-dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
+dirname = f'{opt.eval_dir}{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
 if '-ten' in opt.mfile:
     dirname += f'-sampling={opt.sampling}'
     if opt.sampling == 'knn':

@@ -23,7 +23,7 @@ parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3, help='layers in frame encoder/decoders')
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='models/')
+parser.add_argument('-model_dir', type=str, default='models')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=8)
@@ -99,7 +99,7 @@ else:
     # specify deterministic model we use to initialize parameters with
     if opt.warmstart == 1:
         prev_model = f'{opt.model_dir}/model=fwd-cnn-layers={opt.layers}-bsize=8-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-dropout={opt.dropout}-gclip=5.0'
-        prev_model += '-warmstart=0-seed=1.step200000.model'
+        prev_model += '-warmstart=0-seed=1.step400000.model'
     else:
         prev_model = ''
 
@@ -154,7 +154,7 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p
@@ -183,7 +183,7 @@ def test(nbatches):
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
 
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p

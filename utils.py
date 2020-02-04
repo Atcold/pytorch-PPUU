@@ -88,6 +88,13 @@ def lane_cost(images, car_size):
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)[0]
+    return costs.view(bsize, npred), proximity_mask
+
+
+def offroad_cost(images, proximity_mask):
+    bsize, npred, nchannels, crop_h, crop_w = images.size()
+    images = images.view(bsize, npred, nchannels, crop_h, crop_w)
+    costs = torch.max((proximity_mask * images[:, :, 2].float()).view(bsize, npred, -1), 2)[0]
     return costs.view(bsize, npred)
 
 
@@ -486,6 +493,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-u_hinge', type=float, default=0.5)
     parser.add_argument('-lambda_a', type=float, default=0.0, help='l2 regularization on actions')
     parser.add_argument('-lambda_l', type=float, default=0.2, help='coefficient of lane cost')
+    parser.add_argument('-lambda_o', type=float, default=1.0, help='coefficient of offroad cost')
     parser.add_argument('-lrt_z', type=float, default=0.0)
     parser.add_argument('-z_updates', type=int, default=0)
     parser.add_argument('-infer_z', action='store_true')
@@ -495,7 +503,9 @@ def parse_command_line(parser=None):
          'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
     m2 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
          'warmstart=0-seed=1.step200000.model'
-    parser.add_argument('-mfile', type=str, default=m1, help='dynamics model used to train the policy network')
+    m3 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+         'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step400000.model'
+    parser.add_argument('-mfile', type=str, default=m3, help='dynamics model used to train the policy network')
     parser.add_argument('-value_model', type=str, default='')
     parser.add_argument('-load_model_file', type=str, default='')
     parser.add_argument('-combine', type=str, default='add')

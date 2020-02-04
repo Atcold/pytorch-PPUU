@@ -93,6 +93,10 @@ def load_models(opt, data_path):
 
     forward_model.intype('gpu')
     forward_model.stats = stats
+    forward_model.policy_net.stats_d = {}
+    for k, v in stats.items():
+        if isinstance(v, torch.Tensor):
+            forward_model.policy_net.stats_d[k] = v.to(device)
 
     forward_model = forward_model.share_memory()
 
@@ -142,6 +146,7 @@ def build_plan_file_name(opt):
         plan_file += f'-abuffer={opt.bprop_buffer}'
         plan_file += f'-saveoptstats={opt.bprop_save_opt_stats}'
         plan_file += f'-lambdal={opt.lambda_l}'
+        plan_file += f'-lambdao={opt.lambda_o}'
         if opt.value_model != '':
             plan_file += f'-vmodel'
         plan_file += '-'
@@ -179,6 +184,7 @@ def parse_args():
     parser.add_argument('-u_reg', type=float, default=0.0, help=' ')
     parser.add_argument('-u_hinge', type=float, default=1.0, help=' ')
     parser.add_argument('-lambda_l', type=float, default=0.0, help=' ')
+    parser.add_argument('-lambda_o', type=float, default=0.0, help=' ')
     parser.add_argument('-graph_density', type=float, default=0.001, help=' ')
     parser.add_argument('-display', type=int, default=0, help=' ')
     parser.add_argument('-debug', action='store_true', help=' ')
@@ -191,7 +197,9 @@ def parse_args():
          'zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.0-gclip=5.0-warmstart=1-seed=1.step200000.model'
     M4 = 'model=fwd-cnn-ten3-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-nhidden=128-fgeom=1-' + \
          'zeroact=0-zmult=0-dropout=0.1-nz=32-beta=0.0-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model'
-    parser.add_argument('-mfile', type=str, default=M1, help=' ')
+    M5 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
+         'beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step400000.model'
+    parser.add_argument('-mfile', type=str, default=M5, help=' ')
     parser.add_argument('-value_model', type=str, default='', help=' ')
     parser.add_argument('-policy_model', type=str, default='', help=' ')
     parser.add_argument('-save_sim_video', action='store_true',
@@ -217,6 +225,7 @@ def parse_args():
     opt.h_width = 3
     opt.opt_z = (opt.opt_z == 1)
     opt.opt_a = (opt.opt_a == 1)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if opt.num_processes == -1:
         opt.num_processes = get_optimal_pool_size()
@@ -282,7 +291,8 @@ def process_one_episode(opt,
                 n_models=opt.n_dropout_models,
                 save_opt_stats=(opt.bprop_save_opt_stats == 1),
                 nexec=opt.nexec,
-                lambda_l=opt.lambda_l
+                lambda_l=opt.lambda_l,
+                lambda_o=opt.lambda_o
             )
         elif opt.method == 'policy-IL':
             _, _, _, a = policy_network_il(
@@ -380,8 +390,9 @@ def process_one_episode(opt,
         grads = torch.cat(grad_list)
 
     if len(images) > 3:
+        images_3_channels = (images[:, :3] + images[:, 3:]).clamp(max=255)
         utils.save_movie(path.join(movie_dir, 'ego'),
-                         images.float() / 255.0,
+                         images_3_channels.float() / 255.0,
                          states,
                          costs,
                          actions=actions,

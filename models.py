@@ -12,17 +12,18 @@ import utils
 
 # encodes a sequence of input frames and states, and optionally a cost or action, to a hidden representation
 class encoder(nn.Module):
-    def __init__(self, opt, a_size, n_inputs, states=True, state_input_size=4):
+    def __init__(self, opt, a_size, n_inputs, states=True, state_input_size=4, n_channels=3):
         super(encoder, self).__init__()
         self.opt = opt
         self.a_size = a_size
         self.n_inputs = opt.ncond if n_inputs is None else n_inputs
+        self.n_channels = n_channels
         # frame encoder
         if opt.layers == 3:
             assert(opt.nfeature % 4 == 0)
             self.feature_maps = (opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -34,7 +35,7 @@ class encoder(nn.Module):
             assert(opt.nfeature % 8 == 0)
             self.feature_maps = (opt.nfeature // 8, opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(3 * self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -74,7 +75,7 @@ class encoder(nn.Module):
 
     def forward(self, images, states=None, actions=None):
         bsize = images.size(0)
-        h = self.f_encoder(images.view(bsize, self.n_inputs * 3, self.opt.height, self.opt.width))
+        h = self.f_encoder(images.view(bsize, self.n_inputs * self.n_channels, self.opt.height, self.opt.width))
         if states is not None:
             h = h + self.s_encoder(states.contiguous().view(bsize, -1)).view(h.size())
         if actions is not None:
@@ -427,12 +428,13 @@ class v_network(nn.Module):
 
 # combines a sequence of images with the state vector.
 class policy_encoder(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, n_channels=4):
         super(policy_encoder, self).__init__()
         self.opt = opt
+        self.n_channels = n_channels
 
         self.convnet = nn.Sequential(
-            nn.Conv2d(3*opt.ncond, opt.nfeature, 4, 2, 1),
+            nn.Conv2d(n_channels * opt.ncond, opt.nfeature, 4, 2, 1),
             nn.ReLU(),
             nn.Conv2d(opt.nfeature, opt.nfeature, 4, 2, 1),
             nn.ReLU(),
@@ -450,7 +452,7 @@ class policy_encoder(nn.Module):
 
     def forward(self, state_images, states):
         bsize = state_images.size(0)
-        state_images = state_images.view(bsize, 3*self.opt.ncond, self.opt.height, self.opt.width)
+        state_images = state_images.view(bsize, self.n_channels * self.opt.ncond, self.opt.height, self.opt.width)
         states = states.view(bsize, -1)
         hi = self.convnet(state_images).view(bsize, self.hsize)
         hs = self.embed(states)
@@ -787,9 +789,10 @@ class CostPredictor(nn.Module):
 
 # Stochastic Policy, output is a diagonal Gaussian and learning uses the re-parametrization trick.
 class StochasticPolicy(nn.Module):
-    def __init__(self, opt, context_dim=0, actor_critic=False, output_dim=None):
+    def __init__(self, opt, context_dim=0, actor_critic=False, output_dim=None, n_channels=4):
         super().__init__()
         self.opt = opt
+        self.n_channels = n_channels
         self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
@@ -866,10 +869,11 @@ class StochasticPolicy(nn.Module):
 
 
 class DeterministicPolicy(nn.Module):
-    def __init__(self, opt, context_dim=0, output_dim=None):
+    def __init__(self, opt, context_dim=0, output_dim=None, n_channels=4):
         super().__init__()
         self.opt = opt
-        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond)
+        self.n_channels = n_channels
+        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond, n_channels=n_channels)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
