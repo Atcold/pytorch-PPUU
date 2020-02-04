@@ -6,7 +6,7 @@ import random
 import numpy as np
 import scipy.misc
 import sys, pickle
-from skimage import measure, transform
+# from skimage import measure, transform
 # from matplotlib.image import imsave
 import PIL
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
@@ -99,6 +99,7 @@ class Car:
         self._error = 0
         self._states = list()
         self._states_image = list()
+        self._ego_car_image = None
         self._actions = list()
         self._safe_factor = random.gauss(1.5, 0)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
@@ -522,6 +523,8 @@ class Car:
             self._states.append(self._get_obs(*object_))
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
+        elif object_name == 'ego_car_image' and self._ego_car_image is None:
+            self._ego_car_image = self._get_observation_image(*object_)[0]
 
     def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
         if len(self._states_image) < n: return None  # no enough samples
@@ -530,6 +533,10 @@ class Car:
         transpose = list(zip(*self._states_image))
         state_images = transpose[0]
         state_images = torch.stack(state_images).permute(0, 3, 1, 2)[-n:]
+        ego_car_new_shape = list(state_images.shape)
+        ego_car_new_shape[1] = 1
+        ego_car_channel = self._ego_car_image[:, :, 2][None, None, :].expand(ego_car_new_shape)
+        state_images = torch.cat((state_images, ego_car_channel), 1)
 
         zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
         states = torch.stack(zip_[0])[:, 0][-n:]  # select the ego-state (of 1 + 6 states we keep track)
@@ -593,6 +600,7 @@ class Car:
                     'proximity_cost': proximity_cost,
                     'mask': mask,
                     'frames': frames,
+                    'ego_car': self._ego_car_image.permute(2, 0, 1),
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -975,12 +983,13 @@ class Simulator(core.Env):
                     # Superimpose the lanes
                     vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
                     # Empty ego-surface
-                    # ego_surface.fill((0, 0, 0))
+                    ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
-                    # ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
+                    ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
                     # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
+                    v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame))
                     # Store whole history, if requested
                     if self.store_sim_video:
                         if self.ghost:

@@ -59,6 +59,7 @@ class I80Car(Car):
         self.off_screen = self._max_t <= 0
         self._states = list()
         self._states_image = list()
+        self._ego_car_image = None
         self._actions = list()
         self._passing = False
         self._actions = list()

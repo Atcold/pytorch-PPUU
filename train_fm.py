@@ -154,7 +154,7 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p
@@ -183,7 +183,7 @@ def test(nbatches):
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
 
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p

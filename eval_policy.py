@@ -93,6 +93,10 @@ def load_models(opt, data_path):
 
     forward_model.intype('gpu')
     forward_model.stats = stats
+    forward_model.policy_net.stats_d = {}
+    for k, v in stats.items():
+        if isinstance(v, torch.Tensor):
+            forward_model.policy_net.stats_d[k] = v.to(device)
 
     forward_model = forward_model.share_memory()
 
@@ -221,6 +225,7 @@ def parse_args():
     opt.h_width = 3
     opt.opt_z = (opt.opt_z == 1)
     opt.opt_a = (opt.opt_a == 1)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if opt.num_processes == -1:
         opt.num_processes = get_optimal_pool_size()
@@ -385,8 +390,9 @@ def process_one_episode(opt,
         grads = torch.cat(grad_list)
 
     if len(images) > 3:
+        images_3_channels = (images[:, :3] + images[:, 3:]).clamp(max=255)
         utils.save_movie(path.join(movie_dir, 'ego'),
-                         images.float() / 255.0,
+                         images_3_channels.float() / 255.0,
                          states,
                          costs,
                          actions=actions,

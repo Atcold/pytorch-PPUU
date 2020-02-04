@@ -39,6 +39,8 @@ if torch.cuda.is_available() and opt.no_cuda:
 
 # load the model
 model = torch.load(path.join(opt.model_dir, opt.mfile))
+if not hasattr(model.encoder, 'n_channels'):
+    model.encoder.n_channels = 3
 if type(model) is dict: model = model['model']
 model.opt.lambda_l = opt.lambda_l  # used by planning.py/compute_uncertainty_batch
 model.opt.lambda_o = opt.lambda_o  # used by planning.py/compute_uncertainty_batch
@@ -60,6 +62,10 @@ if 'ten' in opt.mfile:
 
 # Send to GPU if possible
 model.to(opt.device)
+model.policy_net.stats_d = {}
+for k, v in stats.items():
+    if isinstance(v, torch.Tensor):
+        model.policy_net.stats_d[k] = v.to(opt.device)
 
 if opt.learned_cost:
     print('[loading cost regressor]')
