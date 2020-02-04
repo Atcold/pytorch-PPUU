@@ -41,6 +41,7 @@ if torch.cuda.is_available() and opt.no_cuda:
 model = torch.load(path.join(opt.model_dir, opt.mfile))
 if type(model) is dict: model = model['model']
 model.opt.lambda_l = opt.lambda_l  # used by planning.py/compute_uncertainty_batch
+model.opt.lambda_o = opt.lambda_o  # used by planning.py/compute_uncertainty_batch
 if opt.value_model != '':
     value_function = torch.load(path.join(opt.model_dir, 'value_functions', opt.value_model)).to(opt.device)
     model.value_function = value_function
@@ -80,6 +81,7 @@ def start(what, nbatches, npred):
         proximity=0,
         uncertainty=0,
         lane=0,
+        offroad=0,
         action=0,
         policy=0,
     )
@@ -92,7 +94,8 @@ def start(what, nbatches, npred):
         pred['policy'] = pred['proximity'] + \
                          opt.u_reg * pred['uncertainty'] + \
                          opt.lambda_l * pred['lane'] + \
-                         opt.lambda_a * pred['action']
+                         opt.lambda_a * pred['action'] + \
+                         opt.lambda_o * pred['offroad']
 
         if not math.isnan(pred['policy'].item()):
             if train:
@@ -127,6 +130,7 @@ n_iter = 0
 losses = OrderedDict(
     p='proximity',
     l='lane',
+    o='offroad',
     u='uncertainty',
     a='action',
     π='policy',

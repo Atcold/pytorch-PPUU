@@ -975,11 +975,11 @@ class Simulator(core.Env):
                     # Superimpose the lanes
                     vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
                     # Empty ego-surface
-                    ego_surface.fill((0, 0, 0))
+                    # ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
-                    ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
+                    # ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
-                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
+                    # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
                     # Store whole history, if requested
                     if self.store_sim_video:

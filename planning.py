@@ -77,11 +77,15 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
             pred_costs.detach_()
     else:
         # ipdb.set_trace()
+        car_sizes_temp = car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2)
         pred_costs, _ = utils.proximity_cost(
             pred_images, pred_states.data,
-            car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2),
+            car_sizes_temp,
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
         )
+        lane_cost, prox_map_l = utils.lane_cost(pred_images, car_sizes_temp)
+        offroad_cost = utils.offroad_cost(pred_images, prox_map_l)
+        pred_costs += model.opt.lambda_l * lane_cost + model.opt.lambda_o * offroad_cost
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
     pred_states = pred_states.view(n_models, bsize, npred, -1)
@@ -167,7 +171,7 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
 
 def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True,
                           bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10,
-                          save_opt_stats=True, nexec=1, lambda_l=0.0):
+                          save_opt_stats=True, nexec=1, lambda_l=0.0, lambda_o=0.0):
     if use_action_buffer:
         actions = torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda()
     elif actions is None:
@@ -233,10 +237,12 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         else:
             uncertainty_loss = torch.zeros(1)
 
-        lane_loss = torch.mean(utils.lane_cost(pred_images, car_sizes.expand(n_futures, 2)) * gamma_mask[:, :npred])
+        lane_loss, prox_map_l = utils.lane_cost(pred_images, car_sizes.expand(n_futures, 2))
+        lane_loss = torch.mean(lane_loss * gamma_mask[:, :npred])
+        offroad_loss = torch.mean(utils.offroad_cost(pred_images, prox_map_l) * gamma_mask[:, :npred])
         # lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
         # lane_loss = torch.mean(pred[2][:, :, 1] * gamma_mask[:, :npred])
-        loss = loss + lambda_l * lane_loss
+        loss = loss + lambda_l * lane_loss + lambda_o * offroad_loss
         loss.backward()
         print('[iter {} | mean pred cost = {:.4f}, uncertainty = {:.4f}, grad = {}'.format(
             i, proximity_loss.item(), uncertainty_loss.item(), actions.grad.data.norm())
@@ -333,7 +339,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
                                                  s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
-        lane_cost = utils.lane_cost(pred_images, car_sizes)
+        lane_cost, prox_map_l = utils.lane_cost(pred_images, car_sizes)
+        offroad_cost = utils.offroad_cost(pred_images, prox_map_l)
         if hasattr(model, 'value_function'):
             v = model.value_function(pred_images[:, -model.value_function.opt.ncond:].contiguous(),
                                      pred_states[:, -model.value_function.opt.ncond:].contiguous().data)
@@ -350,6 +357,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
     else:
         lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+        offroad_cost = torch.mean(offroad_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
@@ -364,6 +372,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         state_vct=pred_states,
         proximity=proximity_loss,
         lane=lane_loss,
+        offroad=offroad_cost,
         uncertainty=total_u_loss,
         action=loss_a,
     )

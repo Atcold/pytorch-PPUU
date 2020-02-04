@@ -520,6 +520,7 @@ class I80(Simulator):
             s = surface  # screen
             draw_line = pygame.draw.line  # shortcut
             w = colours['r']  # colour white
+            b = colours['b']  # colour blue
             sw = self.screen_size[0]  # screen width
             m = offset
 
@@ -532,6 +533,25 @@ class I80(Simulator):
             draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
             draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
             draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
+
+            # offroad regions
+            pygame.Surface.fill(s, b, pygame.Rect(m + 0, m + lanes[0]['min']-35, sw, 34))
+            pygame.draw.polygon(s, b, [
+                (m + 0, bottom+2),
+                (m + 0, bottom + 29-1),
+                (m + 18 * LANE_W, bottom + 29-1 - slope * 18 * LANE_W),
+                (m + 18 * LANE_W, bottom+2)
+            ])
+            pygame.draw.polygon(s, b, [
+                (m + 0, bottom + 54),
+                (m + 0, bottom + 54+30),
+                (m + 60 * LANE_W, bottom + 54+30),
+                (m + 60 * LANE_W, bottom + 54 - slope * 60 * LANE_W)
+            ])
+            pygame.Surface.fill(
+                s,
+                b,
+                pygame.Rect(m + 60 * LANE_W, bottom + 5, sw-60*LANE_W, 54+30-5))
 
             self._lane_surfaces[mode] = surface.copy()
             # pygame.image.save(surface, "i80-machine.png")

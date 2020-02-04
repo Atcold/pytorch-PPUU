@@ -23,6 +23,7 @@ srun python train_MPUR.py \
     -z_updates $z_updates \
     -batch_size $batch_size \
     -lambda_l $lambda_l \
+    -lambda_o $lambda_o \
     -infer_z $infer_z \
     -lambda_a $lambda_a \
     -seed $seed \
