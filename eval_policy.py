@@ -56,7 +56,7 @@ def get_optimal_pool_size():
     return optimal_pool_size
 
 
-def load_models(opt, data_path):
+def load_models(opt, data_path, device='cuda'):
     stats = torch.load(path.join(data_path, 'data_stats.pth'))
     forward_model = torch.load(path.join(opt.model_dir, opt.mfile))
     if type(forward_model) is dict:
@@ -225,7 +225,6 @@ def parse_args():
     opt.h_width = 3
     opt.opt_z = (opt.opt_z == 1)
     opt.opt_a = (opt.opt_a == 1)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if opt.num_processes == -1:
         opt.num_processes = get_optimal_pool_size()
@@ -432,6 +431,7 @@ def process_one_episode(opt,
 
 def main():
     opt = parse_args()
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     random.seed(opt.seed)
     numpy.random.seed(opt.seed)
@@ -446,7 +446,7 @@ def main():
         policy_network_il,
         policy_network_mper,
         data_stats
-    ) = load_models(opt, data_path)
+    ) = load_models(opt, data_path, device)
     splits = torch.load(path.join(data_path, 'splits.pth'))
 
     if opt.u_reg > 0.0:
