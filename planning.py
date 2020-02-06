@@ -2,7 +2,6 @@ import torch
 import torch.optim as optim
 import numpy
 import utils
-import ipdb
 
 ##################################################################################
 # functions for planning and training policy networks using the forward model
@@ -399,7 +398,7 @@ def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
         input_images[:, -1:], input_states.data[:, -1:], car_sizes, unnormalize=True,
         s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
     proximity_loss = torch.mean(proximity_cost)
-    lane_cost = utils.lane_cost(input_images[:, -1:], car_sizes)
+    lane_cost, _ = utils.lane_cost(input_images[:, -1:], car_sizes)
     lane_loss = torch.mean(lane_cost)
 
     opt = model.policy_net.options
