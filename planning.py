@@ -386,6 +386,30 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     return predictions, pred_actions
 
 
+def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
+    input_images, input_states = input_images.clone(), input_states.clone()
+    input_images, input_states = utils.normalize_inputs(
+        input_images, input_states, model.policy_net.stats, device=device)
+    input_images.requires_grad = True
+    input_states.requires_grad = True
+    input_images.retain_grad()
+    input_states.retain_grad()
+
+    proximity_cost, _ = utils.proximity_cost(
+        input_images[:, -1:], input_states.data[:, -1:], car_sizes, unnormalize=True,
+        s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+    proximity_loss = torch.mean(proximity_cost)
+    lane_cost = utils.lane_cost(input_images[:, -1:], car_sizes)
+    lane_loss = torch.mean(lane_cost)
+
+    opt = model.policy_net.options
+    loss = proximity_loss + \
+           opt.lambda_l * lane_loss
+    loss.backward()
+
+    return input_images.grad[:, -1, :3].abs().clamp(max=1.)
+
+
 def train_policy_net_mper(model, inputs, targets, targetprop=0, dropout=0.0, n_models=10, model_type='vae'):
     input_images, input_states = inputs
     target_images, target_states, target_costs = targets
