@@ -152,6 +152,7 @@ losses = OrderedDict(
 
 writer = utils.create_tensorboard_writer(opt)
 
+
 for i in range(500):
     train_losses = start('train', opt.epoch_size, opt.npred)
     with torch.no_grad():  # Torch, please please please, do not track computations :)

@@ -395,7 +395,7 @@ def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
     input_states.retain_grad()
 
     proximity_cost = utils.proximity_cost(
-        input_images[:, -1:], input_states.data[:, -1:], car_sizes, unnormalize=True,
+            input_images[:, -1:, :3], input_states.data[:, -1:], car_sizes, unnormalize=True,
         s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])['costs']
     proximity_loss = torch.mean(proximity_cost)
     lane_cost, _ = utils.lane_cost(input_images[:, -1:], car_sizes)
