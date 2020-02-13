@@ -52,6 +52,7 @@ if not hasattr(model.encoder, 'n_channels'):
 if type(model) is dict: model = model['model']
 model.opt.lambda_l = opt.lambda_l  # used by planning.py/compute_uncertainty_batch
 model.opt.lambda_o = opt.lambda_o  # used by planning.py/compute_uncertainty_batch
+model.opt.lambda_p = opt.lambda_p  # used by planning.py/compute_uncertainty_batch
 if opt.value_model != '':
     value_function = torch.load(path.join(opt.model_dir, 'value_functions', opt.value_model)).to(opt.device)
     model.value_function = value_function
@@ -105,7 +106,7 @@ def start(what, nbatches, npred):
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
             n_updates_z=opt.z_updates, infer_z=opt.infer_z
         )
-        pred['policy'] = pred['proximity'] + \
+        pred['policy'] = opt.lambda_p * pred['proximity'] + \
                          opt.u_reg * pred['uncertainty'] + \
                          opt.lambda_l * pred['lane'] + \
                          opt.lambda_a * pred['action'] + \

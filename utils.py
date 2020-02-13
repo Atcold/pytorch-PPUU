@@ -543,6 +543,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-lambda_a', type=float, default=0.0, help='l2 regularization on actions')
     parser.add_argument('-lambda_l', type=float, default=0.2, help='coefficient of lane cost')
     parser.add_argument('-lambda_o', type=float, default=1.0, help='coefficient of offroad cost')
+    parser.add_argument('-lambda_p', type=float, default=1.0, help='coefficient of proximity cost')
     parser.add_argument('-lrt_z', type=float, default=0.0)
     parser.add_argument('-z_updates', type=int, default=0)
     parser.add_argument('-infer_z', action='store_true')

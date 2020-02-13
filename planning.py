@@ -78,7 +78,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     else:
         # ipdb.set_trace()
         car_sizes_temp = car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2)
-        pred_costs = utils.proximity_cost(
+        pred_costs = model.opt.lambda_p * utils.proximity_cost(
             pred_images, pred_states.data,
             car_sizes_temp,
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
@@ -402,7 +402,7 @@ def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
     lane_loss = torch.mean(lane_cost)
 
     opt = model.policy_net.options
-    loss = proximity_loss + \
+    loss = opt.labmda_p * proximity_loss + \
            opt.lambda_l * lane_loss
     loss.backward()
 
