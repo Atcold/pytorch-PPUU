@@ -402,7 +402,7 @@ def get_grad_vid(model, input_images, input_states, car_sizes, device='cuda'):
     lane_loss = torch.mean(lane_cost)
 
     opt = model.policy_net.options
-    loss = opt.labmda_p * proximity_loss + \
+    loss = proximity_loss + \
            opt.lambda_l * lane_loss
     loss.backward()
 

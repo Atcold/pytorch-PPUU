@@ -193,6 +193,7 @@ def parse_args():
     parser.add_argument('-u_hinge', type=float, default=1.0, help=' ')
     parser.add_argument('-lambda_l', type=float, default=0.0, help=' ')
     parser.add_argument('-lambda_o', type=float, default=0.0, help=' ')
+    parser.add_argument('-lambda_p', type=float, default=0.0, help=' ')
     parser.add_argument('-graph_density', type=float, default=0.001, help=' ')
     parser.add_argument('-display', type=int, default=0, help=' ')
     parser.add_argument('-debug', action='store_true', help=' ')
