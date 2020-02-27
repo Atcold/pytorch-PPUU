@@ -126,7 +126,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
         vertical_masked = F.relu(vertical_mask * vertical)
 
         result = vertical_masked[:][:] + horizontal_masked[:][:]
-        return result
+        return result, vertical_masked, horizontal_masked
 
     SCALE = 0.25
     safe_factor = 1.5
@@ -150,6 +150,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     # Account for 1 metre overlap (low data accuracy)
     alpha = 1 * SCALE * (24 / 3.7)  # 1 m overlap collision
     # Create separable proximity mask
+
 
     max_x = torch.ceil((crop_h - torch.clamp(length - alpha, min=0)) / 2)
     max_y = torch.ceil((crop_w - torch.clamp(width - alpha, min=0)) / 2)
@@ -176,8 +177,41 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(-1, nchannels, crop_h, crop_w)
-    green_contours = compute_contours(images)
+    green_contours, vertical_contour, horizontal_contour = compute_contours(images)
     green_contours = green_contours.view(bsize, npred, crop_h, crop_w)
+    vertical_contour = vertical_contour.view(bsize, npred, crop_h, crop_w)
+    horizontal_contour = horizontal_contour.view(bsize, npred, crop_h, crop_w)
+
+    middle_y = crop_h // 2
+    middle_x = crop_w // 2
+
+    lower_limit_y = middle_y - torch.ceil(length / 2).int()
+    upper_limit_y = middle_y + torch.ceil(length / 2).int()
+
+    lower_limit_x = middle_x - torch.ceil(width / 2).int()
+    upper_limit_x = middle_x + torch.ceil(width / 2).int()
+
+    filter_lateral = torch.zeros(green_contours.shape).to(images.device)
+    filter_longitudinal = torch.zeros(green_contours.shape).to(images.device)
+
+    for i in range(bsize):
+        filter_lateral[i, :, lower_limit_y[i]:upper_limit_y[i], :middle_x] = -1
+        filter_lateral[i, :, lower_limit_y[i]:upper_limit_y[i], middle_x:] = 1
+
+        filter_longitudinal[i, :, :middle_y, lower_limit_x[i]:upper_limit_x[i]] = 1
+        filter_longitudinal[i, :, middle_y:, lower_limit_x[i]:upper_limit_x[i]] = -1
+
+
+    lateral_filtered = filter_lateral * vertical_contour * proximity_mask
+    cost_lateral = (lateral_filtered.view(bsize, npred, -1).max(dim=2)[0] \
+                  + lateral_filtered.view(bsize, npred, -1).max(dim=2)[0]) ** 2
+
+    longitudinal_filtered = filter_longitudinal * horizontal_contour * proximity_mask
+    cost_longitudinal = (longitudinal_filtered.view(bsize, npred, -1).max(dim=2)[0] \
+                       + longitudinal_filtered.view(bsize, npred, -1).max(dim=2)[0]) ** 2
+
+    cost_total = cost_lateral + cost_longitudinal
+
     # pre_max = (proximity_mask * (green_image ** 2))
     # green_contours[green_contours < 0.5] = 0
     proximity_mask = proximity_mask ** 2
@@ -193,11 +227,14 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     costs_old = torch.max(pre_max_old.view(bsize, npred, -1), 2)[0]
 
     result = {}
-    result['costs'] = costs
+    result['costs'] = cost_total
+    result['costs_edge'] = costs
     result['costs_old'] = costs_old
     result['masks'] = proximity_mask
     result['pre_max'] = pre_max
     result['contours'] = green_contours
+    result['cost_lateral'] = lateral_filtered
+    result['cost_longitudinal'] = longitudinal_filtered
     return result
 
 
