@@ -28,12 +28,13 @@ def load_models(data_path, model_dir, mfile, policy_model, method):
 
 
 def calculate_proximity_cost(env, ego, lane_idx):
-    left_vehicles = env._get_neighbours(lane_idx, -1, ego) \
-        if 0 < lane_idx < 6 or lane_idx == 6 and ego.front[0] > 18 * env.LANE_W else None
+    # left_vehicles = env._get_neighbours(lane_idx, -1, ego) \
+    #     if 0 < lane_idx < 6 or lane_idx == 6 and ego.front[0] > 18 * env.LANE_W else None
     mid_vehicles = env._get_neighbours(lane_idx, 0, ego)
-    right_vehicles = env._get_neighbours(lane_idx, 1, ego) \
-        if lane_idx < 5 or lane_idx == 5 and ego.front[0] > 18 * env.LANE_W else None
-    _, _, cost = ego._get_obs(left_vehicles, mid_vehicles, right_vehicles)
+    # right_vehicles = env._get_neighbours(lane_idx, 1, ego) \
+    #     if lane_idx < 5 or lane_idx == 5 and ego.front[0] > 18 * env.LANE_W else None
+    # _, _, cost = ego._get_obs(left_vehicles, mid_vehicles, right_vehicles)
+    _, _, cost = ego._get_obs(None, mid_vehicles, None)
     return cost
 
 
@@ -100,8 +101,7 @@ def main():
     time_travelled, distance_travelled, road_completed, action_sequences, state_sequences = [], [], [], [], []
 
     n_test = len(splits['test_indx'])
-    # for j in range(n_test):
-    for j in [0]:
+    for j in range(n_test):
         movie_dir = path.join(opt.save_dir, 'videos_simulator', plan_file, f'ep{j + 1}')
         print(f'[new episode, will save to: {movie_dir}]')
         car_path = dataloader.ids[splits['test_indx'][j]]
@@ -114,7 +114,7 @@ def main():
         input_state_t0 = inputs['state'].contiguous()[-1]
         action_sequences.append([])
         state_sequences.append([])
-        i80_lanes_dict = {'0': 48.0, '1': 72.0, '2': 96.0, '3': 120.0, '4': 144.0, '5': 168.0}
+        i80_lanes_dict = {'0': 48.0, '1': 72.0, '2': 96.0, '3': 120.0, '4': 144.0, '5': 168.0, '6': 192.0}
         while not done:
             input_images = inputs['context'].contiguous()
             input_states = inputs['state'].contiguous()
@@ -123,7 +123,7 @@ def main():
             if target_offset:
                 direction = 'right' if target_offset > 0 else 'left'
                 print(f'Reduced cost can be achieved by changing one lane to the {direction}.')
-            target = i80_lanes_dict[f'{env.controlled_car["locked"].current_lane + target_offset}']
+            target = i80_lanes_dict[f'{min(6, env.controlled_car["locked"].current_lane + target_offset)}']
             target_y = torch.tensor(target).to(device)   # dummy value for now
             if env.ghost:
                 print(f'(cntr={cntr}) Ghost Car: {env.ghost._position[1]} vs. '
