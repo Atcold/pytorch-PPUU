@@ -23,9 +23,6 @@ kwargs = {
     'delta_t': opt.delta_t,
 }
 
-if opt.map == 'highD':
-    kwargs['rec'] = '50'
-
 gym.envs.registration.register(
     id='Traffic-v0',
     entry_point='traffic_gym:Simulator',
