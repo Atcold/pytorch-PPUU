@@ -17,10 +17,11 @@
 source activate PPUU
 
 cd ../
-srun python eval_policy_tl.py \
+srun python eval_policy_look.py \
     -seed 333333 \
     -batch_size 1 \
     -method policy-MPUR \
     -model_dir $model_dir \
-    -policy_model $policy
+    -policy_model $policy \
+    -save_dir $save_dir
 
