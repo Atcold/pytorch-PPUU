@@ -5,9 +5,9 @@ channels:
 dependencies:
   - imageio
   - pandas
-  - python=3.7
-  - pytorch=1.2.0
-  - scipy=1.2.0
+  - python=3.8
+  - pytorch>1.2.0
+  - scipy
   - matplotlib
   - pip
   - jupyter
@@ -15,7 +15,7 @@ dependencies:
   - scikit-image
   - pip:
     - gym
-    - pygame
+    - pygame>=2.0.0.dev6
     - jupytext
     - ipdb
     - tb-nightly
