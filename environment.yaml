@@ -21,3 +21,4 @@ dependencies:
     - tb-nightly
     - moviepy
     - bqplot
+    - astropy
