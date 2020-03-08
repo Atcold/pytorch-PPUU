@@ -20,8 +20,6 @@ parser.add_argument('-fps', type=int, default=30)
 parser.add_argument('-time_slot', type=int, default=0)
 parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
 parser.add_argument('-delta_t', type=float, default=0.1)
-parser.add_argument('-recording', type=str, default="01",
-                    help='Use this argument with highD maps to choose from recordings \'01\' to \'60\'')
 opt = parser.parse_args()
 
 opt.state_image = (opt.state_image == 1)
@@ -43,10 +41,6 @@ kwargs = dict(
     data_dir=opt.data_dir,
     delta_t=opt.delta_t,
 )
-
-# HighD dataset will use recordings IDs rather than time slots
-if opt.map == 'highD':
-    kwargs['rec'] = opt.recording
 
 register(
     id='Traffic-v0',
