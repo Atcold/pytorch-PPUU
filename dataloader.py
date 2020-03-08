@@ -11,7 +11,7 @@ class DataLoader:
         self.random = random.Random()
         self.random.seed(12345)  # use this so that the same batches will always be picked
 
-        if dataset == 'i80' or dataset == 'us101':
+        if dataset == 'i80' or dataset == 'us101' or dataset == 'highD':
             data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
             if single_shard:
                 # quick load for debugging
