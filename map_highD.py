@@ -16,52 +16,6 @@ MAX_SPEED = 130
 DT = 1 / 25  # frame rate for highD dataset (comes from recording_meta csv files)
 
 
-# Recording meta data
-def read_recoding_meta(filename, reload=False):
-    # Check if concatenated file already exists:
-    if os.path.isfile(os.path.join(filename, 'all_recordingMeta.pkl')) and not reload:
-        df_recs = pd.read_pickle(os.path.join(filename, 'all_recordingMeta.pkl'))
-        return df_recs
-    # Else read in the individual recordings, concatenate, and save them
-    df_rec_dict = dict()
-    recordings = [f'{i:02d}' for i in range(1, 61)]
-    for rec in recordings:
-        # Recording meta data dataframes
-        df_rec = pd.read_csv(os.path.join(filename, f'{rec}_recordingMeta.csv'),
-                             header=0,
-                             index_col=False,
-                             names=(
-                                 'Recording ID',
-                                 'Frame Rate',
-                                 'Location ID',
-                                 'Speed Limit',
-                                 'Month',
-                                 'Weekday',
-                                 'Start Time',
-                                 'Duration',
-                                 'Total Driven Distance',
-                                 'Total Driven Time',
-                                 'Number Vehicles',
-                                 'Number Cars',
-                                 'Number Trucks',
-                                 'Upper Lane Markings',
-                                 'Lower Lane Markings'
-                             ))
-        # Calculate number of lanes based on lane markings
-        num_lanes = len(df_rec["Upper Lane Markings"].values[0].split(";")) + \
-                    len(df_rec["Lower Lane Markings"].values[0].split(";"))
-        df_rec["Number Lanes"] = num_lanes - 2
-        df_rec['Upper Lane Markings'] = df_rec['Upper Lane Markings'].apply(lambda x: np.fromstring(x, sep=';'))
-        df_rec['Lower Lane Markings'] = df_rec['Lower Lane Markings'].apply(lambda x: np.fromstring(x, sep=';'))
-
-        # Add to dict
-        df_rec_dict[rec] = df_rec
-    # Concatenate and save
-    df_recs = pd.concat([df_rec_dict[rec] for rec in recordings], ignore_index=True)
-    df_recs.to_pickle(os.path.join(filename, 'all_recordingMeta.pkl'))
-    return df_recs
-
-
 class HighDCar(Car):
     # Global constants
     SCALE = SCALE
@@ -222,11 +176,7 @@ class HighD(Simulator):
     DUMP_NAME = 'data_highD_v0'
 
     def __init__(self, **kwargs):
-        self.rec_meta = read_recoding_meta('traffic-data/xy-trajectories/highD/', reload=True)
-        kwargs['nb_lanes'] = self.rec_meta[self.rec_meta['Recording ID']
-                                           == int(kwargs['rec'])]["Number Lanes"].values[0]
-        self.recording = kwargs['rec']
-        del kwargs['rec']
+        self.rec_meta = self.read_recoding_meta('traffic-data/xy-trajectories/highD/', reload=False)
         delta_t = kwargs['delta_t']
         assert delta_t >= DT, f'Minimum delta t is 0.04s > {delta_t:.2f}s you tried to set'
         assert (delta_t / DT).is_integer(), f'dt: {delta_t:.2f}s must be a multiple of 1 / 25 s'
@@ -234,11 +184,9 @@ class HighD(Simulator):
         super().__init__(**kwargs)
 
         self.screen_size = (1800, 400)
-        # # Uncomment below to display actual image from recording
-        # photo = pygame.image.load(f'HighD/{self.recording}_highway.png')
-        # photo = pygame.transform.scale(photo, self.screen_size)
-        # self.photos = (photo,)
-        # self.photos_rect = (self.photos[0].get_rect().move([0, Y_OFFSET]),)
+        self.photos = None  # set this in env.reset()
+        self.photos_rect = None  # set this in env.reset()
+
         if self.display:  # if display is required
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
             self.font = {
@@ -246,15 +194,15 @@ class HighD(Simulator):
                 20: pygame.font.SysFont(None, 20),
                 30: pygame.font.SysFont(None, 30),
             }
-        self._time_slots = [self.recording]
+        self._time_slots = [f'{i+1:02d}' for i in range(60)]  # there are 60 recordings in highD dataset
         self._t_slot = None
         self._black_list = {i: set() for i in self._time_slots}  # TODO: Need to visually inspect data to create this
         self.df = None
         self.vehicles_history = None
         self.lane_occupancy = None
         self.x_offset = 0
-        self.nb_lanes = kwargs['nb_lanes']
-        self.lanes = self.build_lanes(kwargs['nb_lanes'])
+        self.nb_lanes = None  # set this in env.reset()
+        self.lanes = None  # set this in env.reset()
         self.max_frame = -1
         pth = 'traffic-data/state-action-cost/data_highD_v0/data_stats.pth'
         self.data_stats = torch.load(pth) if self.normalise_state or self.normalise_action else None
@@ -263,15 +211,59 @@ class HighD(Simulator):
         self.train_indx = None
         self.indx_order = None
         self.look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE  # km/h --> m/s * SCALE
-        upper_lanes = self.rec_meta[self.rec_meta['Recording ID'] ==
-                                    int(self.recording)]['Upper Lane Markings'].values[0]
-        self.lane_width = (upper_lanes[1] - upper_lanes[0]) * SCALE  # distance between first and second lane markings
+        self.lane_width = None  # set this in env.reset()
 
-    def build_lanes(self, nb_lanes):
+    # Recording meta data
+    @staticmethod
+    def read_recoding_meta(file_path, reload=False):
+        # Check if concatenated file already exists:
+        if os.path.isfile(os.path.join(file_path, 'all_recordingMeta.pkl')) and not reload:
+            df_recs = pd.read_pickle(os.path.join(file_path, 'all_recordingMeta.pkl'))
+            return df_recs
+        # Else read in the individual recordings, concatenate, and save them
+        df_rec_dict = dict()
+        recordings = [f'{i + 1:02d}' for i in range(60)]
+        for rec in recordings:
+            # Recording meta data dataframes
+            df_rec = pd.read_csv(os.path.join(file_path, f'{rec}_recordingMeta.csv'),
+                                 header=0,
+                                 index_col=False,
+                                 names=(
+                                     'Recording ID',
+                                     'Frame Rate',
+                                     'Location ID',
+                                     'Speed Limit',
+                                     'Month',
+                                     'Weekday',
+                                     'Start Time',
+                                     'Duration',
+                                     'Total Driven Distance',
+                                     'Total Driven Time',
+                                     'Number Vehicles',
+                                     'Number Cars',
+                                     'Number Trucks',
+                                     'Upper Lane Markings',
+                                     'Lower Lane Markings'
+                                 ))
+            # Calculate number of lanes based on lane markings
+            num_lanes = len(df_rec["Upper Lane Markings"].values[0].split(";")) + \
+                        len(df_rec["Lower Lane Markings"].values[0].split(";"))
+            df_rec["Number Lanes"] = num_lanes - 2
+            df_rec['Upper Lane Markings'] = df_rec['Upper Lane Markings'].apply(lambda x: np.fromstring(x, sep=';'))
+            df_rec['Lower Lane Markings'] = df_rec['Lower Lane Markings'].apply(lambda x: np.fromstring(x, sep=';'))
+
+            # Add to dict
+            df_rec_dict[rec] = df_rec
+        # Concatenate and save
+        df_recs = pd.concat([df_rec_dict[rec] for rec in recordings], ignore_index=True)
+        df_recs.to_pickle(os.path.join(file_path, 'all_recordingMeta.pkl'))
+        return df_recs
+
+    def build_lanes(self, time_slot):
         upper_lanes = self.rec_meta[self.rec_meta['Recording ID'] ==
-                                    int(self.recording)]["Upper Lane Markings"].values[0] * SCALE + Y_OFFSET
+                                    time_slot]["Upper Lane Markings"].values[0] * SCALE + Y_OFFSET
         lower_lanes = self.rec_meta[self.rec_meta['Recording ID'] ==
-                                    int(self.recording)]["Lower Lane Markings"].values[0] * SCALE + Y_OFFSET
+                                    time_slot]["Lower Lane Markings"].values[0] * SCALE + Y_OFFSET
 
         lane_markings = [
             {'min': upper_lanes[i],
@@ -351,6 +343,7 @@ class HighD(Simulator):
                                    'Vehicle Velocity X',
                                    'Vehicle Velocity Y',
                                    'Vehicle Acceleration X',
+                                   'Vehicle Acceleration Y',
                                    'Back Sight Distance',
                                    'Spacing',
                                    'Headway',
@@ -377,7 +370,6 @@ class HighD(Simulator):
                                                df_track['Vehicle Velocity Y']**2)
         df_track['Vehicle Acceleration'] = np.sqrt(df_track['Vehicle Acceleration X'] ** 2 +
                                                    df_track['Vehicle Acceleration Y'] ** 2)
-        df_track['Frame ID'] = df_track['Frame ID'] - 1  # re-index frames to 0
 
         # Merge recordings meta into tracks df on Recording ID key
         rec_cols = ['Recording ID',
@@ -418,18 +410,18 @@ class HighD(Simulator):
 
     def _get_data_frame(self, time_slot, x_max):
         if time_slot in self.cached_data_frames:
-            return self.cached_data_frames[time_slot]
-        file_name = f'traffic-data/xy-trajectories/highD/'
-        if os.path.isfile(os.path.join(file_name, f'{time_slot}.pkl')):
-            pkl_file = os.path.join(file_name, f'{time_slot}.pkl')
-            print(f'Loading trajectories from {pkl_file}')
+            return self.cached_data_frames[f'{time_slot}']
+        file_path = f'traffic-data/xy-trajectories/highD/'
+        if os.path.isfile(os.path.join(file_path, f'{time_slot}.pkl')):
+            pkl_file = os.path.join(file_path, f'{time_slot}.pkl')
+            print(f'Loading trajectories from {pkl_file}...')
             df = pd.read_pickle(pkl_file)
-        elif os.path.isfile(os.path.join(file_name, f'{time_slot}_tracks.csv')):
-            csv_file = os.path.join(file_name, f'{time_slot}_tracks.csv')
+        elif os.path.isfile(os.path.join(file_path, f'{time_slot}_tracks.csv')):
+            csv_file = os.path.join(file_path, f'{time_slot}_tracks.csv...')
             print(f'Loading trajectories from {csv_file}')
-            df = self._read_data_frame(file_name, time_slot)
+            df = self._read_data_frame(file_path, time_slot)
         else:
-            raise FileNotFoundError(f'{file_name + time_slot}.{{pkl,_tracks.csv}} not found.')
+            raise FileNotFoundError(f'{file_path + time_slot}.{{pkl,_tracks.csv}} not found.')
 
         # Remove cars that spontaneously appear on screen
         right_threshold = 150  # any left-to-right cars whose first frame x location is > than this should be removed
@@ -491,9 +483,28 @@ class HighD(Simulator):
             self.episode += 1
             ################################################################################
 
-        super().reset(control=(frame is None))
         # print(f'\n > Env on process {os.getpid()} is resetting')
         self._t_slot = self._time_slots[time_slot] if time_slot is not None else self.random.choice(self._time_slots)
+        # Filter down rec meta to specific time slot
+        rec_meta_t_slot = self.rec_meta.loc[self.rec_meta['Recording ID'] == int(self._t_slot)]
+        # Set variables previously set to None
+        self.nb_lanes = rec_meta_t_slot['Number Lanes'].values[0]
+        self.lanes = self.build_lanes(int(self._t_slot))
+        upper_lanes = rec_meta_t_slot['Upper Lane Markings'].values[0]
+        lower_lanes = rec_meta_t_slot['Lower Lane Markings'].values[0]
+        lane_widths = np.array(
+            [upper_lanes[i+1] - upper_lanes[i] for i in range(len(upper_lanes) - 1)] +
+            [lower_lanes[i+1] - lower_lanes[i] for i in range(len(lower_lanes) - 1)]
+        )
+        self.lane_width = lane_widths.mean() * SCALE  # average distance between lane markings
+
+        super().reset(control=(frame is None))
+        # # Uncomment below to display actual image from recording
+        # photo = pygame.image.load(f'HighD/{self._t_slot}_highway.png')
+        # photo = pygame.transform.scale(photo, self.screen_size)
+        # self.photos = (photo,)
+        # self.photos_rect = (self.photos[0].get_rect().move([0, Y_OFFSET]),)
+
         self.df = self._get_data_frame(self._t_slot, self.screen_size[0])
         self.max_frame = max(self.df['Frame ID'])
         if vehicle_id:
