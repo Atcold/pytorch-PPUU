@@ -15,12 +15,12 @@ import torch.nn as nn
 parser = argparse.ArgumentParser()
 # data params
 parser.add_argument('-seed', type=int, default=1)
-parser.add_argument('-v', type=int, default=4)
-parser.add_argument('-dataset', type=str, default='i80')
+parser.add_argument('-v', type=int, default=0)
+parser.add_argument('-dataset', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3, help='layers in frame encoder/decoders')
-parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/')
+parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v13/')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=8)
@@ -36,6 +36,7 @@ parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', action='store_true')
 opt = parser.parse_args()
+opt.data_dir = os.path.join(opt.data_dir, f'data_{opt.dataset}_v{opt.v}')
 
 os.system('mkdir -p ' + opt.model_dir)
 
@@ -135,9 +136,6 @@ def expand(x, actions, nrep):
         return [images_, states_, None], actions_
     else:
         return [images_, states_]
-
-
-
 
 
 def train(nbatches, npred):
