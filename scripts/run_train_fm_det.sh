@@ -1,6 +1,6 @@
-#!/bin/bash
+set -k
 
-for model in fwd-cnn; do
+for model in "fwd-cnn"; do
     for lrt in 0.0001; do
         for nfeature in 256; do
             for warmstart in 0; do
@@ -13,9 +13,23 @@ for model in fwd-cnn; do
                                         for bsize in 8; do
                                             for seed in 1; do
                                                 for dropout in 0.1; do
-                                                    for l2reg in 0.0 0.01 0.001 0.0001; do  
-                                                        sbatch submit_train_fm.slurm $model $lrt $nfeature $warmstart $ncond $npred $beta $nz $z_dropout $layers $bsize $seed $dropout $l2reg
-                                                    done
+                                                    sbatch \
+                                                        --output ../logs/highD/fm/trainFM-highD.out \
+                                                        --error ../logs/highD/fm/trainFM-highD.err \
+                                                        submit_train_fm.slurm \
+                                                            model=$model \
+                                                            lrt=$lrt \
+                                                            nfeature=$nfeature \
+                                                            warmstart=$warmstart \
+                                                            ncond=$ncond \
+                                                            npred=$npred \
+                                                            beta=$beta \
+                                                            nz=$nz \
+                                                            z_dropout=$z_dropout \
+                                                            layers=$layers \
+                                                            batch_size=$bsize \
+                                                            seed=$seed \
+                                                            dropout=$dropout
                                                 done
                                             done
                                         done
