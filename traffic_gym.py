@@ -6,12 +6,13 @@ import random
 import numpy as np
 import scipy.misc
 import sys, pickle
+# from skimage import measure, transform
 # from matplotlib.image import imsave
+import PIL
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core, spaces
 import os
 from imageio import imwrite
-from torch.autograd import Variable
 
 # from skimage.transform import rescale
 
@@ -98,6 +99,7 @@ class Car:
         self._error = 0
         self._states = list()
         self._states_image = list()
+        self._ego_car_image = None
         self._actions = list()
         self._safe_factor = random.gauss(1.5, 0)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
@@ -450,7 +452,9 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
-        sub_rot_array_scaled = scipy.misc.imresize(sub_rot_array, scale)  # is deprecated, need to be replaced
+        new_h = int(scale*sub_rot_array.shape[0])
+        new_w = int(scale*sub_rot_array.shape[1])
+        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
@@ -519,6 +523,8 @@ class Car:
             self._states.append(self._get_obs(*object_))
         elif object_name == 'state_image':
             self._states_image.append(self._get_observation_image(*object_))
+        elif object_name == 'ego_car_image' and self._ego_car_image is None:
+            self._ego_car_image = self._get_observation_image(*object_)[0]
 
     def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
         if len(self._states_image) < n: return None  # no enough samples
@@ -527,6 +533,10 @@ class Car:
         transpose = list(zip(*self._states_image))
         state_images = transpose[0]
         state_images = torch.stack(state_images).permute(0, 3, 1, 2)[-n:]
+        ego_car_new_shape = list(state_images.shape)
+        ego_car_new_shape[1] = 1
+        ego_car_channel = self._ego_car_image[:, :, 2][None, None, :].expand(ego_car_new_shape)
+        state_images = torch.cat((state_images, ego_car_channel), 1)
 
         zip_ = list(zip(*self._states))  # n × (obs, mask, cost) -> (n × obs, n × mask, n × cost)
         states = torch.stack(zip_[0])[:, 0][-n:]  # select the ego-state (of 1 + 6 states we keep track)
@@ -590,6 +600,7 @@ class Car:
                     'proximity_cost': proximity_cost,
                     'mask': mask,
                     'frames': frames,
+                    'ego_car': self._ego_car_image.permute(2, 0, 1),
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -724,8 +735,8 @@ class Simulator(core.Env):
         states -= s_mean.view(1, 1, 4).expand(states.size())
         states /= (1e-8 + s_std.view(1, 1, 4).expand(states.size()))
 
-        images = Variable(images.float())
-        states = Variable(states.float())
+        images = images.float()
+        states = states.float()
         _, _, _, actions = self.policy_network(images, states, sample=True, unnormalize=True)
         actions = actions.view(bsize, -1, 2)
         return actions
@@ -976,8 +987,9 @@ class Simulator(core.Env):
                     # Draw myself blue on the ego_surface
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
-                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
+                    # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
+                    v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame))
                     # Store whole history, if requested
                     if self.store_sim_video:
                         if self.ghost:

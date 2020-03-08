@@ -1,7 +1,6 @@
 import torch, numpy, argparse, pdb, os, time, math, random, re
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import models, planning
@@ -20,9 +19,8 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='fwd-cnn')
-parser.add_argument('-policy', type=str, default='policy-gauss')
-parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-policy', type=str, default='policy-deterministic')
+parser.add_argument('-model_dir', type=str, default='models/')
 parser.add_argument('-ncond', type=int, default=20)
 parser.add_argument('-npred', type=int, default=16)
 parser.add_argument('-batch_size', type=int, default=8)
@@ -56,6 +54,11 @@ parser.add_argument('-load_model_file', type=str, default='')
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-test_only', type=int, default=0)
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
+parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 opt.n_inputs = 4
@@ -126,7 +129,6 @@ if opt.actions_subsample == -1:
 
 model.intype('gpu')
 model.cuda()
-model.disable_unet=False
 
 
 print('[loading data]')
@@ -149,7 +151,7 @@ def compute_loss(targets, predictions, gamma=1.0, r=True):
         loss_i *= gamma_mask
         loss_s *= gamma_mask
         loss_c *= gamma_mask
-    return loss_i.mean(), loss_s.mean(), Variable(torch.zeros(1)), loss_p.mean()
+    return loss_i.mean(), loss_s.mean(), torch.zeros(1), loss_p.mean()
 
 def train(nbatches, npred):
     gamma_mask = torch.Tensor([opt.gamma**t for t in range(npred)]).view(1, -1).cuda()
@@ -159,14 +161,11 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = planning.train_policy_net_mper(model, inputs, targets, dropout=opt.p_dropout, model_type=model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
 #        proximity_cost, lane_cost = pred[2][:, :, 0], pred[2][:, :, 1]
-#        proximity_cost = proximity_cost * Variable(gamma_mask)
-#        lane_cost = lane_cost * Variable(gamma_mask)
+#        proximity_cost = proximity_cost * gamma_mask
+#        lane_cost = lane_cost * gamma_mask
 #        loss_c = proximity_cost.mean() + opt.lambda_lane * lane_cost.mean()
         loss_policy = loss_i + loss_s + opt.lambda_h*loss_p
         if opt.loss_c == 1:
@@ -199,9 +198,6 @@ def test(nbatches, npred):
     total_loss_i, total_loss_s, total_loss_c, total_loss_policy, total_loss_p, n_updates = 0, 0, 0, 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('test', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, pred_actions = planning.train_policy_net_mper(model, inputs, targets, targetprop = opt.targetprop, dropout=0.0, model_type = model_type)
         loss_i, loss_s, loss_c_, loss_p = compute_loss(targets, pred)
         loss_policy = loss_i + loss_s
@@ -245,6 +241,9 @@ if opt.test_only == 1:
     print('[testing]')
     valid_losses = test(10, 200)
 else:
+
+    writer = utils.create_tensorboard_writer(opt)
+
     print('[training]')
     utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
     npred = opt.npred if opt.npred != -1 else 16
@@ -263,6 +262,20 @@ else:
                     'n_iter': n_iter},
                    opt.model_file + '.model')
         model.intype('gpu')
+
+        if writer is not None:
+            writer.add_scalar('Loss/train_state_img', train_losses[0], i)
+            writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
+            writer.add_scalar('Loss/train_costs', train_losses[2], i)
+            writer.add_scalar('Loss/train_policy', train_losses[3], i)
+            writer.add_scalar('Loss/train_relative_entropy', train_losses[4], i)
+
+            writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
+            writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
+            writer.add_scalar('Loss/validation_costs', valid_losses[2], i)
+            writer.add_scalar('Loss/validation_policy', valid_losses[3], i)
+            writer.add_scalar('Loss/validation_relative_entropy', valid_losses[4], i)
+
         log_string = f'step {n_iter} | npred {npred} | bsize {bsize} | esize {opt.epoch_size} | '
         log_string += utils.format_losses(train_losses[0], train_losses[1], split='train')
         log_string += utils.format_losses(valid_losses[0], valid_losses[1], split='valid')
@@ -271,3 +284,5 @@ else:
         if i > 0 and(i % opt.curriculum_length == 0) and (opt.npred == -1) and npred < 400:
             npred += 8
 
+    if writer is not None:
+        writer.close()

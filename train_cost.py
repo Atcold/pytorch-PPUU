@@ -1,12 +1,12 @@
 import torch, numpy, argparse, pdb, os, time, math, random
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import importlib
 import models
 import torch.nn as nn
+import utils
 
 #################################################
 # Train an action-conditional forward model
@@ -18,7 +18,7 @@ parser.add_argument('-seed', type=int, default=1)
 parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-model_dir', type=str, default='models/')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=64)
@@ -32,6 +32,11 @@ parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step200000.model')
 #parser.add_argument('-mfile', type=str, default='model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-warmstart=0-seed=1.step200000.model')
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
+parser.add_argument('-tensorboard_dir', type=str, default='models',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)
@@ -72,9 +77,6 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = model(inputs, actions, targets, z_dropout=0)
         pred_cost = cost(pred[0].view(opt.batch_size*opt.npred, 1, 3, opt.height, opt.width), pred[1].view(opt.batch_size*opt.npred, 1, 4))
         loss = F.mse_loss(pred_cost.view(opt.batch_size, opt.npred, 2), targets[2])
@@ -94,9 +96,6 @@ def test(nbatches, npred):
     total_loss = 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pred, _ = model(inputs, actions, targets, z_dropout=0)
         pred_cost = cost(pred[0].view(opt.batch_size*opt.npred, 1, 3, opt.height, opt.width), pred[1].view(opt.batch_size*opt.npred, 1, 4))
         loss = F.mse_loss(pred_cost.view(opt.batch_size, opt.npred, 2), targets[2])
@@ -107,7 +106,7 @@ def test(nbatches, npred):
     total_loss /= nbatches
     return total_loss
 
-
+writer = utils.create_tensorboard_writer(opt)
 
 
 print('[training]')
@@ -127,7 +126,12 @@ for i in range(200):
                     'n_iter': n_iter}, opt.model_file + f'.step{n_iter}.model')
         torch.save(model, opt.model_file + f'.step{n_iter}.model')
     model.intype('gpu')
+    if writer is not None:
+        writer.add_scalar('Loss/train', train_loss, i)
+        writer.add_scalar('Loss/valid', valid_loss, i)
     log_string = f'step {n_iter} | train: {train_loss} | valid: {valid_loss}' 
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
+if writer is not None:
+    writer.close()

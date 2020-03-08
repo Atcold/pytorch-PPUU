@@ -5,15 +5,20 @@ channels:
 dependencies:
   - imageio
   - pandas
-  - python=3.7
-  - pytorch=1.0.1
-  - scipy=1.2.0
+  - python=3.8
+  - pytorch>1.2.0
+  - scipy
   - matplotlib
   - pip
   - jupyter
+  - scikit-learn
+  - scikit-image
   - pip:
     - gym
-    - pygame
-    - scikit-learn
+    - pygame>=2.0.0.dev6
     - jupytext
     - ipdb
+    - tb-nightly
+    - moviepy
+    - bqplot
+    - astropy

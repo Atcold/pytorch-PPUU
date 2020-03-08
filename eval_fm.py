@@ -9,7 +9,7 @@ import torch.nn.functional as fun
 import utils
 from dataloader import DataLoader
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 parser.add_argument('-dataset', type=str, default='i80')
 parser.add_argument('-debug', action='store_true')
 parser.add_argument('-batch_size', type=int, default=4)
@@ -28,7 +28,7 @@ parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-noise', type=float, default=0.0)
 parser.add_argument('-n_mixture', type=int, default=20)
 parser.add_argument('-graph_density', type=float, default=0.001)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/')
+parser.add_argument('-model_dir', type=str, default='models/')
 M1 = 'model=fwd-cnn-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-gclip=5.0-' + \
      'warmstart=0-seed=1.step200000.model'
 M2 = 'model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-' + \
@@ -52,7 +52,7 @@ np.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 
 opt.save_video = (opt.save_video == 1)
-opt.eval_dir = opt.model_dir + f'/eval/'
+opt.eval_dir = opt.model_dir + f'eval/'
 
 
 print(f'[loading {opt.model_dir + opt.mfile}]')
@@ -66,9 +66,8 @@ model.eval()
 dataloader = DataLoader(None, opt, opt.dataset)
 # model.opt.npred = opt.npred  # instruct the model about how many predictions we want it to produce
 model.opt.alpha = 0
-model.disable_unet = False
 
-dirname = f'{opt.eval_dir}/{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
+dirname = f'{opt.eval_dir}{opt.mfile}-nbatches={opt.n_batches}-npred={opt.npred}-nsample={opt.n_samples}'
 if '-ten' in opt.mfile:
     dirname += f'-sampling={opt.sampling}'
     if opt.sampling == 'knn':

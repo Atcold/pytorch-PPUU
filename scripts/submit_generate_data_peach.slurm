@@ -8,8 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
 
 cd ../
-srun python -u generate_trajectories.py -time_slot $1 -map peach
+srun python -u generate_trajectories.py -time_slot $time_slot -map peach
 

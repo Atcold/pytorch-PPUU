@@ -24,6 +24,7 @@ class DataLoader:
             self.costs = []
             self.states = []
             self.ids = []
+            self.ego_car_images = []
             for df in data_files:
                 combined_data_path = f'{data_dir}/{df}/all_data.pth'
                 if os.path.isfile(combined_data_path):
@@ -34,6 +35,7 @@ class DataLoader:
                     self.costs += data.get('costs')
                     self.states += data.get('states')
                     self.ids += data.get('ids')
+                    self.ego_car_images += data.get('ego_car')
                 else:
                     print(data_dir)
                     images = []
@@ -42,6 +44,7 @@ class DataLoader:
                     states = []
                     ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
                     ids.sort()
+                    ego_car_images = []
                     for f in ids:
                         print(f'[loading {f}]')
                         fd = pickle.load(open(f, 'rb'))
@@ -57,6 +60,7 @@ class DataLoader:
                             fd.get('lane_cost')[:Ta].view(-1, 1),
                         ), 1),)
                         states.append(fd['states'])
+                        ego_car_images.append(fd['ego_car'])
 
                     print(f'Saving {combined_data_path} to disk')
                     torch.save({
@@ -65,12 +69,14 @@ class DataLoader:
                         'costs': costs,
                         'states': states,
                         'ids': ids,
+                        'ego_car': ego_car_images,
                     }, combined_data_path)
                     self.images += images
                     self.actions += actions
                     self.costs += costs
                     self.states += states
                     self.ids += ids
+                    self.ego_car_images += ego_car_images
         else:
             assert False, 'Data set not supported'
 
@@ -148,7 +154,7 @@ class DataLoader:
         if npred == -1:
             npred = self.opt.npred
 
-        images, states, actions, costs, ids, sizes = [], [], [], [], [], []
+        images, states, actions, costs, ids, sizes, ego_cars = [], [], [], [], [], [], []
         nb = 0
         T = self.opt.ncond + npred
         while nb < self.opt.batch_size:
@@ -162,6 +168,7 @@ class DataLoader:
                 states.append(self.states[s][t : t + T, 0].to(device))  # discard 6 neighbouring cars
                 costs.append(self.costs[s][t : t + T].to(device))
                 ids.append(self.ids[s])
+                ego_cars.append(self.ego_car_images[s].to(device))
                 splits = self.ids[s].split('/')
                 time_slot = splits[-2]
                 car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
@@ -180,7 +187,6 @@ class DataLoader:
             actions = self.normalise_action(actions)
             states = self.normalise_state_vector(states)
         images = self.normalise_state_image(images)
-
         costs = torch.stack(costs)
 
         # |-----ncond-----||------------npred------------||
@@ -196,6 +202,7 @@ class DataLoader:
         t0 -= 1; t1 -= 1
         actions       = actions[:, t0:t1].float().contiguous()
         # input_actions = actions[:, :t0].float().contiguous()
+        ego_cars = ego_cars.float().contiguous()
         #          n_cond                      n_pred
         # <---------------------><---------------------------------->
         # .                     ..                                  .
@@ -224,7 +231,22 @@ class DataLoader:
         # |                          car_size                       |  2          | tensor
         # +---------------------------------------------------------+             v
 
-        return [input_images, input_states], actions, [target_images, target_states, target_costs], ids, sizes
+        return [input_images, input_states, ego_cars], actions, [target_images, target_states, target_costs], ids, sizes
+
+    @staticmethod
+    def normalise_state_image(images):
+        return images.float().div_(255.0)
+
+    def normalise_state_vector(self, states):
+        shape = (1, 1, 4) if states.dim() == 3 else (1, 4)  # dim = 3: state sequence, dim = 2: single state
+        states -= self.s_mean.view(*shape).expand(states.size()).to(states.device)
+        states /= (1e-8 + self.s_std.view(*shape).expand(states.size())).to(states.device)
+        return states
+
+    def normalise_action(self, actions):
+        actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
+        actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
+        return actions
 
     @staticmethod
     def normalise_state_image(images):

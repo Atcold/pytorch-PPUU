@@ -1,3 +1,4 @@
+# Allows named arguments
 set -k
 
 for model in "fwd-cnn"; do

@@ -2,7 +2,6 @@ import torch, numpy, argparse, pdb, os, math
 import utils
 import models
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
@@ -18,8 +17,7 @@ parser.add_argument('-v', type=int, default=4)
 parser.add_argument('-model', type=str, default='policy-il-mdn')
 parser.add_argument('-layers', type=int, default=3)
 parser.add_argument('-fmap_geom', type=int, default=1)
-parser.add_argument('-data_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/data/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v11/policy_networks/')
+parser.add_argument('-model_dir', type=str, default='models/policy_networks/')
 parser.add_argument('-n_episodes', type=int, default=20)
 parser.add_argument('-ncond', type=int, default=10)
 parser.add_argument('-npred', type=int, default=20)
@@ -37,6 +35,11 @@ parser.add_argument('-epoch_size', type=int, default=1000)
 parser.add_argument('-combine', type=str, default='add')
 parser.add_argument('-grad_clip', type=float, default=50)
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
+parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 
 
@@ -75,9 +78,6 @@ def train(nbatches):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
@@ -96,9 +96,6 @@ def test(nbatches):
     total_loss, nb = 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
         pi, mu, sigma, _ = policy(inputs[0], inputs[1])
         loss = utils.mdn_loss_fn(pi, sigma, mu, actions.view(opt.batch_size, -1))
         if not math.isnan(loss.item()):
@@ -110,6 +107,7 @@ def test(nbatches):
 
 
 
+writer = utils.create_tensorboard_writer(opt)
 
 print('[training]')
 best_valid_loss = 1e6
@@ -122,6 +120,13 @@ for i in range(200):
         torch.save(policy, opt.model_file + '.model')
         policy.intype('gpu')
 
+    if writer is not None:
+        writer.add_scalar('Loss/train', train_loss, i)
+        writer.add_scalar('Loss/valid', valid_loss, i)
+
     log_string = f'iter {opt.epoch_size*i} | train loss: {train_loss:.5f}, valid: {valid_loss:.5f}, best valid loss: {best_valid_loss:.5f}'
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
+
+    if writer is not None:
+        writer.close()

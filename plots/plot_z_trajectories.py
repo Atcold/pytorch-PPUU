@@ -3,7 +3,6 @@ import gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 import torch.nn as nn
 from gym.envs.registration import register
 import scipy.misc
@@ -31,7 +30,7 @@ parser.add_argument('-n_batches', type=int, default=200)
 parser.add_argument('-n_samples', type=int, default=10)
 parser.add_argument('-sampling', type=str, default='fp')
 parser.add_argument('-topz_sample', type=int, default=10)
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models/')
+parser.add_argument('-model_dir', type=str, default='models/')
 parser.add_argument('-mfile', type=str, default='model=fwd-cnn-ae-fp-bsize=16-ncond=10-npred=20-lrt=0.0001-nhidden=100-nfeature=128-decoder=0-combine=add-gclip=1-nz=32-beta=0.0-nmix=1-warmstart=1.model')
 parser.add_argument('-cuda', type=int, default=1)
 parser.add_argument('-save_video', type=int, default=1)
@@ -60,9 +59,6 @@ def compute_pz(nbatches):
     for j in range(nbatches):
         print('[estimating z distribution: {:2.1%}]'.format(float(j)/nbatches), end="\r")
         inputs, actions, targets = dataloader.get_batch_fm('train', opt.npred, (opt.cuda == 1))
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = utils.Variable(actions)
         pred, loss_kl = model(inputs, actions, targets, save_z = True)
         del inputs, actions, targets
 

@@ -10,7 +10,6 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=mbh305@nyu.edu
 
 source activate py35
 cd ../

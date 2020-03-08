@@ -1,12 +1,15 @@
 import torch, numpy, argparse, pdb, os, time, math, random
 import utils
 from dataloader import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import importlib
 import models
 import torch.nn as nn
+
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 #################################################
 # Train an action-conditional forward model
@@ -19,8 +22,8 @@ parser.add_argument('-v', type=int, default=0)
 parser.add_argument('-dataset', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
 parser.add_argument('-model', type=str, default='fwd-cnn')
 parser.add_argument('-layers', type=int, default=3, help='layers in frame encoder/decoders')
-parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/')
-parser.add_argument('-model_dir', type=str, default='/misc/vlgscratch4/LecunGroup/nvidia-collab/models_v13/')
+parser.add_argument('-data_dir', type=str, default='traffic-data/state-action-cost/data_i80_v0/')
+parser.add_argument('-model_dir', type=str, default='models')
 parser.add_argument('-ncond', type=int, default=20, help='number of conditioning frames')
 parser.add_argument('-npred', type=int, default=20, help='number of predictions to make with unrolled fwd model')
 parser.add_argument('-batch_size', type=int, default=8)
@@ -35,6 +38,11 @@ parser.add_argument('-grad_clip', type=float, default=5.0)
 parser.add_argument('-epoch_size', type=int, default=2000)
 parser.add_argument('-warmstart', type=int, default=0, help='initialize with pretrained model')
 parser.add_argument('-debug', action='store_true')
+parser.add_argument('-enable_tensorboard', action='store_true',
+                    help='Enables tensorboard logging.')
+parser.add_argument('-tensorboard_dir', type=str, default='models',
+                    help='path to the directory where to save tensorboard log. If passed empty path' \
+                         ' no logs are saved.')
 opt = parser.parse_args()
 opt.data_dir = os.path.join(opt.data_dir, f'data_{opt.dataset}_v{opt.v}')
 
@@ -92,7 +100,7 @@ else:
     # specify deterministic model we use to initialize parameters with
     if opt.warmstart == 1:
         prev_model = f'{opt.model_dir}/model=fwd-cnn-layers={opt.layers}-bsize=8-ncond={opt.ncond}-npred={opt.npred}-lrt=0.0001-nfeature={opt.nfeature}-dropout={opt.dropout}-gclip=5.0'
-        prev_model += '-warmstart=0-seed=1.step200000.model'
+        prev_model += '-warmstart=0-seed=1.step400000.model'
     else:
         prev_model = ''
 
@@ -111,7 +119,7 @@ model.cuda()
 # training and testing functions. We will compute several losses:
 # loss_i: images
 # loss_s: states
-# loss_p: prior (optional)
+# loss_p: relative entropy (optional)
 
 def compute_loss(targets, predictions, reduction='mean'):
     target_images = targets[0]
@@ -144,10 +152,7 @@ def train(nbatches, npred):
     for i in range(nbatches):
         optimizer.zero_grad()
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('train', npred)
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p
@@ -175,11 +180,8 @@ def test(nbatches):
     total_loss_i, total_loss_s, total_loss_p = 0, 0, 0
     for i in range(nbatches):
         inputs, actions, targets, _, _ = dataloader.get_batch_fm('valid')
-        inputs = utils.make_variables(inputs)
-        targets = utils.make_variables(targets)
-        actions = Variable(actions)
 
-        pred, loss_p = model(inputs, actions, targets, z_dropout=opt.z_dropout)
+        pred, loss_p = model(inputs[: -1], actions, targets, z_dropout=opt.z_dropout)
         loss_p = loss_p[0]
         loss_i, loss_s = compute_loss(targets, pred)
         loss = loss_i + loss_s + opt.beta*loss_p
@@ -194,12 +196,23 @@ def test(nbatches):
     total_loss_p /= nbatches
     return total_loss_i, total_loss_s, total_loss_p
 
+writer = utils.create_tensorboard_writer(opt)
 
 print('[training]')
 for i in range(200):
     t0 = time.time()
     train_losses = train(opt.epoch_size, opt.npred)
     valid_losses = test(int(opt.epoch_size / 2))
+
+    if writer is not None:
+        writer.add_scalar('Loss/train_state_img', train_losses[0], i)
+        writer.add_scalar('Loss/train_state_vct', train_losses[1], i)
+        writer.add_scalar('Loss/train_relative_entropy', train_losses[2], i)
+
+        writer.add_scalar('Loss/validation_state_img', valid_losses[0], i)
+        writer.add_scalar('Loss/validation_state_vct', valid_losses[1], i)
+        writer.add_scalar('Loss/validation_relative_entropy', valid_losses[2], i)
+
     n_iter += opt.epoch_size
     model.cpu()
     torch.save({'model': model,
@@ -214,3 +227,5 @@ for i in range(200):
     print(log_string)
     utils.log(opt.model_file + '.log', log_string)
 
+if writer is not None:
+    writer.close()

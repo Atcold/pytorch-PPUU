@@ -11,7 +11,6 @@
 #SBATCH --nodes=1
 #SBATCH --mem=48000
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
-#SBATCH --mail-user=canziani@nyu.edu
 
 eval "$(conda shell.bash hook)"
 conda activate PPUU
@@ -24,7 +23,7 @@ srun python train_MPUR.py \
     -z_updates $z_updates \
     -batch_size $batch_size \
     -lambda_l $lambda_l \
-    -infer_z $infer_z \
+    -lambda_o $lambda_o \
     -lambda_a $lambda_a \
     -seed $seed \
     -policy 'policy-deterministic'
