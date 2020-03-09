@@ -99,12 +99,12 @@ class HighDCar(Car):
         self.off_screen = self._frame >= self._max_t
         new_speed = self._get('speed', self._frame)
         a = (new_speed - self._speed) / self._dt
-        if self.id == 231:
-            df = self._df
-            print(f' Calc Speed: {new_speed / SCALE * 3.6:.2f} km/h', end=' ')
-            print(f'DF Speed: {df.at[df.index[self._frame], "Vehicle Velocity"] * 3.6:.2f} km\h', end=' ')
-            print(f'Calc Acc: {a / SCALE / 9.81: .2f} g', end=' ')
-            print(f'DF Acc: {df.at[df.index[self._frame], "Vehicle Acceleration"] / 9.81:.2f} g')
+        # if self.id == 231:
+        #     df = self._df
+        #     print(f' Calc Speed: {new_speed / SCALE * 3.6:.2f} km/h', end=' ')
+        #     print(f'DF Speed: {df.at[df.index[self._frame], "Vehicle Velocity"] * 3.6:.2f} km\h', end=' ')
+        #     print(f'Calc Acc: {a / SCALE / 9.81: .2f} g', end=' ')
+        #     print(f'DF Acc: {df.at[df.index[self._frame], "Vehicle Acceleration"] / 9.81:.2f} g')
 
         ortho_direction = np.array((self._direction[1], -self._direction[0]))
         new_direction = self._get('direction', self._frame)
