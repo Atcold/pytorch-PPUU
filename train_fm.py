@@ -85,8 +85,8 @@ if opt.layers == 3:
         'i80': {'h_height': 14, 'h_width': 3},
         'highD': {'h_height': 11, 'h_width': 2},
     }
-    opt.height = h_dim_dict[opt.dataset]['h_height']
-    opt.width = h_dim_dict[opt.dataset]['h_width']
+    opt.h_height = h_dim_dict[opt.dataset]['h_height']
+    opt.h_width = h_dim_dict[opt.dataset]['h_width']
 elif opt.layers == 4:
     opt.h_height = 7
     opt.h_width = 1
