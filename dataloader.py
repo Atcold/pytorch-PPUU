@@ -181,6 +181,7 @@ class DataLoader:
         states  = torch.stack(states)
         actions = torch.stack(actions)
         sizes   = torch.tensor(sizes)
+        ego_cars = torch.stack(ego_cars)
 
         # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
