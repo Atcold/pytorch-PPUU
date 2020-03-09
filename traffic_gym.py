@@ -577,7 +577,7 @@ class Car:
     def dump_state_image(self, save_dir='scratch/', mode='img'):
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
-        if len(transpose) == 0:
+        if len(transpose) == 0 or len(self._states) == 0:
             print(f'failure, {save_dir}')
             # print(transpose)
             return
