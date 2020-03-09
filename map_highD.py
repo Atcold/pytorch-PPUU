@@ -58,6 +58,7 @@ class HighDCar(Car):
         self._actions = list()
         self._states = list()
         self.states_image = list()
+        self._ego_car_image = None
         self.look_ahead = look_ahead
         self.screen_w = screen_w
         self._safe_factor = 1.5  # second, manually matching the data TODO: Check this number
@@ -66,9 +67,9 @@ class HighDCar(Car):
             # self._text = self.get_text(f'{self.id}: Lane {self.current_lane}', font)  # Uncomment to display lane #
         self.is_controlled = False
         self.collisions_per_frame = 0
-        if self.id == 231:
-            print(f'Initial calc speed: {self._speed / SCALE * 3.6:.2f} km/h', end=' ')
-            print(f'Initial DF Speed: {df.at[df.index[0], "Vehicle Velocity"] * 3.6:.2f} km\h')
+        # if self.id == 231:
+        #     print(f'Initial calc speed: {self._speed / SCALE * 3.6:.2f} km/h', end=' ')
+        #     print(f'Initial DF Speed: {df.at[df.index[0], "Vehicle Velocity"] * 3.6:.2f} km\h')
 
     @property
     def is_autonomous(self):
