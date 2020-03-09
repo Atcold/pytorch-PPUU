@@ -71,18 +71,26 @@ opt.model_file += f'-seed={opt.seed}'
 print(f'[will save model as: {opt.model_file}]')
 
 
-# parameters specific to the I-80 dataset
+# parameters specific to the dataset
 opt.n_inputs = 4
 opt.n_actions = 2
-opt.height = 117
-opt.width = 24
+dim_dict = {
+    'i80': {'height': 117, 'width': 24},
+    'highD': {'height': 90, 'width': 18},
+}
+opt.height = dim_dict[opt.dataset]['height']
+opt.width = dim_dict[opt.dataset]['width']
 if opt.layers == 3:
-    opt.h_height = 14
-    opt.h_width = 3
+    h_dim_dict = {
+        'i80': {'h_height': 14, 'h_width': 3},
+        'highD': {'h_height': 11, 'h_width': 2},
+    }
+    opt.height = h_dim_dict[opt.dataset]['h_height']
+    opt.width = h_dim_dict[opt.dataset]['h_width']
 elif opt.layers == 4:
     opt.h_height = 7
     opt.h_width = 1
-opt.hidden_size = opt.nfeature*opt.h_height*opt.h_width
+opt.hidden_size = opt.nfeature * opt.h_height * opt.h_width
 
 mfile = opt.model_file + '.model'
 

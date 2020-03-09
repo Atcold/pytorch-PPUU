@@ -99,11 +99,13 @@ class u_network(nn.Module):
             nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (4, 1), 2, 1),
             nn.Dropout2d(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (4, 3), 2, 0)
+            nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (5, 2), 2, 0) # TODO: hack to get highD data to work
+            # nn.ConvTranspose2d(self.opt.nfeature, self.opt.nfeature, (4, 3), 2, 0)
         )
 
-        assert(self.opt.layers == 3) # hardcoded sizes
-        self.hidden_size = self.opt.nfeature*3*2
+        assert(self.opt.layers == 3)  # hardcoded sizes
+        # self.hidden_size = self.opt.nfeature*3*2
+        self.hidden_size = self.opt.nfeature*2*2  # TODO: hack to get highD data to work
         self.fc = nn.Sequential(
             nn.Linear(self.hidden_size, self.opt.nfeature),
             nn.Dropout(p=opt.dropout, inplace=True),
@@ -135,7 +137,8 @@ class decoder(nn.Module):
                 nn.ConvTranspose2d(self.feature_maps[1], self.feature_maps[0], (5, 5), 2, (0, 1)),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (0, 1))
+                nn.ConvTranspose2d(self.feature_maps[0], self.n_out * 3, (3, 2), 2, (0, 0))  # TODO: This is a hack to get highD to work
+                # nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (0, 1))
             )
 
             self.h_reducer = nn.Sequential(
@@ -173,7 +176,8 @@ class decoder(nn.Module):
         n_hidden = self.feature_maps[-1]
 
         self.s_predictor = nn.Sequential(
-            nn.Linear(2*n_hidden, n_hidden),
+            # nn.Linear(2*n_hidden, n_hidden),
+            nn.Linear(n_hidden, n_hidden),  # TODO: This is a hack to get highD to work
             nn.Dropout(p=opt.dropout, inplace=True),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(n_hidden, n_hidden),
