@@ -1,18 +1,20 @@
 import bisect
-
-import pygame, pdb, torch
-import math, numpy
+import os
+import pickle
 import random
+import sys
+
 import numpy as np
-import scipy.misc
-import sys, pickle
+import pdb
+import pygame
+import torch
 # from skimage import measure, transform
 # from matplotlib.image import imsave
-import PIL
-from custom_graphics import draw_dashed_line, draw_text, draw_rect
+from PIL import Image
 from gym import core, spaces
-import os
 from imageio import imwrite
+
+from custom_graphics import draw_dashed_line, draw_text, draw_rect
 
 # from skimage.transform import rescale
 
@@ -454,7 +456,7 @@ class Car:
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
         new_h = int(scale*sub_rot_array.shape[0])
         new_w = int(scale*sub_rot_array.shape[1])
-        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
+        sub_rot_array_scaled = np.array(Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2))  # bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
