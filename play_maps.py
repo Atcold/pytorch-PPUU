@@ -3,6 +3,7 @@ import numpy
 import gym
 
 parser = argparse.ArgumentParser()
+parser.add_argument('-time-slot', type=int, default=0)
 parser.add_argument('-nb_conditions', type=int, default=10)
 parser.add_argument('-display', type=int, default=1)
 parser.add_argument('-map', type=str, default='i80', choices={'ai', 'i80', 'us101', 'lanker', 'peach', 'highD'})
@@ -73,7 +74,7 @@ env = gym.make(env_names[opt.map])
 
 for episode in range(opt.nb_episodes):
     # env.reset(frame=int(input('Frame: ')), time_slot=0)
-    env.reset(frame=0, time_slot=0)
+    env.reset(frame=0, time_slot=opt.time_slot)
 
     done = False
     while not done:
