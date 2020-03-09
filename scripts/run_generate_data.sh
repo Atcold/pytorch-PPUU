@@ -19,7 +19,7 @@ echo "Map: $MAP, time slots: $(eval echo {0..$T})"
 
 for t in $(eval echo {0..$T}); do  # time slot
     sbatch \
-        --output ../logs/${MAP}/generate_data/_ts${t}.out \
+        --output ../logs/${MAP}/generate_data/${MAP}_ts${t}.out \
         --error ../logs/${MAP}/generate_data/${MAP}_ts${t}.err \
         submit_generate_data_${MAP}.slurm time_slot=$t
 done
