@@ -15,7 +15,7 @@ class DataLoader:
             data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
             if single_shard:
                 # quick load for debugging
-                data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
+                data_files = [f'{next(os.walk(data_dir))[1][0]}']
             else:
                 data_files = next(os.walk(data_dir))[1]
 
