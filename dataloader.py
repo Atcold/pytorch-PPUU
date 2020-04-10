@@ -13,72 +13,73 @@ class DataLoader:
 
         if dataset == 'i80' or dataset == 'us101':
             data_dir = f'traffic-data/state-action-cost/data_{dataset}_v0'
-            if single_shard:
-                # quick load for debugging
-                data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
-            else:
-                data_files = next(os.walk(data_dir))[1]
-
-            self.images = []
-            self.actions = []
-            self.costs = []
-            self.states = []
-            self.ids = []
-            self.ego_car_images = []
-            for df in data_files:
-                combined_data_path = f'{data_dir}/{df}/all_data.pth'
-                if os.path.isfile(combined_data_path):
-                    print(f'[loading data shard: {combined_data_path}]')
-                    data = torch.load(combined_data_path)
-                    self.images += data.get('images')
-                    self.actions += data.get('actions')
-                    self.costs += data.get('costs')
-                    self.states += data.get('states')
-                    self.ids += data.get('ids')
-                    self.ego_car_images += data.get('ego_car')
-                else:
-                    print(data_dir)
-                    images = []
-                    actions = []
-                    costs = []
-                    states = []
-                    ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
-                    ids.sort()
-                    ego_car_images = []
-                    for f in ids:
-                        print(f'[loading {f}]')
-                        fd = pickle.load(open(f, 'rb'))
-                        Ta = fd['actions'].size(0)
-                        Tp = fd['pixel_proximity_cost'].size(0)
-                        Tl = fd['lane_cost'].size(0)
-                        # assert Ta == Tp == Tl  # TODO Check why there are more costs than actions
-                        # if not(Ta == Tp == Tl): pdb.set_trace()
-                        images.append(fd['images'])
-                        actions.append(fd['actions'])
-                        costs.append(torch.cat((
-                            fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
-                            fd.get('lane_cost')[:Ta].view(-1, 1),
-                        ), 1),)
-                        states.append(fd['states'])
-                        ego_car_images.append(fd['ego_car'])
-
-                    print(f'Saving {combined_data_path} to disk')
-                    torch.save({
-                        'images': images,
-                        'actions': actions,
-                        'costs': costs,
-                        'states': states,
-                        'ids': ids,
-                        'ego_car': ego_car_images,
-                    }, combined_data_path)
-                    self.images += images
-                    self.actions += actions
-                    self.costs += costs
-                    self.states += states
-                    self.ids += ids
-                    self.ego_car_images += ego_car_images
         else:
-            assert False, 'Data set not supported'
+            data_dir = dataset
+
+        if single_shard:
+            # quick load for debugging
+            data_files = [f'{next(os.walk(data_dir))[1][0]}.txt/']
+        else:
+            data_files = next(os.walk(data_dir))[1]
+
+        self.images = []
+        self.actions = []
+        self.costs = []
+        self.states = []
+        self.ids = []
+        self.ego_car_images = []
+        for df in data_files:
+            combined_data_path = f'{data_dir}/{df}/all_data.pth'
+            if os.path.isfile(combined_data_path):
+                print(f'[loading data shard: {combined_data_path}]')
+                data = torch.load(combined_data_path)
+                self.images += data.get('images')
+                self.actions += data.get('actions')
+                self.costs += data.get('costs')
+                self.states += data.get('states')
+                self.ids += data.get('ids')
+                self.ego_car_images += data.get('ego_car')
+            else:
+                print(data_dir)
+                images = []
+                actions = []
+                costs = []
+                states = []
+                ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
+                ids.sort()
+                ego_car_images = []
+                for f in ids:
+                    print(f'[loading {f}]')
+                    fd = pickle.load(open(f, 'rb'))
+                    Ta = fd['actions'].size(0)
+                    Tp = fd['pixel_proximity_cost'].size(0)
+                    Tl = fd['lane_cost'].size(0)
+                    # assert Ta == Tp == Tl  # TODO Check why there are more costs than actions
+                    # if not(Ta == Tp == Tl): pdb.set_trace()
+                    images.append(fd['images'])
+                    actions.append(fd['actions'])
+                    costs.append(torch.cat((
+                        fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
+                        fd.get('lane_cost')[:Ta].view(-1, 1),
+                    ), 1),)
+                    states.append(fd['states'])
+                    ego_car_images.append(fd['ego_car'])
+
+                print(f'Saving {combined_data_path} to disk')
+                torch.save({
+                    'images': images,
+                    'actions': actions,
+                    'costs': costs,
+                    'states': states,
+                    'ids': ids,
+                    'ego_car': ego_car_images,
+                }, combined_data_path)
+                self.images += images
+                self.actions += actions
+                self.costs += costs
+                self.states += states
+                self.ids += ids
+                self.ego_car_images += ego_car_images
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
