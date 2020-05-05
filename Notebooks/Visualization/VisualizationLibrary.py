@@ -11,6 +11,7 @@ class Visualization:
         self.tab = widgets.Tab()
         self.tab.children = [
             Tabs.PolicyComparisonTab(),
+            Tabs.LearningCurvesTab(),
             Tabs.EpisodeReviewTab(),
             Tabs.PiePlotTab(),
             Tabs.HeatMapTab(),
@@ -19,6 +20,7 @@ class Visualization:
             Tabs.ExperimentsDirectoryTab()
         ]
         titles = ['Policy performance',
+                  'Learing curves',
                   'Episode review',
                   'Success Pie',
                   'Success Heatmap',

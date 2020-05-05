@@ -264,6 +264,78 @@ class PolicyComparison(widgets.VBox):
         self.experiment_figure.marks = marks
         return
 
+class LearningCurve(widgets.VBox):
+    """Widget for comparing learning curves of different policies.
+
+    Contains a single plot of learning curves across timesteps.
+    """
+
+    def __init__(self):
+        # self.experiment_plot = plt.subplots(figsize=(18, 4))
+        # self.experiment_plot_output = widgets.Output()
+        self.x_sc = LinearScale()
+        self.y_sc = LinearScale()
+        ax_x = bq.Axis(label='steps',
+                       scale=self.x_sc,
+                       grid_lines='solid')
+        ax_y = bq.Axis(label='loss',
+                       scale=self.y_sc,
+                       orientation='vertical',
+                       side='left',
+                       grid_lines='solid')
+        self.scales = {'x': self.x_sc, 'y': self.y_sc}
+        self.experiment_figure = Figure(
+            title='comparison',
+            marks=[],
+            layout=widgets.Layout(width='100%'),
+            axes=[ax_x, ax_y],
+            legend_location='top-right',
+        )
+        super(LearningCurve, self).__init__([self.experiment_figure])
+
+    def update(self, experiments):
+        """updates the plots for given experiments
+
+        Args:
+            experiments: array of strings. Names of experiments to be loaded.
+        """
+        marks = []
+        colors = bq.colorschemes.CATEGORY10
+        for i, experiment in enumerate(experiments):
+            curves = DataReader.get_learning_curves_for_experiment(experiment)
+            x = np.array(curves['steps'])
+            def draw_line(result, std, label, c):
+                between_fill = Lines(x=[x, x],
+                                     y=[result - std, result + std],
+                                     fill='between',
+                                     colors=[c, c],
+                                     opacities=[0.1, 0.1],
+                                     fill_colors=[c],
+                                     fill_opacities=[0.3],
+                                     scales=self.scales,
+                                     )
+                self.y_sc.max = np.min([np.max(result), np.median(result) * 2])
+                self.y_sc.min = max(np.min(result), np.mean(result) - 2 * np.std(result))
+                line = Lines(x=x, y=result,
+                             scales=self.scales,
+                             colors=[c],
+                             display_legend=True,
+                             labels=[label],
+                             )
+                marks.append(between_fill)
+                marks.append(line)
+            draw_line(np.array(curves['train'][0], dtype=np.float),
+                      np.array(curves['train'][1], dtype=np.float),
+                      experiment + '_train',
+                      colors[2 * i])
+            draw_line(np.array(curves['validation'][0], dtype=np.float),
+                      np.array(curves['validation'][1], dtype=np.float),
+                      experiment + '_validation',
+                      colors[2 * i + 1])
+
+        self.experiment_figure.marks = marks
+        return
+
 
 class EpisodeReview(widgets.VBox):
     """Widget which allows to view the episode in detail.

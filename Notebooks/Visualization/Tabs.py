@@ -13,6 +13,7 @@ from Widgets import (
     HeatMap,
     HeatMapComparison,
     PolicyComparison,
+    LearningCurve,
     ExperimentEntryView,
 )
 
@@ -128,6 +129,32 @@ class PolicyComparisonTab(widgets.VBox):
             experiment_multiselect_change_callback, type='change')
         super(PolicyComparisonTab, self).__init__(
             [self.experiment_multiselect, self.policy_comparison])
+
+
+class LearningCurvesTab(widgets.VBox):
+    """Tab for comparing learning curves for experiments.
+
+    Experiments are chosen using a multiselect widget.
+    """
+
+    def __init__(self):
+        self.experiment_multiselect = widgets.SelectMultiple(
+            options=list(DataReader.get_experiments_mapping().keys()),
+            description='Experiments:',
+            disabled=False,
+            value=[],
+        )
+
+        self.learning_curve = LearningCurve()
+
+        def experiment_multiselect_change_callback(change):
+            if change.name == 'value' and change.new is not None:
+                self.learning_curve.update(change.new)
+
+        self.experiment_multiselect.observe(
+            experiment_multiselect_change_callback, type='change')
+        super(LearningCurvesTab, self).__init__(
+            [self.experiment_multiselect, self.learning_curve])
 
 
 class ExperimentsDirectoryTab(widgets.HBox):
