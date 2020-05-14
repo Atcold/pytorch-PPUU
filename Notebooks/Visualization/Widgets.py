@@ -655,7 +655,7 @@ class DimensionalityReductionPlot(widgets.VBox):
 
         classes = self.DimensionalityReduction.cluster(features)
 
-        category = bq.colorschemes.CATEGORY20[2:]
+        category = bq.colorschemes.CATEGORY10[2:]
         for f in range(len(features)):
             if f - 1 < len(colors):  # TODO: wtf?
                 if f < len(classes):
