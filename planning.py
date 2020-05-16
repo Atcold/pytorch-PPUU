@@ -177,6 +177,8 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
     elif actions is None:
         actions = torch.zeros(npred, model.opt.n_actions).cuda()
 
+    model.encoder.n_channels = 3
+
     if normalize:
         input_images = input_images.clone().float().div_(255.0)
         input_states -= model.stats['s_mean'].view(1, 4).expand(input_states.size())

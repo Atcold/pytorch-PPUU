@@ -101,10 +101,11 @@ def load_models(opt, data_path, device='cuda'):
 
     forward_model.intype('gpu')
     forward_model.stats = stats
-    forward_model.policy_net.stats_d = {}
-    for k, v in stats.items():
-        if isinstance(v, torch.Tensor):
-            forward_model.policy_net.stats_d[k] = v.to(device)
+    if hasattr(forward_model, 'policy_net'):
+        forward_model.policy_net.stats_d = {}
+        for k, v in stats.items():
+            if isinstance(v, torch.Tensor):
+                forward_model.policy_net.stats_d[k] = v.to(device)
 
     forward_model = forward_model.share_memory()
 
@@ -281,13 +282,11 @@ def process_one_episode(opt,
         elif opt.method == 'bprop':
             # TODO: car size is provided by the dataloader!! This lines below should be removed!
             # TODO: Namely, dataloader.car_sizes[timeslot][car_id]
-            car_size = torch.Tensor([info._width / (0.3048 * 24 / 3.7),
-                                     info._length / (0.3048 * 24 / 3.7)]).view(1, 2).cuda()
             a = planning.plan_actions_backprop(
                 forward_model,
-                input_images,
+                input_images[:, :3, :, :].contiguous(),
                 input_states,
-                car_size,
+                car_sizes,
                 npred=opt.npred,
                 n_futures=opt.n_rollouts,
                 normalize=True,
