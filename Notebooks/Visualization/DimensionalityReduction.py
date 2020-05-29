@@ -10,7 +10,7 @@ import pickle
 import os
 import traceback
 
-from DataReader import DataReader
+from Notebooks.Visualization.DataReader import DataReader
 
 
 class DimensionalityReduction:

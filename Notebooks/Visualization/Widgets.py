@@ -19,12 +19,14 @@ from bqplot.marks import Pie, GridHeatMap, Lines, Scatter
 from bqplot import Figure
 from bqplot.scales import LinearScale, ColorScale, OrdinalScale
 import bqplot as bq
+import PIL.Image
+import io
 
 from collections import OrderedDict
 import traitlets
 
-from DataReader import DataReader
-from DimensionalityReduction import DimensionalityReduction
+from Notebooks.Visualization.DataReader import DataReader
+from Notebooks.Visualization.DimensionalityReduction import DimensionalityReduction
 
 
 class Picker(widgets.VBox):
@@ -260,78 +262,6 @@ class PolicyComparison(widgets.VBox):
                          )
             marks.append(between_fill)
             marks.append(line)
-
-        self.experiment_figure.marks = marks
-        return
-
-class LearningCurve(widgets.VBox):
-    """Widget for comparing learning curves of different policies.
-
-    Contains a single plot of learning curves across timesteps.
-    """
-
-    def __init__(self):
-        # self.experiment_plot = plt.subplots(figsize=(18, 4))
-        # self.experiment_plot_output = widgets.Output()
-        self.x_sc = LinearScale()
-        self.y_sc = LinearScale()
-        ax_x = bq.Axis(label='steps',
-                       scale=self.x_sc,
-                       grid_lines='solid')
-        ax_y = bq.Axis(label='loss',
-                       scale=self.y_sc,
-                       orientation='vertical',
-                       side='left',
-                       grid_lines='solid')
-        self.scales = {'x': self.x_sc, 'y': self.y_sc}
-        self.experiment_figure = Figure(
-            title='comparison',
-            marks=[],
-            layout=widgets.Layout(width='100%'),
-            axes=[ax_x, ax_y],
-            legend_location='top-right',
-        )
-        super(LearningCurve, self).__init__([self.experiment_figure])
-
-    def update(self, experiments):
-        """updates the plots for given experiments
-
-        Args:
-            experiments: array of strings. Names of experiments to be loaded.
-        """
-        marks = []
-        colors = bq.colorschemes.CATEGORY10
-        for i, experiment in enumerate(experiments):
-            curves = DataReader.get_learning_curves_for_experiment(experiment)
-            x = np.array(curves['steps'])
-            def draw_line(result, std, label, c):
-                between_fill = Lines(x=[x, x],
-                                     y=[result - std, result + std],
-                                     fill='between',
-                                     colors=[c, c],
-                                     opacities=[0.1, 0.1],
-                                     fill_colors=[c],
-                                     fill_opacities=[0.3],
-                                     scales=self.scales,
-                                     )
-                self.y_sc.max = np.min([np.max(result), np.median(result) * 2])
-                self.y_sc.min = max(np.min(result), np.mean(result) - 2 * np.std(result))
-                line = Lines(x=x, y=result,
-                             scales=self.scales,
-                             colors=[c],
-                             display_legend=True,
-                             labels=[label],
-                             )
-                marks.append(between_fill)
-                marks.append(line)
-            draw_line(np.array(curves['train'][0], dtype=np.float),
-                      np.array(curves['train'][1], dtype=np.float),
-                      experiment + '_train',
-                      colors[2 * i])
-            draw_line(np.array(curves['validation'][0], dtype=np.float),
-                      np.array(curves['validation'][1], dtype=np.float),
-                      experiment + '_validation',
-                      colors[2 * i + 1])
 
         self.experiment_figure.marks = marks
         return
@@ -655,7 +585,7 @@ class DimensionalityReductionPlot(widgets.VBox):
 
         classes = self.DimensionalityReduction.cluster(features)
 
-        category = bq.colorschemes.CATEGORY10[2:]
+        category = bq.colorschemes.CATEGORY20[2:]
         for f in range(len(features)):
             if f - 1 < len(colors):  # TODO: wtf?
                 if f < len(classes):
@@ -855,3 +785,95 @@ class ExperimentEntryView(widgets.VBox):
             ],
             layout=widgets.Layout(width='400px'),
         )
+        import ipywidgets as widgets
+
+
+class EpisodeVisualizer(widgets.VBox):
+    """A widget that serves to visualize a sequence of images,
+    usually from the evaluation.
+
+    Differs from Episode Review because it directly gets the evaluation
+    results dict.
+    """
+    def __init__(self, results, episode=0):
+        self.images = results['images'][episode].numpy()
+        if 'state_sequences' in results:
+            # states contain sequences of 20, the last state being the present state.
+            self.states = results['state_sequences'][episode].numpy()[:, -1, :]
+        else:
+            self.states = None
+
+        if 'action_sequences' in results:
+            # actions contain sequences of 30, the first being the action taken.
+            self.actions = results['action_sequences'][episode].numpy()[:, 0, :]
+        else:
+            self.states = None
+
+        if self.images.shape[1] == 3:
+            self.images = np.transpose(self.images, (0, 2, 3, 1))
+        if self.images.max() < 1:
+            self.images = (self.images * 255).astype(np.uint8)
+        self.episode_play = widgets.Play(
+            value=0,
+            min=0,
+            max=self.images.shape[0] - 1,
+            step=1,
+            description="Press play",
+            disabled=False,
+            interval=10,
+        )
+        self.update_interval_slider = widgets.IntSlider(
+            min=1,
+            max=300,
+            value=30,
+        )
+        self.update_interval_box = widgets.HBox([
+            widgets.Label("Animation update interval:"),
+            self.update_interval_slider
+        ])
+        self.state_action_label =  widgets.Label("State and action: None")
+
+        self.episode_slider = widgets.IntSlider()
+        self.episode_hbox = widgets.HBox([
+            self.episode_play,
+            self.episode_slider
+        ])
+        self.episode_vbox = widgets.VBox([
+            self.episode_hbox,
+            self.update_interval_box,
+            self.state_action_label,
+        ])
+
+        widgets.jslink((self.episode_play, 'value'),
+                       (self.episode_slider, 'value'))
+        widgets.jslink((self.episode_play, 'max'),
+                       (self.episode_slider, 'max'))
+        widgets.jslink((self.episode_play, 'min'),
+                       (self.episode_slider, 'min'))
+
+        widgets.jslink((self.update_interval_slider, 'value'),
+                       (self.episode_play, 'interval'))
+
+        self.episode_image = widgets.Image(format='png',
+                                   width=120,
+                                   height=600,
+                                   )
+
+        def episode_slider_callback(change):
+            if change.name == 'value' and change.new is not None:
+                image = PIL.Image.fromarray(self.images[change.new])
+
+                imgByteArr = io.BytesIO()
+                image.save(imgByteArr, format='PNG')
+                imgByteArr = imgByteArr.getvalue()
+
+                self.episode_image.value  = imgByteArr
+                if self.states is not None and self.actions is not None:
+                    self.state_action_label.value = \
+                            f'State and action: {np.around(self.states[change.new], 2)},\
+                            {np.around(self.actions[change.new], 4)}'
+
+        self.episode_slider.observe(episode_slider_callback, type='change')
+        self.episode_slider.value = 0
+
+        super(EpisodeVisualizer, self).__init__([self.episode_vbox, self.episode_image])

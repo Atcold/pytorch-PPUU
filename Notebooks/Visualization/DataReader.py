@@ -99,17 +99,6 @@ class DataReader:
         return paths[0]
 
     @staticmethod
-    def get_training_log_file(experiment, seed):
-        """Retuns a path to the eval logs for given model"""
-        path = DataReader.get_experiments_mapping()[experiment]
-        regex = path[0] + 'policy_networks/' + path[1] + \
-            f'-seed={seed}-novalue' + '.log'
-        paths = glob(regex)
-        assert len(paths) == 1, \
-            f'paths for {regex} is not length of 1, and is equal to {paths}'
-        return paths[0]
-
-    @staticmethod
     @lru_cache(maxsize=100)
     def find_option_values(option,
                            experiment=None,
@@ -207,68 +196,6 @@ class DataReader:
             return steps, result
         else:
             return None, None
-
-    @staticmethod
-    def get_learning_curves_for_seed(experiment, seed):
-        """Gets the training and validation total losses for a given experiment
-        and seed.
-        """
-        path = DataReader.get_training_log_file(experiment, seed)
-        with open(path, 'r') as f:
-            lines = f.readlines()
-        regex = re.compile(".*step\s(\d+).*\s\[.*\π\:\s(.*)\].*\[.*\π\:\s(.*)\]")
-        steps = []
-        train_losses = []
-        validation_losses = []
-        for line in lines:
-            match = regex.match(line)
-            if match:
-                steps.append(int(match.group(1)))
-                train_losses.append(float(match.group(2)))
-                validation_losses.append(float(match.group(3)))
-        result = dict(
-            steps=steps,
-            train_losses=train_losses,
-            validation_losses=validation_losses,
-        )
-        return result
-
-    @staticmethod
-    def get_learning_curves_for_experiment(experiment):
-        seeds = DataReader.find_option_values('seed', experiment)
-        result = {}
-        steps = []
-        min_length = 100
-        max_length = 0
-
-        train = {}
-        validation = {}
-
-        for seed in seeds:
-            result[seed] = []
-            curves = DataReader.get_learning_curves_for_seed(experiment, seed)
-            for i, step in enumerate(curves['steps']):
-                train.setdefault(step, []).append(curves['train_losses'][i])
-                validation.setdefault(step, []).append(curves['validation_losses'][i])
-
-        train_means = []
-        train_stds = []
-        validation_means = []
-        validation_stds = []
-
-        for key in train:
-            train_means.append(float(np.mean(train[key])))
-            train_stds.append(float(np.std(train[key])))
-            validation_means.append(float(np.mean(validation[key])))
-            validation_stds.append(float(np.std(validation[key])))
-
-        result = dict(
-            steps=list(train.keys()),
-            train=(train_means, train_stds),
-            validation=(validation_means, validation_stds),
-        )
-        return result
-
 
     @staticmethod
     def get_episodes_with_outcome(experiment, seed, step, outcome):
