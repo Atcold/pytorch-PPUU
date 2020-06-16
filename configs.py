@@ -1,3 +1,4 @@
+import os
 import argparse
 import dataclasses
 from dataclasses import dataclass, field
@@ -16,11 +17,18 @@ class ConfigBase:
 
     @classmethod
     def parse_from_command_line(cls):
-        return DataclassArgParser(cls).parse_args_into_dataclasses()[0]
+        result = DataclassArgParser(cls).parse_args_into_dataclasses()
+        if len(result) > 1:
+            raise RuntimeError(
+                f"The following arguments were not recognized: {result[1:]}"
+            )
+        return result[0]
 
     @classmethod
     def parse_from_dict(cls, inputs):
-        return DataclassArgParser(cls)._populate_dataclass_from_dict(cls, inputs.copy())
+        return DataclassArgParser(cls)._populate_dataclass_from_dict(
+            cls, inputs.copy()
+        )
 
 
 @dataclass
@@ -37,6 +45,7 @@ class TrainingConfig(ConfigBase):
     dataset: str = field(default="i80")
     seed: int = field(default=42)
     output_dir: str = field(default=None)
+    experiment_name: str = field(default="train_mpur")
 
 
 @dataclass
@@ -114,8 +123,6 @@ class DataclassArgParser(argparse.ArgumentParser):
             args:
                 List of strings to parse. The default is taken from sys.argv.
                 (same as argparse.ArgumentParser)
-            return_remaining_strings:
-                If true, also return a list of remaining argument strings.
         Returns:
             Tuple consisting of:
                 - the dataclass instances in the same order as they
@@ -126,7 +133,7 @@ class DataclassArgParser(argparse.ArgumentParser):
                 - The potential list of remaining argument strings.
                   (same as argparse.ArgumentParser.parse_known_args)
         """
-        namespace, _ = self.parse_known_args(args=args)
+        namespace, unknown = self.parse_known_args(args=args)
         outputs = []
 
         for dtype in self.dataclass_types:
@@ -134,6 +141,8 @@ class DataclassArgParser(argparse.ArgumentParser):
         if len(namespace.__dict__) > 0:
             # additional namespace.
             outputs.append(namespace)
+        if len(unknown) > 0:
+            outputs.append(unknown)
         return outputs
 
     @staticmethod
@@ -170,5 +179,3 @@ class DataclassArgParser(argparse.ArgumentParser):
             inputs[k] = DataclassArgParser._populate_dataclass_from_dict(s, d)
         obj = dtype(**inputs)
         return obj
-
-

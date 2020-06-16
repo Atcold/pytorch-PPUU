@@ -2,7 +2,7 @@
 import ipywidgets as widgets
 from IPython.display import display
 
-from Notebooks.Visualization.DataReader import Tabs
+import Tabs
 
 
 class Visualization:

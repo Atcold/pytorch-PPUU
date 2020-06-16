@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import time
 from multiprocessing.pool import ThreadPool
 import json
+import os
 
 import pandas as pd
 import numpy
@@ -23,6 +24,7 @@ from torch.multiprocessing import Pool, set_start_method
 import configs
 import dataloader
 import train_mpur_2
+import policy_costs
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -37,11 +39,12 @@ def get_optimal_pool_size():
 
 @dataclass
 class EvalConfig(configs.ConfigBase):
-    checkpoint_path: str
-    # dataset: str = "i80"
-    dataset: str = "/home/us441/nvidia-collab/vlad/traffic-data_offroad_small_sparse_dense/state-action-cost/data_i80_v0/"
+    checkpoint_path: str = None
+    dataset: str = "i80"
+    # dataset: str = "/home/us441/nvidia-collab/vlad/traffic-data_offroad_small_sparse_dense/state-action-cost/data_i80_v0/"
     env_map: str = "i80"
     save_sim_video: bool = False
+    save_gradients: bool = False
     debug: bool = False
     num_processes: int = -1
     output_dir: str = None
@@ -54,9 +57,20 @@ class EvalConfig(configs.ConfigBase):
                 f"Number of processes wasn't speicifed, going to use {self.num_processes}"
             )
 
+        if self.output_dir is None:
+            self.checkpoint_path = os.path.normpath(self.checkpoint_path)
+            components = self.checkpoint_path.split(os.path.sep)
+            components[-2] = 'evaluation_results'
+            self.output_dir = os.path.join(*components)
+            if self.checkpoint_path[0] == os.path.sep:
+                self.output_dir = os.path.sep + self.output_dir
+            logging.info(
+                f"Output dir wasn't specified, going to save to {self.output_dir}"
+            )
+
 
 def process_one_episode(
-    config, env, forward_model, policy_model, data_stats, car_info, index,
+    config, model_config, env, forward_model, policy_model, data_stats, car_info, index,
 ):
     # movie_dir = path.join(
     #     opt.save_dir, "videos_simulator", plan_file, f"ep{index + 1}"
@@ -146,8 +160,20 @@ def process_one_episode(
         action_sequence=numpy.stack(action_sequence),
         state_sequence=numpy.stack(state_sequence),
         cost_sequence=numpy.stack(cost_sequence),
-        images=images_3_channels if config.debug else None,
+        images=images_3_channels,
+        gradients=None,
     )
+    if config.save_gradients:
+        episode_data["gradients"] = policy_costs.get_grad_vid(
+            policy_model,
+            model_config.cost_config,
+            dict(
+                input_images=images[:, :3].contiguous(),
+                input_states=states,
+                car_sizes=torch.tensor(car_info["car_size"])
+            ),
+            data_stats,
+        )[0]
 
     if config.output_dir is not None:
         episode_data_dir = os.path.join(config.output_dir, "episode_data")
@@ -215,6 +241,7 @@ def main(config):
                 process_one_episode,
                 (
                     config,
+                    mpur_module.config,
                     env,
                     mpur_module.forward_model,
                     mpur_module.policy_model,
@@ -232,6 +259,7 @@ def main(config):
         simulation_result = async_results[j].get()
         results_per_episode[j] = simulation_result
         total_images += simulation_result["time_travelled"]
+        stats = get_performance_stats(results_per_episode)
 
         log_string = " | ".join(
             (
@@ -239,6 +267,7 @@ def main(config):
                 f"time: {simulation_result['time_travelled']}",
                 f"distance: {simulation_result['distance_travelled']:.0f}",
                 f"success: {simulation_result['road_completed']:d}",
+                f"success rate: {stats['success_rate']:.2f}",
             )
         )
         logging.info(log_string)
@@ -258,7 +287,9 @@ def main(config):
 
     result = dict(results_per_episode=results_per_episode, stats=stats,)
     if config.output_dir is not None:
-        with open(os.path.join(config.output_dir, 'evaluation_result.json'), 'w') as f:
+        with open(
+            os.path.join(config.output_dir, "evaluation_results.json"), "w"
+        ) as f:
             json.dump(result, f, indent=4)
     return result
 

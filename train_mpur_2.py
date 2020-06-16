@@ -1,6 +1,8 @@
 """Train a policy / controller"""
 import dataclasses
 from dataclasses import dataclass, field
+import os
+import json
 
 import torch
 import torch.optim as optim
@@ -21,8 +23,8 @@ class MPURModule(pl.LightningModule):
     class Config(configs.ConfigBase):
         forward_model_path: str = "/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/models/offroad/model=fwd-cnn-vae-fp-layers=3-bsize=64-ncond=20-npred=20-lrt=0.0001-nfeature=256-dropout=0.1-nz=32-beta=1e-06-zdropout=0.5-gclip=5.0-warmstart=1-seed=1.step400000.model"
 
-        n_cond: int = field(default=20)
-        n_pred: int = field(default=30)
+        n_cond: int = 20
+        n_pred: int = 30
         n_hidden: int = 256
         n_feature: int = 256
 
@@ -58,8 +60,10 @@ class MPURModule(pl.LightningModule):
             h_width=self.config.model_config.h_width,
             n_hidden=self.config.model_config.n_hidden,
         )
+        self.policy_model.train()
 
     def forward(self, batch):
+        self.forward_model.eval()
         predictions = policy_costs.policy_unfold(
             self.forward_model, self.policy_model, batch
         )
@@ -172,6 +176,7 @@ class MPURModule(pl.LightningModule):
         return loader
 
     def on_train_start(self):
+        self.forward_model.eval()
         self.forward_model.device = self.device
         self.forward_model.to(self.device)
         policy_costs.estimate_uncertainty_stats(
@@ -189,10 +194,10 @@ class CostConfig(configs.ConfigBase):
     """Configuration of cost calculation"""
 
     u_reg: float = field(default=0.05)
-    lambda_a: float = field(default=0.01)
+    lambda_a: float = field(default=0.0)
     lambda_l: float = field(default=0.2)
-    lambda_o: float = field(default=1)
-    lambda_p: float = field(default=4.0)
+    lambda_o: float = field(default=1.0)
+    lambda_p: float = field(default=1.0)
     gamma: float = field(default=0.99)
     u_hinge: float = field(default=0.5)
     n_models: int = field(default=10)
@@ -205,16 +210,42 @@ class MasterConfig(configs.ConfigBase):
     training_config: configs.TrainingConfig
 
 
+class JsonLogger(pl.loggers.TensorBoardLogger):
+    def __init__(self, *args, json_filename="logs.json", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.logs = []
+        self.json_filename = json_filename
+
+    @pl.loggers.base.rank_zero_only
+    def log_metrics(self, metrics, step=None):
+        super().log_metrics(metrics, step)
+        self.logs.append(metrics)
+
+    @pl.loggers.base.rank_zero_only
+    def save(self):
+        super().save()
+        logs_json_save_path = os.path.join(self.log_dir, self.json_filename)
+        with open(logs_json_save_path, "w") as f:
+            json.dump(self.logs, f, indent=4)
+
+
 def main(config):
     pl.seed_everything(config.training_config.seed)
+
+    logger = JsonLogger(
+        save_dir=config.training_config.output_dir,
+        name=config.training_config.experiment_name,
+        version=f"seed={config.training_config.seed}",
+    )
+
     trainer = pl.Trainer(
-        filepath=config.training_config.output_dir,
         gpus=1,
         grad_clip_val=50.0,
         max_epochs=config.training_config.n_epochs,
-        check_val_every_n_epoch=2,
+        check_val_every_n_epoch=1,
         add_log_row_interval=10,
-        checkpoint_callback=pl.callbacks.ModelCheckpoint(save_top_k=-1),
+        checkpoint_callback=pl.callbacks.ModelCheckpoint(save_top_k=-1, period=20),
+        logger=logger,
     )
     model = MPURModule(config)
     trainer.fit(model)
@@ -222,4 +253,5 @@ def main(config):
 
 if __name__ == "__main__":
     config = MasterConfig.parse_from_command_line()
+    print("parsed config", config)
     main(config)

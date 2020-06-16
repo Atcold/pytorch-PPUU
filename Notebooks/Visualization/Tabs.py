@@ -4,7 +4,7 @@ import ipywidgets as widgets
 import json
 import traitlets
 
-from Notebooks.Visualization.DataReader import DataReader
+from DataReader import DataReader
 
 from Widgets import (
     Picker,
@@ -113,7 +113,7 @@ class PolicyComparisonTab(widgets.VBox):
 
     def __init__(self):
         self.experiment_multiselect = widgets.SelectMultiple(
-            options=list(DataReader.get_experiments_mapping().keys()),
+            options=list(DataReader.find_experiments()),
             description='Experiments:',
             disabled=False,
             value=[],

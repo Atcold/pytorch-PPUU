@@ -47,14 +47,25 @@ def compute_lane_cost(images, car_size):
     )
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
 
-    x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
+    x_filter = (
+        x_filter.unsqueeze(0)
+        .expand(bsize * npred, crop_h)
+        .type(car_size.type())
+        .cuda()
+    )
+
     x_filter = torch.min(
         x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size())
     )
     x_filter = (x_filter == max_x.unsqueeze(1).expand(x_filter.size())).float()
 
     y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
-    y_filter = y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
+    y_filter = (
+        y_filter.view(1, crop_w)
+        .expand(bsize * npred, crop_w)
+        .type(car_size.type())
+        .cuda()
+    )
     #    y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
     y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
     y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (
@@ -62,6 +73,7 @@ def compute_lane_cost(images, car_size):
     )
     x_filter = x_filter.cuda()
     y_filter = y_filter.cuda()
+    x_filter = x_filter.type(y_filter.type())
     proximity_mask = torch.bmm(
         x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w)
     )
@@ -147,7 +159,12 @@ def compute_proximity_cost(
     )
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-    x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
+    x_filter = (
+        x_filter.unsqueeze(0)
+        .expand(bsize * npred, crop_h)
+        .type(car_size.type())
+        .cuda()
+    )
     x_filter = torch.min(
         x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size())
     )
@@ -157,7 +174,12 @@ def compute_proximity_cost(
         max_x - min_x
     ).view(bsize * npred, 1)
     y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
-    y_filter = y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
+    y_filter = (
+        y_filter.view(1, crop_w)
+        .expand(bsize * npred, crop_w)
+        .type(car_size.type())
+        .cuda()
+    )
     y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
     y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
     y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (
@@ -222,14 +244,15 @@ def compute_uncertainty_batch(
     actions = actions.contiguous().view(bsize * n_models, npred, 2)
     Z_rep = Z_rep.contiguous().view(n_models * bsize, npred, -1)
 
+    original_value = model.training  # to switch back later
     model.train()  # turn on dropout, for uncertainty estimation
-
     predictions = policy_unfold(
         model,
         actions.clone(),
         dict(input_images=input_images, input_states=input_states,),
         Z=Z_rep.clone(),
     )
+    model.train(original_value)
 
     car_sizes_temp = (
         car_sizes.unsqueeze(0)
@@ -444,16 +467,52 @@ def compute_state_costs(pred_images, pred_states, car_sizes, stats):
     )
 
 
+def get_grad_vid(policy_model, cost_config, batch, data_stats, device="cuda"):
+    input_images = batch["input_images"].clone()
+    input_states = batch["input_states"].clone()
+    car_sizes = batch["car_sizes"].clone()
+
+    input_images = input_images.clone().float().div_(255.0)
+    input_states -= data_stats["s_mean"].view(1, 4).expand(input_states.size())
+    input_states /= data_stats["s_std"].view(1, 4).expand(input_states.size())
+    if input_images.dim() == 4:  # if processing single vehicle
+        input_images = input_images.to(device).unsqueeze(0)
+        input_states = input_states.to(device).unsqueeze(0)
+        car_sizes = car_sizes.to(device).unsqueeze(0)
+
+    input_images.requires_grad = True
+    input_states.requires_grad = True
+    input_images.retain_grad()
+    input_states.retain_grad()
+
+    costs = compute_state_costs(
+        input_images, input_states, car_sizes, data_stats
+    )
+    combined_loss = compute_combined_loss(
+        cost_config,
+        proximity_loss=costs["proximity_loss"],
+        uncertainty_loss=0,
+        lane_loss=costs["lane_loss"],
+        action_loss=0,
+        offroad_loss=costs["offroad_loss"],
+    )
+    combined_loss.backward()
+
+    return input_images.grad[:, :, :3].abs().clamp(max=1.0)
+
+
 def compute_combined_loss(
     cost_config,
-    proximity_loss=0,
-    uncertainty_loss=0,
-    lane_loss=0,
-    action_loss=0,
-    offroad_loss=0,
+    proximity_loss,
+    uncertainty_loss,
+    lane_loss,
+    action_loss,
+    offroad_loss,
 ):
-    return cost_config.lambda_p * proximity_loss
-    +cost_config.u_reg * uncertainty_loss
-    +cost_config.lambda_l * lane_loss
-    +cost_config.lambda_a * action_loss
-    +cost_config.lambda_o * offroad_loss
+    return (
+        cost_config.lambda_p * proximity_loss
+        + cost_config.u_reg * uncertainty_loss
+        + cost_config.lambda_l * lane_loss
+        + cost_config.lambda_a * action_loss
+        + cost_config.lambda_o * offroad_loss
+    )

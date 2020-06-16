@@ -59,7 +59,7 @@ class DataStore:
     def parse_car_path(path):
         splits = path.split("/")
         time_slot = splits[-2]
-        car_id = int(re.findall("car(\d+).pkl", splits[-1])[0])
+        car_id = int(re.findall(r"car(\d+).pkl", splits[-1])[0])
         data_files = {
             "trajectories-0400-0415": 0,
             "trajectories-0500-0515": 1,
@@ -71,7 +71,7 @@ class DataStore:
     def get_episode_car_info(self, episode):
         splits = self.ids[episode].split("/")
         time_slot_str = splits[-2]
-        car_id = int(re.findall("car(\d+).pkl", splits[-1])[0])
+        car_id = int(re.findall(r"car(\d+).pkl", splits[-1])[0])
         data_files_mapping = {
             "trajectories-0400-0415": 0,
             "trajectories-0500-0515": 1,
@@ -105,6 +105,8 @@ class Dataset(torch.utils.data.Dataset):
         return self.size
 
     def __getitem__(self, i):
+        # this is needed so that multiple workers don't get the same elements
+        self.random.seed(i)
         return self.get_one_example()
 
     def get_one_example(self):

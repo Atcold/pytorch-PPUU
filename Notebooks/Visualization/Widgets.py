@@ -25,24 +25,25 @@ import io
 from collections import OrderedDict
 import traitlets
 
-from Notebooks.Visualization.DataReader import DataReader
-from Notebooks.Visualization.DimensionalityReduction import DimensionalityReduction
+from DataReader import DataReader
+from DimensionalityReduction import DimensionalityReduction
 
 
 class Picker(widgets.VBox):
     """Picker widget
     This widget is in essence a set of drop-down menus.
-    They allow, in turns, to choose experiment, seed, checkpoint, and episode.
+    They allow, in turns, to choose experiment, version, checkpoint, and episode.
 
     The picker can be created for different levels of granularity:
         EXPERIMENT_LEVEL is only one dropdown that lets us choose the
                          experiment.
-        MODEL_LEVEL includes dropdowns for experiment, seed, and checkpoint and
+        MODEL_LEVEL includes dropdowns for experiment, version, and checkpoint and
                     lets us choose the model
-        EPISODE_LEVEL includes dropdowns for experiment, seed, checkpoint,
+        EPISODE_LEVEL includes dropdowns for experiment, version, checkpoint,
                       and episode, letting us choose evaluation of a model
                       on a given episode.
     """
+
     EXPERIMENT_LEVEL = 0
     MODEL_LEVEL = 1
     EPISODE_LEVEL = 2
@@ -63,8 +64,8 @@ class Picker(widgets.VBox):
         """
         children = []
         self.experiment_dropdown = widgets.Dropdown(
-            options=list(DataReader.get_experiments_mapping().keys()),
-            description='Experiment:',
+            options=list(DataReader.find_experiments()),
+            description="Experiment:",
             disabled=False,
             value=None,
         )
@@ -75,55 +76,48 @@ class Picker(widgets.VBox):
 
         if level >= Picker.MODEL_LEVEL:
 
-            self.seed_dropdown = widgets.Dropdown(
-                description='Seed:',
-                disabled=True,
+            self.version_dropdown = widgets.Dropdown(
+                description="Seed:", disabled=True,
             )
-            children.append(self.seed_dropdown)
+            children.append(self.version_dropdown)
 
             self.checkpoint_dropdown = widgets.Dropdown(
-                description='Checkpoint:',
-                disabled=True,
+                description="Checkpoint:", disabled=True,
             )
             children.append(self.checkpoint_dropdown)
 
         if level >= Picker.EPISODE_LEVEL:
             self.episode_dropdown = widgets.Dropdown(
-                description='Episode:',
-                disabled=True,
+                description="Episode:", disabled=True,
             )
             children.append(self.episode_dropdown)
 
         self.ignore_updates = False
 
         def experiment_dropdown_change_callback(change):
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 self.ignore_updates = True
                 if level >= Picker.MODEL_LEVEL:
-                    self.seed_dropdown.options = \
-                        DataReader.find_option_values(
-                            option='seed',
-                            experiment=self.experiment_dropdown.value
-                        )
-                    self.seed_dropdown.value = None
-                    self.seed_dropdown.disabled = False
+                    self.version_dropdown.options = DataReader.find_experiment_versions(
+                        experiment=self.experiment_dropdown.value,
+                    )
+                    self.version_dropdown.value = None
+                    self.version_dropdown.disabled = False
                     self.checkpoint_dropdown.disabled = True
                     self.checkpoint_dropdown.value = None
                 self.ignore_updates = False
                 if level == Picker.EXPERIMENT_LEVEL:
                     self.call_callback(self.experiment_dropdown.value)
 
-        def seed_dropdown_change_callback(change):
+        def version_dropdown_change_callback(change):
             if self.ignore_updates:
                 return
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 self.ignore_updates = True
-                self.checkpoint_dropdown.options = \
-                    DataReader.find_option_values(
-                        option='checkpoint',
-                        experiment=self.experiment_dropdown.value,
-                        seed=self.seed_dropdown.value
-                    )
+                self.checkpoint_dropdown.options = DataReader.find_version_checkpoints(
+                    experiment=self.experiment_dropdown.value,
+                    version=self.version_dropdown.value,
+                )
                 self.checkpoint_dropdown.value = None
                 self.checkpoint_dropdown.disabled = False
                 self.ignore_updates = False
@@ -132,54 +126,57 @@ class Picker(widgets.VBox):
             if self.ignore_updates:
                 return
 
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 self.ignore_updates = True
                 if level >= Picker.EPISODE_LEVEL:
-                    self.episode_dropdown.options = \
-                        DataReader.find_option_values(
-                            option='episode',
-                            experiment=self.experiment_dropdown.value,
-                            seed=self.seed_dropdown.value,
-                            checkpoint=self.checkpoint_dropdown.value
-                        )
+                    self.episode_dropdown.options = DataReader.find_checkpoint_episodes(
+                        experiment=self.experiment_dropdown.value,
+                        version=self.version_dropdown.value,
+                        checkpoint=self.checkpoint_dropdown.value,
+                    )
                     self.episode_dropdown.value = None
                     self.episode_dropdown.disabled = False
                 self.ignore_updates = False
 
                 if level == Picker.MODEL_LEVEL:
-                    self.call_callback(self.experiment_dropdown.value,
-                                       self.seed_dropdown.value,
-                                       self.checkpoint_dropdown.value)
+                    self.call_callback(
+                        self.experiment_dropdown.value,
+                        self.version_dropdown.value,
+                        self.checkpoint_dropdown.value,
+                    )
 
         def episode_dropdown_change_callback(change):
             if self.ignore_updates:
                 return
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 if level == Picker.EPISODE_LEVEL:
-                    self.call_callback(self.experiment_dropdown.value,
-                                       self.seed_dropdown.value,
-                                       self.checkpoint_dropdown.value,
-                                       self.episode_dropdown.value)
-
-                    self.experiment_dropdown.observe(
-                        experiment_dropdown_change_callback,
-                        type='change'
+                    self.call_callback(
+                        self.experiment_dropdown.value,
+                        self.version_dropdown.value,
+                        self.checkpoint_dropdown.value,
+                        self.episode_dropdown.value,
                     )
 
-        self.experiment_dropdown.observe(experiment_dropdown_change_callback,
-                                         type='change')
+                    self.experiment_dropdown.observe(
+                        experiment_dropdown_change_callback, type="change"
+                    )
+
+        self.experiment_dropdown.observe(
+            experiment_dropdown_change_callback, type="change"
+        )
 
         if level >= Picker.MODEL_LEVEL:
-            self.seed_dropdown.observe(seed_dropdown_change_callback,
-                                       type='change')
+            self.version_dropdown.observe(
+                version_dropdown_change_callback, type="change"
+            )
             self.checkpoint_dropdown.observe(
-                checkpoint_dropdown_change_callback,
-                type='change'
+                checkpoint_dropdown_change_callback, type="change"
             )
 
         if level >= Picker.EPISODE_LEVEL:
-            self.episode_dropdown.observe(episode_dropdown_change_callback,
-                                          type='change')
+            self.episode_dropdown.observe(
+                episode_dropdown_change_callback, type="change"
+            )
 
         super(Picker, self).__init__(children)
 
@@ -192,8 +189,8 @@ class Picker(widgets.VBox):
     def get_selected_experiment(self):
         return self.experiment_dropdown.value
 
-    def get_selected_seed(self):
-        return self.seed_dropdown.value
+    def get_selected_version(self):
+        return self.version_dropdown.value
 
     def get_selected_checkpoint(self):
         return self.checkpoint_dropdown.value
@@ -214,21 +211,21 @@ class PolicyComparison(widgets.VBox):
         # self.experiment_plot_output = widgets.Output()
         self.x_sc = LinearScale()
         self.y_sc = LinearScale()
-        ax_x = bq.Axis(label='steps',
-                       scale=self.x_sc,
-                       grid_lines='solid')
-        ax_y = bq.Axis(label='success rate',
-                       scale=self.y_sc,
-                       orientation='vertical',
-                       side='left',
-                       grid_lines='solid')
-        self.scales = {'x': self.x_sc, 'y': self.y_sc}
+        ax_x = bq.Axis(label="steps", scale=self.x_sc, grid_lines="solid")
+        ax_y = bq.Axis(
+            label="success rate",
+            scale=self.y_sc,
+            orientation="vertical",
+            side="left",
+            grid_lines="solid",
+        )
+        self.scales = {"x": self.x_sc, "y": self.y_sc}
         self.experiment_figure = Figure(
-            title='comparison',
+            title="comparison",
             marks=[],
-            layout=widgets.Layout(width='100%'),
+            layout=widgets.Layout(width="100%"),
             axes=[ax_x, ax_y],
-            legend_location='top-right',
+            legend_location="top-right",
         )
         super(PolicyComparison, self).__init__([self.experiment_figure])
 
@@ -241,25 +238,29 @@ class PolicyComparison(widgets.VBox):
         marks = []
         colors = bq.colorschemes.CATEGORY10
         for i, experiment in enumerate(experiments):
-            steps, result = DataReader.get_success_rates_for_experiment(
-                experiment)
-            x = np.array(steps)
+            result = DataReader.get_success_rates_for_experiment(experiment)
+            x = np.array(result['checkpoints'])
+            means = np.array(result['means'])
+            stds = np.array(result['stds'])
             c = colors[i]
-            between_fill = Lines(x=[x, x],
-                                 y=[result.min(0), result.max(0)],
-                                 fill='between',
-                                 colors=[c, c],
-                                 opacities=[0.1, 0.1],
-                                 fill_colors=[c],
-                                 fill_opacities=[0.3],
-                                 scales=self.scales,
-                                 )
-            line = Lines(x=x, y=np.median(result, 0),
-                         scales=self.scales,
-                         colors=[c],
-                         display_legend=True,
-                         labels=[experiment],
-                         )
+            between_fill = Lines(
+                x=[x, x],
+                y=[means - stds, means + stds],
+                fill="between",
+                colors=[c, c],
+                opacities=[0.1, 0.1],
+                fill_colors=[c],
+                fill_opacities=[0.3],
+                scales=self.scales,
+            )
+            line = Lines(
+                x=x,
+                y=means,
+                scales=self.scales,
+                colors=[c],
+                display_legend=True,
+                labels=[experiment],
+            )
             marks.append(between_fill)
             marks.append(line)
 
@@ -284,42 +285,43 @@ class EpisodeReview(widgets.VBox):
             interval=10,
         )
         self.update_interval_slider = widgets.IntSlider(
-            min=1,
-            max=300,
-            value=30,
+            min=1, max=300, value=30,
         )
-        self.update_interval_box = widgets.HBox([
-            widgets.Label("Animation update interval:"),
-            self.update_interval_slider
-        ])
+        self.update_interval_box = widgets.HBox(
+            [
+                widgets.Label("Animation update interval:"),
+                self.update_interval_slider,
+            ]
+        )
         self.episode_slider = widgets.IntSlider()
-        self.episode_hbox = widgets.HBox([
-            self.episode_play,
-            self.episode_slider
-        ])
-        self.episode_vbox = widgets.VBox([
-            self.episode_hbox,
-            self.update_interval_box
-        ])
+        self.episode_hbox = widgets.HBox(
+            [self.episode_play, self.episode_slider]
+        )
+        self.episode_vbox = widgets.VBox(
+            [self.episode_hbox, self.update_interval_box]
+        )
 
-        widgets.jslink((self.episode_play, 'value'),
-                       (self.episode_slider, 'value'))
-        widgets.jslink((self.episode_play, 'max'),
-                       (self.episode_slider, 'max'))
-        widgets.jslink((self.episode_play, 'min'),
-                       (self.episode_slider, 'min'))
+        widgets.jslink(
+            (self.episode_play, "value"), (self.episode_slider, "value")
+        )
+        widgets.jslink(
+            (self.episode_play, "max"), (self.episode_slider, "max")
+        )
+        widgets.jslink(
+            (self.episode_play, "min"), (self.episode_slider, "min")
+        )
 
-        widgets.jslink((self.update_interval_slider, 'value'),
-                       (self.episode_play, 'interval'))
+        widgets.jslink(
+            (self.update_interval_slider, "value"),
+            (self.episode_play, "interval"),
+        )
 
-        self.episode_gradient_image = widgets.Image(format='png',
-                                                    width=120,
-                                                    height=600,
-                                                    )
-        self.episode_image = widgets.Image(format='png',
-                                           width=120,
-                                           height=600,
-                                           )
+        self.episode_gradient_image = widgets.Image(
+            format="png", width=120, height=600,
+        )
+        self.episode_image = widgets.Image(
+            format="png", width=120, height=600,
+        )
 
         x_sc = bq.LinearScale()
         # x_sc.max = size * 1.3
@@ -329,50 +331,60 @@ class EpisodeReview(widgets.VBox):
 
         self.x_sc = x_sc
 
-        ax_x = bq.Axis(label='step', scale=x_sc, grid_lines='none')
+        ax_x = bq.Axis(label="step", scale=x_sc, grid_lines="none")
         ax_x.min = 0
         ax_x.max = 100
-        ax_y = bq.Axis(label='costs',
-                       scale=y_sc,
-                       orientation='vertical',
-                       grid_lines='solid')
-        ax_y2 = bq.Axis(label='speed',
-                        scale=y_sc2,
-                        orientation='vertical',
-                        side='right',
-                        grid_lines='none')
+        ax_y = bq.Axis(
+            label="costs",
+            scale=y_sc,
+            orientation="vertical",
+            grid_lines="solid",
+        )
+        ax_y2 = bq.Axis(
+            label="speed",
+            scale=y_sc2,
+            orientation="vertical",
+            side="right",
+            grid_lines="none",
+        )
 
         self.costs_plot_lines_costs = Lines(
-            scales={'x': x_sc, 'y': y_sc}, display_legend=True, stroke_width=1)
-        self.costs_plot_lines_speed = Lines(scales={'x': x_sc, 'y': y_sc2},
-                                            colors=['red'],
-                                            display_legend=True,
-                                            stroke_width=1)
-        self.costs_plot_progress = Lines(scales={'x': x_sc, 'y': y_sc})
+            scales={"x": x_sc, "y": y_sc}, display_legend=True, stroke_width=1
+        )
+        self.costs_plot_lines_speed = Lines(
+            scales={"x": x_sc, "y": y_sc2},
+            colors=["red"],
+            display_legend=True,
+            stroke_width=1,
+        )
+        self.costs_plot_progress = Lines(scales={"x": x_sc, "y": y_sc})
 
-        pan_zoom = bq.interacts.PanZoom(scales={'x': [x_sc], 'y': []})
+        pan_zoom = bq.interacts.PanZoom(scales={"x": [x_sc], "y": []})
 
-        self.costs_plot_figure = Figure(marks=[self.costs_plot_lines_costs,
-                                               self.costs_plot_lines_speed,
-                                               self.costs_plot_progress],
-                                        axes=[ax_x, ax_y, ax_y2],
-                                        title='Costs and speed',
-                                        legend_location='top-left',
-                                        interaction=pan_zoom,
-                                        layout=widgets.Layout(width='100%', height='100%')
-                                       )
+        self.costs_plot_figure = Figure(
+            marks=[
+                self.costs_plot_lines_costs,
+                self.costs_plot_lines_speed,
+                self.costs_plot_progress,
+            ],
+            axes=[ax_x, ax_y, ax_y2],
+            title="Costs and speed",
+            legend_location="top-left",
+            interaction=pan_zoom,
+            layout=widgets.Layout(width="100%", height="100%"),
+        )
 
         self.follow_present = widgets.ToggleButton(
             value=False,
-            description='Follow present',
+            description="Follow present",
             disabled=False,
-            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
         )
 
         self.reset_scale = widgets.Button(
-            description='Reset scale',
+            description="Reset scale",
             disabled=False,
-            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
         )
 
         def reset_scale_callback(b):
@@ -382,60 +394,68 @@ class EpisodeReview(widgets.VBox):
 
         self.plot_controls_hbox = widgets.HBox(
             [self.follow_present, self.reset_scale],
-            layout=widgets.Layout(width='100%', justify_content='center')
+            layout=widgets.Layout(width="100%", justify_content="center"),
         )
 
         self.costs_plot_box = widgets.VBox(
             [self.costs_plot_figure, self.plot_controls_hbox],
-            layout=widgets.Layout(width='100%')
+            layout=widgets.Layout(width="100%"),
         )
 
         self.images_hbox = widgets.HBox(
             [
                 self.episode_gradient_image,
                 self.episode_image,
-                self.costs_plot_box
+                self.costs_plot_box,
             ],
-            layout=widgets.Layout(width='100%')
+            layout=widgets.Layout(width="100%"),
         )
 
         def episode_slider_callback(change):
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 gradient_shift = max(
-                    0, len(self.images) - len(self.gradient_images))
+                    0, len(self.images) - len(self.gradient_images)
+                )
                 if change.new >= gradient_shift:
                     self.episode_gradient_image.value = self.gradient_images[
-                        change.new - gradient_shift]
+                        change.new - gradient_shift
+                    ]
                 self.episode_image.value = self.images[change.new]
                 self.update_timestamp_line(change.new)
 
-        self.episode_slider.observe(episode_slider_callback, type='change')
+        self.episode_slider.observe(episode_slider_callback, type="change")
 
         super(EpisodeReview, self).__init__(
-            [self.episode_vbox, self.images_hbox])
+            [self.episode_vbox, self.images_hbox]
+        )
 
-    def update_costs_plot(self, experiment, seed, checkpoint, episode):
+    def update_costs_plot(self, experiment, version, checkpoint, episode):
         speeds = DataReader.get_episode_speeds(
-            experiment, seed, checkpoint, episode)
-        self.costs_plot_figure.title = f'Costs and speed: episode {episode}'
+            experiment, version, checkpoint, episode
+        )
+        self.costs_plot_figure.title = f"Costs and speed: episode {episode}"
         if speeds is not None:
             self.costs_plot_lines_speed.x = range(len(speeds))
             self.costs_plot_lines_speed.y = speeds
-            self.costs_plot_lines_speed.labels = ['speed']
+            self.costs_plot_lines_speed.labels = ["speed"]
         costs = DataReader.get_episode_costs(
-            experiment, seed, checkpoint, episode)
+            experiment, version, checkpoint, episode
+        )
         if costs is not None:
             x = costs.index
             self.x_sc.min = x[0]
             self.x_sc.max = x[-1]
             self.costs_plot_lines_costs.x = x
             self.costs_plot_lines_costs.y = [
-                costs['lane_cost'],
-                costs['pixel_proximity_cost'],
-                costs['collisions_per_frame']
+                costs["lane_cost"],
+                costs["pixel_proximity_cost"],
+                costs["collisions_per_frame"],
             ]
             self.costs_plot_lines_costs.labels = [
-                'lane cost', 'pixel proximity cost', 'collisions per frame']
+                "lane cost",
+                "pixel proximity cost",
+                "collisions per frame",
+            ]
 
     def update_timestamp_line(self, timestamp):
         self.costs_plot_progress.x = [timestamp, timestamp]
@@ -448,16 +468,18 @@ class EpisodeReview(widgets.VBox):
         self.x_sc.min = None
         self.x_sc.max = None
 
-    def update(self, experiment, seed, checkpoint, episode):
+    def update(self, experiment, version, checkpoint, episode):
         """updates the plots and loads the images and the gradients, if
         they are available.
 
         This method is called by the corresponding picker.
         """
         self.gradient_images = DataReader.get_gradients(
-            experiment, seed, checkpoint, episode)
+            experiment, version, checkpoint, episode
+        )
         self.images = DataReader.get_images(
-            experiment, seed, checkpoint, episode)
+            experiment, version, checkpoint, episode
+        )
 
         if len(self.gradient_images) > 0:
             self.episode_gradient_image.value = self.gradient_images[0]
@@ -468,12 +490,12 @@ class EpisodeReview(widgets.VBox):
         self.episode_slider.value = 0
         self.episode_slider.max = len(self.images) - 1
 
-        self.seed = seed
+        self.version = version
         self.checkpoint = checkpoint
         self.episode = episode
 
         self.reset_costs_plot_scale()
-        self.update_costs_plot(experiment, seed, checkpoint, episode)
+        self.update_costs_plot(experiment, version, checkpoint, episode)
 
 
 class DimensionalityReductionPlot(widgets.VBox):
@@ -494,57 +516,65 @@ class DimensionalityReductionPlot(widgets.VBox):
         self.y_scale = LinearScale()
 
         pan_zoom = bq.interacts.PanZoom(
-            scales={'x': [self.x_scale], 'y': [self.y_scale]})
+            scales={"x": [self.x_scale], "y": [self.y_scale]}
+        )
 
         self.scatter = Scatter(
-            scales={'x': self.x_scale, 'y': self.y_scale},
+            scales={"x": self.x_scale, "y": self.y_scale},
             default_opacities=[0.7],
-            interactions={'click': 'select'},
-            selected_style={
-                'opacity': 1.0, 'stroke': 'Black'},
-            unselected_style={'opacity': 0.5}
+            interactions={"click": "select"},
+            selected_style={"opacity": 1.0, "stroke": "Black"},
+            unselected_style={"opacity": 0.5},
         )
 
         def scatter_callback(a, b):
-            self.episode = b['data']['index'] + 1  # 1-indexed
+            self.episode = b["data"]["index"] + 1  # 1-indexed
             # we only have failures
             self.episode = self.failures_indices[self.episode - 1]
             if self.callback is not None:
-                self.callback(self.experiment, self.seed,
-                              self.step, self.episode)
+                self.callback(
+                    self.experiment, self.version, self.step, self.episode
+                )
             if self.widget is not None:
-                self.widget.update(self.experiment, self.seed,
-                                   self.step, self.episode)
+                self.widget.update(
+                    self.experiment, self.version, self.step, self.episode
+                )
 
         self.scatter.on_element_click(scatter_callback)
         self.toggle_buttons = widgets.ToggleButtons(
-            options=OrderedDict([('Select', None), ('Zoom', pan_zoom)]))
+            options=OrderedDict([("Select", None), ("Zoom", pan_zoom)])
+        )
 
         self.scatter_figure = Figure(
             marks=[self.scatter],
-            layout=widgets.Layout(height='600px', width='100%')
+            layout=widgets.Layout(height="600px", width="100%"),
         )
 
-        traitlets.link((self.toggle_buttons, 'value'),
-                       (self.scatter_figure, 'interaction'))
+        traitlets.link(
+            (self.toggle_buttons, "value"),
+            (self.scatter_figure, "interaction"),
+        )
 
         super(DimensionalityReductionPlot, self).__init__(
-            [self.scatter_figure, self.toggle_buttons])
+            [self.scatter_figure, self.toggle_buttons]
+        )
 
-    def update2(self, experiment, seed, step):
+    def update2(self, experiment, version, step):
         # used in developement, not currently used
         self.experiment = experiment
-        self.seed = seed
+        self.version = version
         self.step = step
         features = DimensionalityReduction.get_model_failing_features(
-            experiment, seed, step)
+            experiment, version, step
+        )
         self.failures_indices = DataReader.get_episodes_with_outcome(
-            experiment, seed, step, 0)
+            experiment, version, step, 0
+        )
 
         failure_features = features[np.array(failures[:-1]) - 1]
 
         res = self.DimensionalityReduction.transform(features)
-        colors = ['gray'] * res.shape[0]
+        colors = ["gray"] * res.shape[0]
         opacities = [0.3] * res.shape[0]
 
         classes = self.DimensionalityReduction.cluster(failure_features)
@@ -555,7 +585,7 @@ class DimensionalityReductionPlot(widgets.VBox):
                 if i < len(classes):
                     colors[f - 1] = category[classes[i]]
                 else:
-                    colors[f - 1] = 'red'
+                    colors[f - 1] = "red"
                 opacities[f - 1] = 0.8
 
         self.scatter.x = res[:, 0]
@@ -563,24 +593,26 @@ class DimensionalityReductionPlot(widgets.VBox):
         self.scatter.colors = colors
         self.scatter.opacity = opacities
 
-    def update(self, experiment, seed, step):
+    def update(self, experiment, version, step):
         """updates the scatter plot.
         This method is called by the model picker """
         self.experiment = experiment
-        self.seed = seed
+        self.version = version
         self.step = step
         self.failures_indices = DataReader.get_episodes_with_outcome(
-            experiment, seed, step, 0)
+            experiment, version, step, 0
+        )
 
         features = DimensionalityReduction.get_model_failing_features(
-            experiment, seed, step)
+            experiment, version, step
+        )
 
-        costs = DataReader.get_model_states(experiment, seed, step)
-        print('costs shape', len(costs))
-        print('max failure indices', max(self.failures_indices))
+        costs = DataReader.get_model_states(experiment, version, step)
+        print("costs shape", len(costs))
+        print("max failure indices", max(self.failures_indices))
 
         res = self.DimensionalityReduction.transform(features)
-        colors = ['gray'] * res.shape[0]
+        colors = ["gray"] * res.shape[0]
         opacities = [0.3] * res.shape[0]
 
         classes = self.DimensionalityReduction.cluster(features)
@@ -591,7 +623,7 @@ class DimensionalityReductionPlot(widgets.VBox):
                 if f < len(classes):
                     colors[f] = category[classes[f]]
                 else:
-                    colors[f] = 'red'
+                    colors[f] = "red"
                 opacities[f] = 0.8
 
         self.scatter.x = res[:, 0]
@@ -606,22 +638,26 @@ class PiePlot(widgets.VBox):
     """
 
     def __init__(self):
-        self.pie_plot = Pie(radius=150,
-                            inner_radius=80,
-                            interactions={'click': 'select'},
-                            colors=['green', 'red'],
-                            label_color='black',
-                            font_size='14px',
-                            )
-        self.pie_figure = Figure(title='Success rate', marks=[self.pie_plot])
+        self.pie_plot = Pie(
+            radius=150,
+            inner_radius=80,
+            interactions={"click": "select"},
+            colors=["green", "red"],
+            label_color="black",
+            font_size="14px",
+        )
+        self.pie_figure = Figure(title="Success rate", marks=[self.pie_plot])
         super(PiePlot, self).__init__([self.pie_figure])
 
-    def update(self, experiment, seed, checkpoint):
+    def update(self, experiment, version, checkpoint):
         success_rate = DataReader.get_success_rate(
-            experiment, seed, checkpoint)
+            experiment, version, checkpoint
+        )
         self.pie_plot.sizes = [success_rate, 1 - success_rate]
         self.pie_plot.labels = [
-            str(round(success_rate, 2)), str(round(1 - success_rate, 2))]
+            str(round(success_rate, 2)),
+            str(round(1 - success_rate, 2)),
+        ]
 
 
 class HeatMap(widgets.VBox):
@@ -632,25 +668,27 @@ class HeatMap(widgets.VBox):
         self.episode_grid_heat_map = GridHeatMap(
             color=np.random.rand(11, 51) * 0,
             scales={
-                'row': OrdinalScale(),
-                'column': OrdinalScale(),
-                'color': ColorScale()
+                "row": OrdinalScale(),
+                "column": OrdinalScale(),
+                "color": ColorScale(),
             },
-            display_legend=False)
+            display_legend=False,
+        )
         self.episode_grid_heat_map_label = widgets.Label()
         self.episode_grid_heat_map_figure = Figure(
-            title='Episode grid heat map',
+            title="Episode grid heat map",
             marks=[self.episode_grid_heat_map],
-            layout=widgets.Layout(height='331px', width='100%')
+            layout=widgets.Layout(height="331px", width="100%"),
         )
 
         def heat_map_click_callback(a, b):
             if self.result_permutation is not None:
-                episode = self.result_permutation[b['data']['_cell_num']] + 1
-                color = b['data']['color']
-                self.episode_grid_heat_map_label.value = \
-                    f'clicked on episode {episode} with {color}'\
-                    'successful cases'
+                episode = self.result_permutation[b["data"]["_cell_num"]] + 1
+                color = b["data"]["color"]
+                self.episode_grid_heat_map_label.value = (
+                    f"clicked on episode {episode} with {color}"
+                    "successful cases"
+                )
 
         self.episode_grid_heat_map.on_click(heat_map_click_callback)
         self.episode_grid_heat_map.on_element_click(heat_map_click_callback)
@@ -658,7 +696,7 @@ class HeatMap(widgets.VBox):
         super(HeatMap, self).__init__(
             [
                 self.episode_grid_heat_map_figure,
-                self.episode_grid_heat_map_label
+                self.episode_grid_heat_map_label,
             ]
         )
 
@@ -685,37 +723,37 @@ class HeatMapComparison(widgets.VBox):
         self.episode_grid_heat_map = GridHeatMap(
             color=np.random.rand(11, 51) * 0,
             scales={
-                'row': OrdinalScale(),
-                'column': OrdinalScale(),
-                'color': ColorScale(
-                    colors=['orange', 'red', 'green', 'blue'],
-                    min=0,
-                    max=3,
-                )
+                "row": OrdinalScale(),
+                "column": OrdinalScale(),
+                "color": ColorScale(
+                    colors=["orange", "red", "green", "blue"], min=0, max=3,
+                ),
             },
-            display_legend=False)
+            display_legend=False,
+        )
         self.episode_grid_heat_map_help = widgets.HTML(
-            value='<br><br><ul>\
+            value="<br><br><ul>\
                     <li>orange - both models failed.</li>\
                     <li>red - first model succeeded, second failed</li>\
                     <li>green - first model failed, second succeeded</li>\
                     <li>blue - both models succeeded.</li>\
-                    </ul>'
+                    </ul>"
         )
         self.episode_grid_heat_map_label = widgets.Label()
         self.episode_grid_heat_map_figure = Figure(
-            title='Comparison grid heat map',
+            title="Comparison grid heat map",
             marks=[self.episode_grid_heat_map],
-            layout=widgets.Layout(height='331px', width='100%')
+            layout=widgets.Layout(height="331px", width="100%"),
         )
 
         def heat_map_click_callback(a, b):
             if self.result_permutation is not None:
-                episode = self.result_permutation[b['data']['_cell_num']] + 1
-                color = b['data']['color']
-                self.episode_grid_heat_map_label.value = \
-                    f'clicked on episode {episode} with {color}'\
-                    'successful cases'
+                episode = self.result_permutation[b["data"]["_cell_num"]] + 1
+                color = b["data"]["color"]
+                self.episode_grid_heat_map_label.value = (
+                    f"clicked on episode {episode} with {color}"
+                    "successful cases"
+                )
 
         self.episode_grid_heat_map.on_click(heat_map_click_callback)
         self.episode_grid_heat_map.on_element_click(heat_map_click_callback)
@@ -724,17 +762,16 @@ class HeatMapComparison(widgets.VBox):
             [
                 self.episode_grid_heat_map_help,
                 self.episode_grid_heat_map_figure,
-                self.episode_grid_heat_map_label
+                self.episode_grid_heat_map_label,
             ]
         )
 
     def update(self, model1, model2):
         """
         Args:
-            model1 - tuple containing (experiment, seed, step) for the first
-                     compared model
-            model2 - tuple containing (experiment, seed, step) for the second
-                     compared model.
+            model1 - tuple containing (experiment, version, step) for the first
+            compared model model2 - tuple containing (experiment, version,
+            step) for the second compared model.
         """
 
         success_map_1 = DataReader.get_episode_success_map(*model1)
@@ -747,47 +784,6 @@ class HeatMapComparison(widgets.VBox):
         self.color_result = result
 
 
-class ExperimentEntryView(widgets.VBox):
-    """A widget used to edit the directory of experiments for visualization.
-    Contains edit text widgets for experiment name, root path and model prefix.
-    """
-
-    def __init__(self, name, experiment_root, model_name):
-        style = {'description_width': 'initial'}
-        self.experiment_name = widgets.Text(
-            value=name,
-            placeholder='name',
-            description='Experiment name',
-            style=style,
-            layout=widgets.Layout(width='auto'),
-        )
-        self.experiment_root = widgets.Textarea(
-            value=experiment_root,
-            placeholder='path',
-            description='Experiment root:',
-            style=style,
-            disabled=False,
-            layout=widgets.Layout(width='auto'),
-        )
-        self.model_name = widgets.Textarea(
-            value=model_name,
-            placeholder='name',
-            description='Model name prefix:',
-            style=style,
-            disabled=False,
-            layout=widgets.Layout(width='auto'),
-        )
-        super(ExperimentEntryView, self).__init__(
-            [
-                self.experiment_name,
-                self.experiment_root,
-                self.model_name,
-            ],
-            layout=widgets.Layout(width='400px'),
-        )
-        import ipywidgets as widgets
-
-
 class EpisodeVisualizer(widgets.VBox):
     """A widget that serves to visualize a sequence of images,
     usually from the evaluation.
@@ -795,17 +791,20 @@ class EpisodeVisualizer(widgets.VBox):
     Differs from Episode Review because it directly gets the evaluation
     results dict.
     """
+
     def __init__(self, results, episode=0):
-        self.images = results['images'][episode].numpy()
-        if 'state_sequences' in results:
+        self.images = results["images"][episode].numpy()
+        if "state_sequences" in results:
             # states contain sequences of 20, the last state being the present state.
-            self.states = results['state_sequences'][episode].numpy()[:, -1, :]
+            self.states = results["state_sequences"][episode].numpy()[:, -1, :]
         else:
             self.states = None
 
-        if 'action_sequences' in results:
+        if "action_sequences" in results:
             # actions contain sequences of 30, the first being the action taken.
-            self.actions = results['action_sequences'][episode].numpy()[:, 0, :]
+            self.actions = results["action_sequences"][episode].numpy()[
+                :, 0, :
+            ]
         else:
             self.states = None
 
@@ -823,57 +822,63 @@ class EpisodeVisualizer(widgets.VBox):
             interval=10,
         )
         self.update_interval_slider = widgets.IntSlider(
-            min=1,
-            max=300,
-            value=30,
+            min=1, max=300, value=30,
         )
-        self.update_interval_box = widgets.HBox([
-            widgets.Label("Animation update interval:"),
-            self.update_interval_slider
-        ])
-        self.state_action_label =  widgets.Label("State and action: None")
+        self.update_interval_box = widgets.HBox(
+            [
+                widgets.Label("Animation update interval:"),
+                self.update_interval_slider,
+            ]
+        )
+        self.state_action_label = widgets.Label("State and action: None")
 
         self.episode_slider = widgets.IntSlider()
-        self.episode_hbox = widgets.HBox([
-            self.episode_play,
-            self.episode_slider
-        ])
-        self.episode_vbox = widgets.VBox([
-            self.episode_hbox,
-            self.update_interval_box,
-            self.state_action_label,
-        ])
+        self.episode_hbox = widgets.HBox(
+            [self.episode_play, self.episode_slider]
+        )
+        self.episode_vbox = widgets.VBox(
+            [
+                self.episode_hbox,
+                self.update_interval_box,
+                self.state_action_label,
+            ]
+        )
 
-        widgets.jslink((self.episode_play, 'value'),
-                       (self.episode_slider, 'value'))
-        widgets.jslink((self.episode_play, 'max'),
-                       (self.episode_slider, 'max'))
-        widgets.jslink((self.episode_play, 'min'),
-                       (self.episode_slider, 'min'))
+        widgets.jslink(
+            (self.episode_play, "value"), (self.episode_slider, "value")
+        )
+        widgets.jslink(
+            (self.episode_play, "max"), (self.episode_slider, "max")
+        )
+        widgets.jslink(
+            (self.episode_play, "min"), (self.episode_slider, "min")
+        )
 
-        widgets.jslink((self.update_interval_slider, 'value'),
-                       (self.episode_play, 'interval'))
+        widgets.jslink(
+            (self.update_interval_slider, "value"),
+            (self.episode_play, "interval"),
+        )
 
-        self.episode_image = widgets.Image(format='png',
-                                   width=120,
-                                   height=600,
-                                   )
+        self.episode_image = widgets.Image(
+            format="png", width=120, height=600,
+        )
 
         def episode_slider_callback(change):
-            if change.name == 'value' and change.new is not None:
+            if change.name == "value" and change.new is not None:
                 image = PIL.Image.fromarray(self.images[change.new])
 
                 imgByteArr = io.BytesIO()
-                image.save(imgByteArr, format='PNG')
+                image.save(imgByteArr, format="PNG")
                 imgByteArr = imgByteArr.getvalue()
 
-                self.episode_image.value  = imgByteArr
+                self.episode_image.value = imgByteArr
                 if self.states is not None and self.actions is not None:
-                    self.state_action_label.value = \
-                            f'State and action: {np.around(self.states[change.new], 2)},\
-                            {np.around(self.actions[change.new], 4)}'
+                    self.state_action_label.value = f"State and action: {np.around(self.states[change.new], 2)},\
+                            {np.around(self.actions[change.new], 4)}"
 
-        self.episode_slider.observe(episode_slider_callback, type='change')
+        self.episode_slider.observe(episode_slider_callback, type="change")
         self.episode_slider.value = 0
 
-        super(EpisodeVisualizer, self).__init__([self.episode_vbox, self.episode_image])
+        super(EpisodeVisualizer, self).__init__(
+            [self.episode_vbox, self.episode_image]
+        )
