@@ -1,21 +1,25 @@
 import bisect
-
-import pygame, pdb, torch
-import math, numpy
+import math
+import os
+import pdb
+import pickle
 import random
+import sys
+
+import PIL
+import bezier
+# from skimage.transform import rescale
+import matplotlib.pyplot as plt
 import numpy as np
-import scipy.misc
-import sys, pickle
+import pygame
+import torch
+from gym import core, spaces
+from imageio import imwrite
 # from skimage import measure, transform
 # from matplotlib.image import imsave
-import PIL
+from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
+
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
-from gym import core, spaces
-import os
-from imageio import imwrite
-
-# from skimage.transform import rescale
-
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -242,7 +246,7 @@ class Car:
             # # Pick one out
             # if self.id == 738: self._colour = colours['r']
 
-            # # Green / red -> left-to-right / right-to-left
+            # Green / red -> left-to-right / right-to-left
             # if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
             # if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
 
@@ -452,9 +456,10 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
-        new_h = int(scale*sub_rot_array.shape[0])
-        new_w = int(scale*sub_rot_array.shape[1])
-        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
+        new_h = int(scale * sub_rot_array.shape[0])
+        new_w = int(scale * sub_rot_array.shape[1])
+        sub_rot_array_scaled = np.array(
+            PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2))  # bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
@@ -638,7 +643,8 @@ class Simulator(core.Env):
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False):
 
         # Observation spaces definition
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W),
+                                            dtype=np.float32)
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -671,6 +677,9 @@ class Simulator(core.Env):
         self.user_is_done = None
 
         self.display = display
+
+        self.trajectory_image = None
+        self.observed_car = []
         if self.display:  # if display is required
             pygame.init()  # init PyGame
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
@@ -689,6 +698,7 @@ class Simulator(core.Env):
         self.show_frame_count = show_frame_count
         self.ghost = None
         self.store_sim_video = store_simulator_video
+        self.draw_colored_lane = False
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -917,7 +927,6 @@ class Simulator(core.Env):
 
             # clear the screen
             self.screen.fill(colours['k'])
-
             # background pictures
             if self.photos:
                 for i in range(len(self.photos)):
@@ -926,13 +935,19 @@ class Simulator(core.Env):
             # draw lanes
             self._draw_lanes(self.screen)
 
-            for v in self.vehicles:
-                v.draw(self.screen)
+            if self.draw_colored_lane:
+                for v in self.vehicles:
+                    v.draw(self.screen)
+                    if v not in self.observed_car:
+                        self.observed_car.append(v)
+                        self.draw_trajectory(v)
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2), font=self.font[30])
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2), font=self.font[30])
             draw_text(self.screen, f'fps: {self.mean_fps:.0f}', (270, 2), font=self.font[30])
 
+            if self.done and self.draw_colored_lane:
+                self.get_final_trajectory()
             pygame.display.flip()
 
             # # save surface as image, for visualisation only
@@ -1023,6 +1038,61 @@ class Simulator(core.Env):
                 m = offset
                 draw_line(surface, colours['r'], (0, lane['min'] + m), (sw, lane['min'] + m), 1)
                 draw_line(surface, colours['r'], (0, lane['max'] + m), (sw, lane['max'] + m), 1)
+
+    def draw_trajectory(self, v):
+        pad = 0
+        if self.trajectory_image is None:
+            self.trajectory_image = np.zeros((self.screen_size[0], self.screen_size[1], 4))
+        trajectory = v._trajectory
+        # remove nan
+        real_len = 0
+        for i in range(len(trajectory) - 1, 0, -1):
+            if not math.isnan(trajectory[i, 0]) and not math.isnan(trajectory[i, 1]):
+                real_len = i + 1
+                break
+        # remove waittime
+        points = []
+        points.append(trajectory[0, :])
+        for i in range(real_len):
+            if math.sqrt(pow(trajectory[i, 0] - points[-1][0], 2) + pow(trajectory[i, 1] - points[-1][1], 2)) > 5:
+                points.append(trajectory[i, :])
+        points = np.array(points)
+        curve = bezier.Curve(points.T, degree=len(points) - 1)
+        s_vals = np.linspace(0.0, 1.0, 5 * (len(points) - 1))
+        points = curve.evaluate_multi(s_vals).T
+
+        for i in range(len(points) - 1):
+            x, y = points[i, 0], points[i, 1]
+            p = (int(x), int(y))
+            d = points[i + 1, :] - points[i, :]
+            # HSV 2 RGB
+            rad = math.atan(d[1] / (d[0] + 1e-6))
+            rad = (rad + math.pi / 2) / math.pi
+            if d[0] > 0:
+                H = rad * 0.5
+            else:
+                H = rad * 0.5 + 0.5
+            S = 1
+            V = 1
+            RGBcolor = hsv_to_rgb((H, S, V))
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 0] += RGBcolor[0]
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 1] += RGBcolor[1]
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 2] += RGBcolor[2]
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 3] += 1
+
+    def get_final_trajectory(self):
+        threshold = 0.95
+        self.trajectory_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 3] + 1e-6,
+                                                                                  axis=2)
+        hsv = rgb_to_hsv(self.trajectory_image)
+        s = hsv[:, :, 1]
+        s[s < threshold] = 0
+        hsv[:, :, 1] = s
+        v = hsv[:, :, 2]
+        v[v > 0] = 1
+        hsv[:, :, 2] = v
+        self.trajectory_image = hsv_to_rgb(hsv)
+        plt.imsave("1trajectory.jpg", np.transpose(self.trajectory_image, (1, 0, 2)))
 
     def _pause(self):
         pause = True
