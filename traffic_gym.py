@@ -1,25 +1,21 @@
 import bisect
-import math
-import os
-import pdb
-import pickle
-import random
-import sys
 
-import PIL
-import bezier
-# from skimage.transform import rescale
-import matplotlib.pyplot as plt
+import pygame, pdb, torch
+import math, numpy
+import random
 import numpy as np
-import pygame
-import torch
-from gym import core, spaces
-from imageio import imwrite
+import scipy.misc
+import sys, pickle
 # from skimage import measure, transform
 # from matplotlib.image import imsave
-from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
-
+import PIL
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
+from gym import core, spaces
+import os
+from imageio import imwrite
+
+# from skimage.transform import rescale
+from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -246,7 +242,7 @@ class Car:
             # # Pick one out
             # if self.id == 738: self._colour = colours['r']
 
-            # Green / red -> left-to-right / right-to-left
+            # # Green / red -> left-to-right / right-to-left
             # if d[0] > 0: self._colour = (0, 255, 0)  # green: vehicles moving to the right
             # if d[0] < 0: self._colour = (255, 0, 0)  # red: vehicles moving to the left
 
@@ -458,8 +454,7 @@ class Car:
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
         new_h = int(scale * sub_rot_array.shape[0])
         new_w = int(scale * sub_rot_array.shape[1])
-        sub_rot_array_scaled = np.array(
-            PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2))  # bilinear
+        sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
@@ -643,8 +638,7 @@ class Simulator(core.Env):
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False):
 
         # Observation spaces definition
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W),
-                                            dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -927,6 +921,7 @@ class Simulator(core.Env):
 
             # clear the screen
             self.screen.fill(colours['k'])
+
             # background pictures
             if self.photos:
                 for i in range(len(self.photos)):
@@ -935,9 +930,11 @@ class Simulator(core.Env):
             # draw lanes
             self._draw_lanes(self.screen)
 
+            for v in self.vehicles:
+                v.draw(self.screen)
+
             if self.draw_colored_lane:
                 for v in self.vehicles:
-                    v.draw(self.screen)
                     if v not in self.observed_car:
                         self.observed_car.append(v)
                         self.draw_trajectory(v)
