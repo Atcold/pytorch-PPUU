@@ -16,6 +16,8 @@ from imageio import imwrite
 
 # from skimage.transform import rescale
 from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
+import matplotlib.pyplot as plt
+import bezier
 
 # Conversion LANE_W from real world to pixels
 # A US highway lane width is 3.7 metres, here 50 pixels
@@ -635,7 +637,8 @@ class Simulator(core.Env):
 
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
-                 return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False):
+                 return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False,
+                 draw_colored_lane=False):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -692,7 +695,7 @@ class Simulator(core.Env):
         self.show_frame_count = show_frame_count
         self.ghost = None
         self.store_sim_video = store_simulator_video
-        self.draw_colored_lane = False
+        self.draw_colored_lane = draw_colored_lane
 
     def seed(self, seed=None):
         self.random.seed(seed)
