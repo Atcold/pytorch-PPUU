@@ -8,10 +8,7 @@ import torch
 
 class DataStore:
     def __init__(self, dataset):
-        if dataset == "i80" or dataset == "us101":
-            data_dir = f"traffic-data/state-action-cost/data_{dataset}_v0"
-        else:
-            data_dir = dataset
+        data_dir = dataset
 
         self.images = []
         self.actions = []
@@ -106,7 +103,6 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         # this is needed so that multiple workers don't get the same elements
-        self.random.seed(i)
         return self.get_one_example()
 
     def get_one_example(self):
@@ -151,6 +147,7 @@ class Dataset(torch.utils.data.Dataset):
         t1 -= 1
         actions = actions[t0:t1].float().contiguous()
         ego_cars = ego_cars.float().contiguous()
+        car_sizes = car_sizes.float()
         #          n_cond                      n_pred
         # <---------------------><---------------------------------->
         # .                     ..                                  .
@@ -189,6 +186,7 @@ class Dataset(torch.utils.data.Dataset):
             target_costs=target_costs,
             ids=ids,
             car_sizes=car_sizes,
+            stats=self.data_store.stats,
         )
 
     @staticmethod

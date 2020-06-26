@@ -16,7 +16,7 @@ class Visualization:
             Tabs.HeatMapTab(),
             Tabs.HeatMapComparisonTab(),
             Tabs.DimensionalityReductionPlotTab(),
-            Tabs.ExperimentsDirectoryTab()
+            # Tabs.ExperimentsDirectoryTab()
         ]
         titles = ['Policy performance',
                   'Episode review',
@@ -24,7 +24,7 @@ class Visualization:
                   'Success Heatmap',
                   'Heatmap Compare',
                   'Failures scatter plot',
-                  'Edit',
+                  # 'Edit',
                   ]
         # self.tab.children = [Tabs.HeatMapComparisonTab()]
         # titles = ['test']

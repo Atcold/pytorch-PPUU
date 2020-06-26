@@ -24,7 +24,7 @@ EPISODES = 561
 class DataReader:
     """Container class for the static data access methods"""
 
-    EXPERIMENTS_MAPPING_FILE = "experiments_mapping.json"
+    # EXPERIMENTS_MAPPING_FILE = "experiments_mapping.json"
 
     # @staticmethod
     # @lru_cache(maxsize=1)
@@ -168,7 +168,7 @@ class DataReader:
         return os.path.join(
             DataReader.get_version_checkpoints_path(experiment, version),
             checkpoint,
-            "evaluation_result.json",
+            "evaluation_results.json",
         )
 
     @staticmethod

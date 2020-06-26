@@ -1,4 +1,3 @@
-import os
 import argparse
 import dataclasses
 from dataclasses import dataclass, field
@@ -32,20 +31,38 @@ class ConfigBase:
 
 
 @dataclass
+class ModelConfig(ConfigBase):
+    model_type: str = field(default="vanilla")
+    checkpoint: Union[str, None] = field(default=None)
+
+
+DATASET_PATHS_MAPPING = {
+    "full": "/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data_offroad/state-action-cost/data_i80_v0/",
+    "50": "/misc/vlgscratch4/LecunGroup/nvidia-collab/vlad/traffic-data_offroad_50_test_train_same/state-action-cost/data_i80_v0/",
+}
+
+
+@dataclass
 class TrainingConfig(ConfigBase):
     """The class that holds configurations common to all training
     scripts.  Does not contain model configurations.
     """
 
     learning_rate: float = field(default=0.0001)
-    n_epochs: int = field(default=500)
+    n_epochs: int = field(default=101)
     epoch_size: int = field(default=500)
     batch_size: int = field(default=6)
     validation_size: int = field(default=25)
-    dataset: str = field(default="i80")
+    dataset: str = field(default="full")
     seed: int = field(default=42)
     output_dir: str = field(default=None)
     experiment_name: str = field(default="train_mpur")
+    slurm: bool = field(default=False)
+    run_eval: bool = field(default=False)
+
+    def __post_init__(self):
+        if self.dataset in DATASET_PATHS_MAPPING:
+            self.dataset = DATASET_PATHS_MAPPING[self.dataset]
 
 
 @dataclass

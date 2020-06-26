@@ -9,7 +9,9 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import logging
 from dataclasses import dataclass
 import time
+
 from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import json
 import os
 
@@ -23,11 +25,9 @@ from torch.multiprocessing import Pool, set_start_method
 
 import configs
 import dataloader
-import train_mpur_2
-import policy_costs
+from lightning_modules.mpur import MPURModule
 
-
-torch.multiprocessing.set_sharing_strategy("file_system")
+from costs.policy_costs import PolicyCost
 
 
 def get_optimal_pool_size():
@@ -39,9 +39,9 @@ def get_optimal_pool_size():
 
 @dataclass
 class EvalConfig(configs.ConfigBase):
+    I_80_PATH = "/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data_offroad/state-action-cost/data_i80_v0/"
     checkpoint_path: str = None
-    dataset: str = "i80"
-    # dataset: str = "/home/us441/nvidia-collab/vlad/traffic-data_offroad_small_sparse_dense/state-action-cost/data_i80_v0/"
+    dataset: str = I_80_PATH
     env_map: str = "i80"
     save_sim_video: bool = False
     save_gradients: bool = False
@@ -51,6 +51,7 @@ class EvalConfig(configs.ConfigBase):
     return_episode_data: bool = False
 
     def __post_init__(self):
+        super().__post_init__()
         if self.num_processes == -1:
             self.num_processes = get_optimal_pool_size()
             logging.info(
@@ -60,7 +61,7 @@ class EvalConfig(configs.ConfigBase):
         if self.output_dir is None:
             self.checkpoint_path = os.path.normpath(self.checkpoint_path)
             components = self.checkpoint_path.split(os.path.sep)
-            components[-2] = 'evaluation_results'
+            components[-2] = "evaluation_results"
             self.output_dir = os.path.join(*components)
             if self.checkpoint_path[0] == os.path.sep:
                 self.output_dir = os.path.sep + self.output_dir
@@ -70,7 +71,14 @@ class EvalConfig(configs.ConfigBase):
 
 
 def process_one_episode(
-    config, model_config, env, forward_model, policy_model, data_stats, car_info, index,
+    config,
+    model_config,
+    env,
+    policy_model,
+    policy_cost,
+    data_stats,
+    car_info,
+    index,
 ):
     # movie_dir = path.join(
     #     opt.save_dir, "videos_simulator", plan_file, f"ep{index + 1}"
@@ -84,8 +92,7 @@ def process_one_episode(
     inputs = env.reset(
         time_slot=car_info["time_slot"], vehicle_id=car_info["car_id"]
     )
-    images, states, costs, actions, grad_list = (
-        [],
+    images, states, costs, actions = (
         [],
         [],
         [],
@@ -119,26 +126,20 @@ def process_one_episode(
         action_sequence.append(a)
         state_sequence.append(input_states)
         cntr += 1
-        t = 0
-        T = 1
-        while (t < T) and not done:
-            inputs, cost, done, info = env.step(a[t])
-            if info.collisions_per_frame > 0:
-                has_collided = True
-                # print(f'[collision after {cntr} frames, ending]')
-                done = True
-            off_screen = info.off_screen
-            images.append(input_images[-1])
-            states.append(input_states[-1])
-            costs.append([cost["pixel_proximity_cost"], cost["lane_cost"]])
-            cost_sequence.append(cost)
-            actions.append(
-                (
-                    (torch.tensor(a[t]) - data_stats["a_mean"])
-                    / data_stats["a_std"]
-                )
-            )
-            t += 1
+
+        inputs, cost, done, info = env.step(a[0])
+        if info.collisions_per_frame > 0:
+            has_collided = True
+            # print(f'[collision after {cntr} frames, ending]')
+            done = True
+        off_screen = info.off_screen
+        images.append(input_images[-1])
+        states.append(input_states[-1])
+        costs.append([cost["pixel_proximity_cost"], cost["lane_cost"]])
+        cost_sequence.append(cost)
+        actions.append(
+            ((torch.tensor(a[0]) - data_stats["a_mean"]) / data_stats["a_std"])
+        )
 
     input_state_tfinal = inputs["state"][-1]
 
@@ -157,6 +158,7 @@ def process_one_episode(
 
     images_3_channels = (images[:, :3] + images[:, 3:]).clamp(max=255)
     episode_data = dict(
+        result=result,
         action_sequence=numpy.stack(action_sequence),
         state_sequence=numpy.stack(state_sequence),
         cost_sequence=numpy.stack(cost_sequence),
@@ -164,20 +166,17 @@ def process_one_episode(
         gradients=None,
     )
     if config.save_gradients:
-        episode_data["gradients"] = policy_costs.get_grad_vid(
+        episode_data["gradients"] = policy_cost.get_grad_vid(
             policy_model,
-            model_config.cost_config,
             dict(
                 input_images=images[:, :3].contiguous(),
                 input_states=states,
-                car_sizes=torch.tensor(car_info["car_size"])
+                car_sizes=torch.tensor(car_info["car_size"]),
             ),
-            data_stats,
         )[0]
 
     if config.output_dir is not None:
         episode_data_dir = os.path.join(config.output_dir, "episode_data")
-        os.makedirs(episode_data_dir, exist_ok=True)
         episode_output_path = os.path.join(episode_data_dir, str(index))
         torch.save(episode_data, episode_output_path)
 
@@ -199,24 +198,31 @@ def get_performance_stats(results_per_episode):
 
 
 def main(config):
-    mpur_module = train_mpur_2.MPURModule.load_from_checkpoint(
+    torch.multiprocessing.set_sharing_strategy("file_system")
+
+    mpur_module = MPURModule.load_from_checkpoint(
         checkpoint_path=config.checkpoint_path
     )
 
     data_store = dataloader.DataStore(config.dataset)
     test_dataset = dataloader.EvaluationDataset(data_store, "test")
 
-    gym.envs.registration.register(
-        id="I-80-v1",
-        entry_point="map_i80_ctrl:ControlledI80",
-        kwargs=dict(
-            fps=10,
-            nb_states=mpur_module.config.model_config.n_cond,
-            display=False,
-            delta_t=0.1,
-            store_simulator_video=config.save_sim_video,
-            show_frame_count=False,
-        ),
+    i80_env_id = "I-80-v1"
+    if i80_env_id not in [e.id for e in gym.envs.registry.all()]:
+        gym.envs.registration.register(
+            id=i80_env_id,
+            entry_point="simulator.map_i80_ctrl:ControlledI80",
+            kwargs=dict(
+                fps=10,
+                nb_states=mpur_module.config.model_config.n_cond,
+                display=False,
+                delta_t=0.1,
+                store_simulator_video=config.save_sim_video,
+                show_frame_count=False,
+            ),
+        )
+    policy_cost = PolicyCost(
+        mpur_module.config.cost_config, None, data_store.stats,
     )
     set_start_method("spawn")
 
@@ -227,28 +233,43 @@ def main(config):
     env = gym.make(env_names["i80"])
 
     if config.num_processes > 0:
-        pool = Pool(config.num_processes)
+        executor = ProcessPoolExecutor(max_workers=config.num_processes)
     else:
-        pool = ThreadPool(1)
+        executor = ThreadPoolExecutor(max_workers=1)
 
     async_results = []
     time_started = time.time()
 
+    os.makedirs(os.path.join(config.output_dir, "episode_data"), exist_ok=True)
+
     n_test = len(test_dataset)
     for j, data in enumerate(test_dataset):
+        # async_results.append(
+        #     pool.apply_async(
+        #         process_one_episode,
+        #         (
+        #             config,
+        #             mpur_module.config,
+        #             env,
+        #             mpur_module.policy_model,
+        #             policy_cost,
+        #             data_store.stats,
+        #             data,
+        #             j,
+        #         ),
+        #     )
+        # )
         async_results.append(
-            pool.apply_async(
+            executor.submit(
                 process_one_episode,
-                (
-                    config,
-                    mpur_module.config,
-                    env,
-                    mpur_module.forward_model,
-                    mpur_module.policy_model,
-                    data_store.stats,
-                    data,
-                    j,
-                ),
+                config,
+                mpur_module.config,
+                env,
+                mpur_module.policy_model,
+                policy_cost,
+                data_store.stats,
+                data,
+                j,
             )
         )
 
@@ -256,7 +277,7 @@ def main(config):
 
     total_images = 0
     for j in range(n_test):
-        simulation_result = async_results[j].get()
+        simulation_result = async_results[j].result()
         results_per_episode[j] = simulation_result
         total_images += simulation_result["time_travelled"]
         stats = get_performance_stats(results_per_episode)
@@ -272,8 +293,7 @@ def main(config):
         )
         logging.info(log_string)
 
-    pool.close()
-    pool.join()
+    executor.shutdown()
 
     diff_time = time.time() - time_started
     logging.info(

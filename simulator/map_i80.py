@@ -4,8 +4,8 @@ from os.path import isfile
 import torch
 from random import choice, randrange
 
-from custom_graphics import draw_dashed_line
-from traffic_gym import Simulator, Car, colours
+from simulator.custom_graphics import draw_dashed_line
+from simulator.traffic_gym import Simulator, Car, colours
 import pygame
 import pandas as pd
 import numpy as np
