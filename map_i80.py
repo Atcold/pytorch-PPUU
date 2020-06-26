@@ -30,7 +30,7 @@ class I80Car(Car):
     max_a = 40
     max_b = 0.01
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0, dt=1/10):
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0, dt=1 / 10):
         k = kernel  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
@@ -301,7 +301,7 @@ class I80(Simulator):
                     self.train_indx = pickle.load(f)
                 self.indx_order = list(self.train_indx.keys())
                 self.random.shuffle(self.indx_order)
-            assert not(frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
+            assert not (frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
             time_slot, vehicle_id = self.train_indx[self.indx_order[self.episode % len(self.indx_order)]]
             self.episode += 1
             ################################################################################
@@ -483,76 +483,85 @@ class I80(Simulator):
         # return observation, reward, done, info
         return None, None, self.done, None
 
-    def _draw_lanes(self, surface, mode='human', offset=0):
+    def _draw_lanes(self, surface, mode='human', offset=0, colored_lane=None):
 
         slope = 0.035
 
         lanes = self.lanes  # lanes
 
         if mode == 'human':
-            s = surface  # screen
-            draw_line = pygame.draw.line  # shortcut
-            w = colours['w']  # colour white
-            g = (128, 128, 128)
-            sw = self.screen_size[0]  # screen width
+            if colored_lane is None:
+                s = surface  # screen
+                draw_line = pygame.draw.line  # shortcut
+                w = colours['w']  # colour white
+                g = (128, 128, 128)
+                sw = self.screen_size[0]  # screen width
 
-            for lane in lanes:
-                draw_line(s, g, (0, lane['min']), (sw, lane['min']), 1)
-                # draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
+                for lane in lanes:
+                    draw_line(s, g, (0, lane['min']), (sw, lane['min']), 1)
+                    # draw_dashed_line(s, colours['r'], (0, lane['mid']), (sw, lane['mid']))
 
-            draw_line(s, w, (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
-            bottom = lanes[-1]['max']
-            draw_line(s, w, (0, bottom), (18 * LANE_W, bottom), 3)
-            draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 3)
-            draw_line(s, g, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 1)
-            # draw_line(s, g, (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W), 1)
-            draw_line(s, w, (0, bottom + 53), (60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 3)
-            draw_line(s, w, (60 * LANE_W, bottom + 3), (sw, bottom + 2), 3)
+                draw_line(s, w, (0, lanes[0]['min']), (sw, lanes[0]['min']), 3)
+                bottom = lanes[-1]['max']
+                draw_line(s, w, (0, bottom), (18 * LANE_W, bottom), 3)
+                draw_line(s, w, (0, bottom + 29), (18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 3)
+                draw_line(s, g, (18 * LANE_W, bottom + 13), (31 * LANE_W, bottom), 1)
+                # draw_line(s, g, (0, bottom + 42), (60 * LANE_W, bottom + 42 - slope * 60 * LANE_W), 1)
+                draw_line(s, w, (0, bottom + 53), (60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 3)
+                draw_line(s, w, (60 * LANE_W, bottom + 3), (sw, bottom + 2), 3)
 
-            look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
-            o = self.offset
-            draw_line(s, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
-            draw_line(s, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
-            draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
-
+                look_ahead = MAX_SPEED * 1000 / 3600 * self.SCALE
+                o = self.offset
+                draw_line(s, (255, 255, 0), (look_ahead, o), (look_ahead, 9.4 * LANE_W))
+                draw_line(s, (255, 255, 0), (sw - 1.75 * look_ahead, o), (sw - 1.75 * look_ahead, bottom))
+                draw_line(s, (255, 255, 0), (sw - 0.75 * look_ahead, o), (sw - 0.75 * look_ahead, bottom), 5)
+            else:
+                s = surface  # screen
+                lane = pygame.image.load(colored_lane)
+                s.blit(lane,(0,0))
             # pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
-            s = surface  # screen
-            draw_line = pygame.draw.line  # shortcut
-            w = colours['r']  # colour white
-            b = colours['b']  # colour blue
-            sw = self.screen_size[0]  # screen width
-            m = offset
+            if colored_lane is None:
+                s = surface  # screen
+                draw_line = pygame.draw.line  # shortcut
+                w = colours['r']  # colour white
+                b = colours['b']  # colour blue
+                sw = self.screen_size[0]  # screen width
+                m = offset
 
-            for lane in lanes:
-                draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
+                for lane in lanes:
+                    draw_line(s, w, (0, lane['min'] + m), (sw + 2 * m, lane['min'] + m), 1)
 
-            bottom = lanes[-1]['max'] + m
-            draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
-            draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
-            draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
-            draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
-            draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
+                bottom = lanes[-1]['max'] + m
+                draw_line(s, w, (0, bottom), (m + 18 * LANE_W, bottom), 1)
+                draw_line(s, w, (m, bottom + 29), (m + 18 * LANE_W, bottom + 29 - slope * 18 * LANE_W), 1)
+                draw_line(s, w, (m + 18 * LANE_W, bottom + 13), (m + 31 * LANE_W, bottom), 1)
+                draw_line(s, w, (m, bottom + 53), (m + 60 * LANE_W, bottom + 53 - slope * 60 * LANE_W), 1)
+                draw_line(s, w, (m + 60 * LANE_W, bottom + 3), (2 * m + sw, bottom), 1)
 
-            # offroad regions
-            pygame.Surface.fill(s, b, pygame.Rect(m + 0, m + lanes[0]['min']-35, sw, 34))
-            pygame.draw.polygon(s, b, [
-                (m + 0, bottom+2),
-                (m + 0, bottom + 29-1),
-                (m + 18 * LANE_W, bottom + 29-1 - slope * 18 * LANE_W),
-                (m + 18 * LANE_W, bottom+2)
-            ])
-            pygame.draw.polygon(s, b, [
-                (m + 0, bottom + 54),
-                (m + 0, bottom + 54+30),
-                (m + 60 * LANE_W, bottom + 54+30),
-                (m + 60 * LANE_W, bottom + 54 - slope * 60 * LANE_W)
-            ])
-            pygame.Surface.fill(
-                s,
-                b,
-                pygame.Rect(m + 60 * LANE_W, bottom + 5, sw-60*LANE_W, 54+30-5))
+                # offroad regions
+                pygame.Surface.fill(s, b, pygame.Rect(m + 0, m + lanes[0]['min'] - 35, sw, 34))
+                pygame.draw.polygon(s, b, [
+                    (m + 0, bottom + 2),
+                    (m + 0, bottom + 29 - 1),
+                    (m + 18 * LANE_W, bottom + 29 - 1 - slope * 18 * LANE_W),
+                    (m + 18 * LANE_W, bottom + 2)
+                ])
+                pygame.draw.polygon(s, b, [
+                    (m + 0, bottom + 54),
+                    (m + 0, bottom + 54 + 30),
+                    (m + 60 * LANE_W, bottom + 54 + 30),
+                    (m + 60 * LANE_W, bottom + 54 - slope * 60 * LANE_W)
+                ])
+                pygame.Surface.fill(
+                    s,
+                    b,
+                    pygame.Rect(m + 60 * LANE_W, bottom + 5, sw - 60 * LANE_W, 54 + 30 - 5))
 
-            self._lane_surfaces[mode] = surface.copy()
+                self._lane_surfaces[mode] = surface.copy()
+            else:
+                s = surface  # screen
+                lane = pygame.image.load(colored_lane)
+                s.blit(lane,(0,0))
             # pygame.image.save(surface, "i80-machine.png")

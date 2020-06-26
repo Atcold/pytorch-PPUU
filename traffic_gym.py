@@ -638,7 +638,7 @@ class Simulator(core.Env):
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False,
-                 draw_colored_lane=False):
+                 draw_colored_lane=True, colored_lane=None):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -676,7 +676,7 @@ class Simulator(core.Env):
         self.display = display
 
         self.trajectory_image = None
-        self.observed_car = []
+        self.observed_car = list()
         if self.display:  # if display is required
             pygame.init()  # init PyGame
             self.screen = pygame.display.set_mode(self.screen_size)  # set screen size
@@ -696,6 +696,7 @@ class Simulator(core.Env):
         self.ghost = None
         self.store_sim_video = store_simulator_video
         self.draw_colored_lane = draw_colored_lane
+        self.colored_lane = colored_lane
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -931,7 +932,7 @@ class Simulator(core.Env):
                     self.screen.blit(self.photos[i], self.photos_rect[i])
 
             # draw lanes
-            self._draw_lanes(self.screen)
+            self._draw_lanes(self.screen, colored_lane=self.colored_lane)
 
             for v in self.vehicles:
                 v.draw(self.screen)
@@ -978,7 +979,7 @@ class Simulator(core.Env):
 
             except KeyError:
                 lane_surface = pygame.Surface(machine_screen_size)
-                self._draw_lanes(lane_surface, mode=mode, offset=max_extension)
+                self._draw_lanes(lane_surface, mode=mode, offset=max_extension, colored_lane=self.colored_lane)
 
             # # draw vehicles
             # for v in self.vehicles:
@@ -1015,7 +1016,7 @@ class Simulator(core.Env):
             # pygame.image.save(vehicle_surface, "vehicle_surface.png")
             # self._pause()
 
-    def _draw_lanes(self, surface, mode='human', offset=0):
+    def _draw_lanes(self, surface, mode='human', offset=0, colored_lane=None):
         draw_line = pygame.draw.line
         if mode == 'human':
             lanes = self.lanes
