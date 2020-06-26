@@ -519,7 +519,7 @@ class I80(Simulator):
                 s = surface  # screen
                 lane = pygame.image.load(colored_lane)
                 s.blit(lane,(0,0))
-            # pygame.image.save(s, "i80-real.png")
+            #pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
             if colored_lane is None:
@@ -561,7 +561,10 @@ class I80(Simulator):
 
                 self._lane_surfaces[mode] = surface.copy()
             else:
+                m = offset
+                sw = self.screen_size[0]
                 s = surface  # screen
                 lane = pygame.image.load(colored_lane)
-                s.blit(lane,(0,0))
-            # pygame.image.save(surface, "i80-machine.png")
+                s.blit(lane,(m + 0, m + lanes[0]['min'] - 35))
+                self._lane_surfaces[mode] = surface.copy()
+            #pygame.image.save(surface, "i80-machine.png")

@@ -13,6 +13,7 @@ dependencies:
   - jupyter
   - scikit-learn
   - scikit-image
+  - opencv
   - pip:
     - gym
     - pygame>=2.0.0.dev6
