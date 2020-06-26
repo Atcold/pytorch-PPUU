@@ -562,7 +562,6 @@ class I80(Simulator):
                 self._lane_surfaces[mode] = surface.copy()
             else:
                 m = offset
-                sw = self.screen_size[0]
                 s = surface  # screen
                 lane = pygame.image.load(colored_lane)
                 s.blit(lane,(m + 0, m + lanes[0]['min'] - 35))

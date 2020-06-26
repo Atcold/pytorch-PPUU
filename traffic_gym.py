@@ -527,6 +527,8 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
         elif object_name == 'ego_car_image' and self._ego_car_image is None:
             self._ego_car_image = self._get_observation_image(*object_)[0]
+        elif object_name == 'lane_image' and self._ego_car_image is None:
+            self._ego_car_image = self._get_observation_image(*object_)[0]
 
     def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
         if len(self._states_image) < n: return None  # no enough samples
@@ -638,7 +640,7 @@ class Simulator(core.Env):
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False,
-                 draw_colored_lane=False, colored_lane=None):
+                 draw_colored_lane=False, colored_lane="7gtrajectory.jpg"):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -992,18 +994,22 @@ class Simulator(core.Env):
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
                     # For every vehicle we want to extract the state, start with a black surface
+
                     vehicle_surface.fill((0, 0, 0))
                     # Draw all the other vehicles (in green)
                     for vv in set(self.vehicles) - {v}:
                         vv.draw(vehicle_surface, mode=mode, offset=max_extension)
                     # Superimpose the lanes
-                    vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
+                    if self.colored_lane is None:
+                        vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
+                    else:
+                        v.store('lane_image', (max_extension, ego_surface, width_height, scale, self.frame))
                     # Empty ego-surface
                     ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
-                    # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
+                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
                     v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame))
                     # Store whole history, if requested
@@ -1013,7 +1019,7 @@ class Simulator(core.Env):
                         v.frames.append(pygame.surfarray.array3d(vehicle_surface).transpose(1, 0, 2))  # flip x and y
 
             # # save surface as image, for visualisation only
-            # pygame.image.save(vehicle_surface, "vehicle_surface.png")
+            pygame.image.save(lane_surface, "lane_surface.png")
             # self._pause()
 
     def _draw_lanes(self, surface, mode='human', offset=0, colored_lane=None):
