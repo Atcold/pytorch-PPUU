@@ -60,6 +60,7 @@ class I80Car(Car):
         self._states = list()
         self._states_image = list()
         self._ego_car_image = None
+        self._lanes_image = list()
         self._actions = list()
         self._passing = False
         self._actions = list()
@@ -402,7 +403,7 @@ class I80(Simulator):
                 if self.state_image and self.store:
                     file_name = os.path.join(self.data_dir, self.DUMP_NAME, os.path.basename(self._t_slot))
                     print(f'[dumping {v} in {file_name}]')
-                    v.dump_state_image(file_name, 'tensor')
+                    v.dump_state_image(file_name, 'tensor', colored_lane=self.colored_lane)
                 self.vehicles.remove(v)
             else:
                 # Insort it in my vehicle list

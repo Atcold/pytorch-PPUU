@@ -102,6 +102,7 @@ class Car:
         self._states = list()
         self._states_image = list()
         self._ego_car_image = None
+        self._lanes_image = list()
         self._actions = list()
         self._safe_factor = random.gauss(1.5, 0)  # 0.9 Germany, 2 safe
         self.pid_k1 = np.random.normal(1e-4, 1e-5)
@@ -527,8 +528,8 @@ class Car:
             self._states_image.append(self._get_observation_image(*object_))
         elif object_name == 'ego_car_image' and self._ego_car_image is None:
             self._ego_car_image = self._get_observation_image(*object_)[0]
-        elif object_name == 'lane_image' and self._ego_car_image is None:
-            self._ego_car_image = self._get_observation_image(*object_)[0]
+        elif object_name == 'lane_image':
+            self._lanes_image.append(self._get_observation_image(*object_))
 
     def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
         if len(self._states_image) < n: return None  # no enough samples
@@ -576,9 +577,12 @@ class Car:
 
         return observation, cost, self.off_screen or done, self
 
-    def dump_state_image(self, save_dir='scratch/', mode='img'):
+    def dump_state_image(self, save_dir='scratch/', mode='img', colored_lane=None):
         os.system('mkdir -p ' + save_dir)
         transpose = list(zip(*self._states_image))
+        if colored_lane is not None:
+            lanes_transpose = list(zip(*self._lanes_image))
+            lanes = lanes_transpose[0]
         if len(transpose) == 0:
             print(f'failure, {save_dir}')
             # print(transpose)
@@ -594,6 +598,9 @@ class Car:
             mask = torch.stack(zip_[1])
             # save in torch format
             im_pth = torch.stack(im).permute(0, 3, 1, 2)
+            lane_pth = None
+            if colored_lane is not None:
+                lane_pth = torch.stack(lanes).permute(0, 3, 1, 2)
             with open(os.path.join(save_dir, f'car{self.id}.pkl'), 'wb') as f:
                 pickle.dump({
                     'images': im_pth,
@@ -605,6 +612,7 @@ class Car:
                     'mask': mask,
                     'frames': frames,
                     'ego_car': self._ego_car_image.permute(2, 0, 1),
+                    'lane_images': lane_pth
                 }, f)
         elif mode == 'img':
             save_dir = os.path.join(save_dir, str(self.id))
@@ -1003,13 +1011,13 @@ class Simulator(core.Env):
                     if self.colored_lane is None:
                         vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
                     else:
-                        v.store('lane_image', (max_extension, ego_surface, width_height, scale, self.frame))
+                        v.store('lane_image', (max_extension, lane_surface, width_height, scale, self.frame))
                     # Empty ego-surface
                     ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
-                    vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
+                    # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
                     v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame))
                     # Store whole history, if requested
@@ -1019,7 +1027,7 @@ class Simulator(core.Env):
                         v.frames.append(pygame.surfarray.array3d(vehicle_surface).transpose(1, 0, 2))  # flip x and y
 
             # # save surface as image, for visualisation only
-            pygame.image.save(lane_surface, "lane_surface.png")
+            # pygame.image.save(lane_surface, "lane_surface.png")
             # self._pause()
 
     def _draw_lanes(self, surface, mode='human', offset=0, colored_lane=None):
