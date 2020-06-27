@@ -18,6 +18,9 @@ class encoder(nn.Module):
         self.a_size = a_size
         self.n_inputs = opt.ncond if n_inputs is None else n_inputs
         self.n_channels = n_channels
+        # colored lane needs an additional channel
+        if opt.use_colored_lane:
+            self.n_channels = 4
         # frame encoder
         if opt.layers == 3:
             assert(opt.nfeature % 4 == 0)
@@ -125,6 +128,11 @@ class decoder(nn.Module):
         super(decoder, self).__init__()
         self.opt = opt
         self.n_out = n_out
+        self.n_channels = 3
+        # colored lane needs an additional channel
+        if opt.use_colored_lane:
+            self.n_channels = 4
+
         if self.opt.layers == 3:
             assert(opt.nfeature % 4 == 0)
             self.feature_maps = [int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]
@@ -135,7 +143,7 @@ class decoder(nn.Module):
                 nn.ConvTranspose2d(self.feature_maps[1], self.feature_maps[0], (5, 5), 2, (0, 1)),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (0, 1))
+                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*self.n_channels, (2, 2), 2, (0, 1))
             )
 
             self.h_reducer = nn.Sequential(
@@ -161,7 +169,7 @@ class decoder(nn.Module):
                 nn.ConvTranspose2d(self.feature_maps[1], self.feature_maps[0], (2, 4), 2, (1, 0)),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*3, (2, 2), 2, (1, 0))
+                nn.ConvTranspose2d(self.feature_maps[0], self.n_out*self.n_channels, (2, 2), 2, (1, 0))
             )
 
             self.h_reducer = nn.Sequential(

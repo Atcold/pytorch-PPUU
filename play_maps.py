@@ -11,6 +11,7 @@ parser.add_argument('-store', type=int, default=0)
 parser.add_argument('-nb_episodes', type=int, default=1)
 parser.add_argument('-fps', type=int, default=1e3)
 parser.add_argument('-delta_t', type=float, default=0.1)
+parser.add_argument('-colored_lane', type=str, default=None)
 
 opt = parser.parse_args()
 
@@ -21,6 +22,7 @@ kwargs = {
     'state_image': opt.state_image,
     'store': opt.store,
     'delta_t': opt.delta_t,
+    'colored_lane': opt.colored_lane
 }
 
 gym.envs.registration.register(

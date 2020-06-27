@@ -4,7 +4,7 @@ import torch
 
 
 class DataLoader:
-    def __init__(self, fname, opt, dataset='simulator', single_shard=False):
+    def __init__(self, fname, opt, dataset='simulator', single_shard=False, use_colored_lane=False):
         if opt.debug:
             single_shard = True
         self.opt = opt
@@ -28,6 +28,10 @@ class DataLoader:
         self.states = []
         self.ids = []
         self.ego_car_images = []
+        self.use_colored_lane = use_colored_lane
+        if use_colored_lane:
+            self.lane_images = []
+
         for df in data_files:
             combined_data_path = f'{data_dir}/{df}/all_data.pth'
             if os.path.isfile(combined_data_path):
@@ -39,6 +43,8 @@ class DataLoader:
                 self.states += data.get('states')
                 self.ids += data.get('ids')
                 self.ego_car_images += data.get('ego_car')
+                if use_colored_lane:
+                    self.lane_images += data.get('lane_image')
             else:
                 print(data_dir)
                 images = []
@@ -48,6 +54,8 @@ class DataLoader:
                 ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
                 ids.sort()
                 ego_car_images = []
+                if use_colored_lane:
+                    lane_images = []
                 for f in ids:
                     print(f'[loading {f}]')
                     fd = pickle.load(open(f, 'rb'))
@@ -64,6 +72,8 @@ class DataLoader:
                     ), 1),)
                     states.append(fd['states'])
                     ego_car_images.append(fd['ego_car'])
+                    if use_colored_lane:
+                        lane_images.append(fd['lane_image'])
 
                 print(f'Saving {combined_data_path} to disk')
                 torch.save({
@@ -73,6 +83,7 @@ class DataLoader:
                     'states': states,
                     'ids': ids,
                     'ego_car': ego_car_images,
+                    'lane_image': lane_images
                 }, combined_data_path)
                 self.images += images
                 self.actions += actions
@@ -80,6 +91,8 @@ class DataLoader:
                 self.states += states
                 self.ids += ids
                 self.ego_car_images += ego_car_images
+                if use_colored_lane:
+                    self.lane_images += lane_images
 
         self.n_episodes = len(self.images)
         print(f'Number of episodes: {self.n_episodes}')
@@ -156,6 +169,8 @@ class DataLoader:
             npred = self.opt.npred
 
         images, states, actions, costs, ids, sizes, ego_cars = [], [], [], [], [], [], []
+        if self.use_colored_lane:
+            lane_images = []
         nb = 0
         T = self.opt.ncond + npred
         while nb < self.opt.batch_size:
@@ -170,6 +185,8 @@ class DataLoader:
                 costs.append(self.costs[s][t : t + T].to(device))
                 ids.append(self.ids[s])
                 ego_cars.append(self.ego_car_images[s].to(device))
+                if self.use_colored_lane:
+                    lane_images.append(self.lane_images[s].to(device))
                 splits = self.ids[s].split('/')
                 time_slot = splits[-2]
                 car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
@@ -183,6 +200,8 @@ class DataLoader:
         actions = torch.stack(actions)
         sizes   = torch.tensor(sizes)
         ego_cars = torch.stack(ego_cars)
+        if self.use_colored_lane:
+            lane_images = torch.stack(lane_images)
 
         # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
@@ -190,7 +209,8 @@ class DataLoader:
             states = self.normalise_state_vector(states)
         images = self.normalise_state_image(images)
         ego_cars = self.normalise_state_image(ego_cars)
-
+        if self.use_colored_lane:
+            lane_images = self.normalise_state_image(lane_images)
         costs = torch.stack(costs)
 
         # |-----ncond-----||------------npred------------||
@@ -251,7 +271,6 @@ class DataLoader:
         actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
         actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
         return actions
-
 
 if __name__ == '__main__':
     # Create some dummy options
