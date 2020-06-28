@@ -202,7 +202,7 @@ class DataLoader:
         ego_cars = torch.stack(ego_cars)
         if self.use_colored_lane:
             lane_images = torch.stack(lane_images)
-            images = torch.cat([lane_images,images[:,:,1,:,:].unsqueeze(dim=2)],dim=2)
+            images = torch.cat([lane_images,images[:,:,1,:,:].unsqueeze(dim=2)],dim=2) # Only use green channel
             del lane_images
 
 
@@ -212,6 +212,7 @@ class DataLoader:
             states = self.normalise_state_vector(states)
         images = self.normalise_state_image(images)
         ego_cars = self.normalise_state_image(ego_cars)
+
         costs = torch.stack(costs)
 
         # |-----ncond-----||------------npred------------||
@@ -272,6 +273,7 @@ class DataLoader:
         actions -= self.a_mean.view(1, 1, 2).expand(actions.size()).to(actions.device)
         actions /= (1e-8 + self.a_std.view(1, 1, 2).expand(actions.size())).to(actions.device)
         return actions
+
 
 if __name__ == '__main__':
     # Create some dummy options

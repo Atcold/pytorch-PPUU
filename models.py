@@ -132,7 +132,6 @@ class decoder(nn.Module):
         # colored lane needs an additional channel
         if opt.use_colored_lane:
             self.n_channels = 4
-
         if self.opt.layers == 3:
             assert(opt.nfeature % 4 == 0)
             self.feature_maps = [int(opt.nfeature/4), int(opt.nfeature/2), opt.nfeature]

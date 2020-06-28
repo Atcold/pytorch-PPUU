@@ -52,7 +52,6 @@ random.seed(opt.seed)
 numpy.random.seed(opt.seed)
 torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
-
 # define colored_lane symbol for dataloader
 use_colored_lane = opt.use_colored_lane
 dataloader = DataLoader(None, opt, opt.dataset, use_colored_lane=use_colored_lane)

@@ -30,7 +30,7 @@ class I80Car(Car):
     max_a = 40
     max_b = 0.01
 
-    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0, dt=1 / 10):
+    def __init__(self, df, y_offset, look_ahead, screen_w, font=None, kernel=0, dt=1/10):
         k = kernel  # running window size
         self._length = df.at[df.index[0], 'Vehicle Length'] * FOOT * SCALE
         self._width = df.at[df.index[0], 'Vehicle Width'] * FOOT * SCALE
@@ -302,7 +302,7 @@ class I80(Simulator):
                     self.train_indx = pickle.load(f)
                 self.indx_order = list(self.train_indx.keys())
                 self.random.shuffle(self.indx_order)
-            assert not (frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
+            assert not(frame or time_slot or vehicle_id), 'Already selecting training episode from file.'
             time_slot, vehicle_id = self.train_indx[self.indx_order[self.episode % len(self.indx_order)]]
             self.episode += 1
             ################################################################################
@@ -520,7 +520,8 @@ class I80(Simulator):
                 s = surface  # screen
                 lane = pygame.image.load(colored_lane)
                 s.blit(lane,(0,0))
-            #pygame.image.save(s, "i80-real.png")
+
+            # pygame.image.save(s, "i80-real.png")
 
         if mode == 'machine':
             if colored_lane is None:
@@ -567,4 +568,4 @@ class I80(Simulator):
                 lane = pygame.image.load(colored_lane)
                 s.blit(lane,(m + 0, m + lanes[0]['min'] - 35))
                 self._lane_surfaces[mode] = surface.copy()
-            #pygame.image.save(surface, "i80-machine.png")
+            # pygame.image.save(surface, "i80-machine.png")

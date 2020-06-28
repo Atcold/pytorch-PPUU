@@ -455,8 +455,8 @@ class Car:
         sub_rot_surface = rot_surface.subsurface(x, y, *width_height)
         sub_rot_array = pygame.surfarray.array3d(sub_rot_surface).transpose(1, 0, 2)  # flip x and y
         # sub_rot_array_scaled = rescale(sub_rot_array, scale, mode='constant')  # output not consistent with below
-        new_h = int(scale * sub_rot_array.shape[0])
-        new_w = int(scale * sub_rot_array.shape[1])
+        new_h = int(scale*sub_rot_array.shape[0])
+        new_w = int(scale*sub_rot_array.shape[1])
         sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
         sub_rot_array_scaled_up[:, :, 0] *= 4
@@ -684,7 +684,6 @@ class Simulator(core.Env):
         self.user_is_done = None
 
         self.display = display
-
         self.trajectory_image = None
         self.observed_car = list()
         if self.display:  # if display is required
@@ -1002,7 +1001,6 @@ class Simulator(core.Env):
             for i, v in enumerate(self.vehicles):
                 if (self.store or v.is_controlled) and v.valid:
                     # For every vehicle we want to extract the state, start with a black surface
-
                     vehicle_surface.fill((0, 0, 0))
                     # Draw all the other vehicles (in green)
                     for vv in set(self.vehicles) - {v}:
@@ -1027,7 +1025,7 @@ class Simulator(core.Env):
                         v.frames.append(pygame.surfarray.array3d(vehicle_surface).transpose(1, 0, 2))  # flip x and y
 
             # # save surface as image, for visualisation only
-            # pygame.image.save(lane_surface, "lane_surface.png")
+            # pygame.image.save(vehicle_surface, "vehicle_surface.png")
             # self._pause()
 
     def _draw_lanes(self, surface, mode='human', offset=0, colored_lane=None):
