@@ -26,7 +26,7 @@ class encoder(nn.Module):
             assert(opt.nfeature % 4 == 0)
             self.feature_maps = (opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(self.n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -38,7 +38,7 @@ class encoder(nn.Module):
             assert(opt.nfeature % 8 == 0)
             self.feature_maps = (opt.nfeature // 8, opt.nfeature // 4, opt.nfeature // 2, opt.nfeature)
             self.f_encoder = nn.Sequential(
-                nn.Conv2d(n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
+                nn.Conv2d(self.n_channels * self.n_inputs, self.feature_maps[0], 4, 2, 1),
                 nn.Dropout2d(p=opt.dropout, inplace=True),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(self.feature_maps[0], self.feature_maps[1], 4, 2, 1),
@@ -197,7 +197,7 @@ class decoder(nn.Module):
         pred_state = self.s_predictor(h_reduced)
         pred_image = self.f_decoder(h)
         pred_image = pred_image[:, :, :self.opt.height, :self.opt.width].clone()
-        pred_image = pred_image.view(bsize, 1, 3*self.n_out, self.opt.height, self.opt.width)
+        pred_image = pred_image.view(bsize, 1, self.n_channels*self.n_out, self.opt.height, self.opt.width)
         return pred_image, pred_state
 
 

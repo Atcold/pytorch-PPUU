@@ -43,7 +43,7 @@ parser.add_argument('-enable_tensorboard', action='store_true',
 parser.add_argument('-tensorboard_dir', type=str, default='models',
                     help='path to the directory where to save tensorboard log. If passed empty path' \
                          ' no logs are saved.')
-parser.add_argument('-colored_lane', type=bool, default=False, help='use colored lanes for forward model')
+parser.add_argument('-use_colored_lane', type=bool, default=False, help='use colored lanes for forward model')
 opt = parser.parse_args()
 
 os.system('mkdir -p ' + opt.model_dir)
@@ -54,7 +54,7 @@ torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
 
 # define colored_lane symbol for dataloader
-use_colored_lane = opt.colored_lane
+use_colored_lane = opt.use_colored_lane
 dataloader = DataLoader(None, opt, opt.dataset, use_colored_lane=use_colored_lane)
 
 

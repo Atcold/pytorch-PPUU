@@ -44,7 +44,7 @@ class DataLoader:
                 self.ids += data.get('ids')
                 self.ego_car_images += data.get('ego_car')
                 if use_colored_lane:
-                    self.lane_images += data.get('lane_image')
+                    self.lane_images += data.get('lane_images')
             else:
                 print(data_dir)
                 images = []
@@ -73,7 +73,7 @@ class DataLoader:
                     states.append(fd['states'])
                     ego_car_images.append(fd['ego_car'])
                     if use_colored_lane:
-                        lane_images.append(fd['lane_image'])
+                        lane_images.append(fd['lane_images'])
 
                 print(f'Saving {combined_data_path} to disk')
                 torch.save({
@@ -83,7 +83,7 @@ class DataLoader:
                     'states': states,
                     'ids': ids,
                     'ego_car': ego_car_images,
-                    'lane_image': lane_images
+                    'lane_images': lane_images
                 }, combined_data_path)
                 self.images += images
                 self.actions += actions
@@ -186,7 +186,7 @@ class DataLoader:
                 ids.append(self.ids[s])
                 ego_cars.append(self.ego_car_images[s].to(device))
                 if self.use_colored_lane:
-                    lane_images.append(self.lane_images[s].to(device))
+                    lane_images.append(self.lane_images[s][t : t + T].to(device))
                 splits = self.ids[s].split('/')
                 time_slot = splits[-2]
                 car_id = int(re.findall(r'car(\d+).pkl', splits[-1])[0])
@@ -202,6 +202,9 @@ class DataLoader:
         ego_cars = torch.stack(ego_cars)
         if self.use_colored_lane:
             lane_images = torch.stack(lane_images)
+            images = torch.cat([lane_images,images[:,:,1,:,:].unsqueeze(dim=2)],dim=2)
+            del lane_images
+
 
         # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
@@ -209,8 +212,6 @@ class DataLoader:
             states = self.normalise_state_vector(states)
         images = self.normalise_state_image(images)
         ego_cars = self.normalise_state_image(ego_cars)
-        if self.use_colored_lane:
-            lane_images = self.normalise_state_image(lane_images)
         costs = torch.stack(costs)
 
         # |-----ncond-----||------------npred------------||
