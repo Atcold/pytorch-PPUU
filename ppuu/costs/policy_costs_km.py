@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from dataclasses import dataclass, field
 
-from costs.policy_costs_continuous import PolicyCostContinuous
+from ppuu.costs.policy_costs_continuous import PolicyCostContinuous
 
 
 class PolicyCostKM(PolicyCostContinuous):

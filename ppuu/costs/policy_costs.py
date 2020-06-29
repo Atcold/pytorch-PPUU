@@ -1,12 +1,11 @@
 """Costs calculation for policy. Calculates uncertainty and state costs.
 """
-from typing import Union
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import torch
 
-import configs
+from ppuu import configs
 
 
 class PolicyCostBase(ABC):
@@ -436,7 +435,12 @@ class PolicyCost(PolicyCostBase):
                 f"[estimating normal uncertainty ranges: {i / self.config.uncertainty_n_batches:2.1%}]",
                 end="\r",
             )
-            batch = next(data_iter)
+            try:
+                batch = next(data_iter)
+            except StopIteration:
+                data_iter = iter(dataloader)
+                batch = next(data_iter)
+
             for k in batch:
                 if torch.is_tensor(batch[k]):
                     batch[k] = batch[k].to(self.forward_model.device)
@@ -535,18 +539,20 @@ class PolicyCost(PolicyCostBase):
 
     def calculate_z_cost(self, inputs, predictions):
         u_loss = self.calculate_uncertainty_cost(inputs, predictions)
-        proximity_loss = (
-            -1
-            * self.compute_state_costs_for_z(
-                predictions["pred_images"],
-                predictions["pred_states"],
-                inputs["car_sizes"],
-            )["proximity_loss"]
-        )
+        proximity_loss = self.compute_state_costs_for_z(
+            predictions["pred_images"],
+            predictions["pred_states"],
+            inputs["car_sizes"],
+        )["proximity_loss"]
         result = self.compute_combined_loss(
-            proximity_loss, u_loss, lane_loss=0, action_loss=0, offroad_loss=0,
+            proximity_loss=-1 * proximity_loss,
+            uncertainty_loss=u_loss,
+            lane_loss=0,
+            action_loss=0,
+            offroad_loss=0,
         )
-        return result
+        components = dict(proximity_loss=proximity_loss, u_loss=u_loss,)
+        return result, components
 
     def get_grad_vid(self, policy_model, batch, device="cuda"):
         input_images = batch["input_images"].clone()

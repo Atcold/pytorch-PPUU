@@ -4,7 +4,7 @@ import yaml
 
 import submitit
 
-import configs
+from ppuu import configs
 
 LOG_CONFIG_PATH = "./slurm_config.yaml"
 

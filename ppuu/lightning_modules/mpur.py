@@ -9,11 +9,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 
-from dataloader import DataStore, Dataset
-from costs import PolicyCost, PolicyCostContinuous
-import configs
-from modeling import policy_models
-from modeling.forward_models import ForwardModel
+from ppuu.dataloader import DataStore, Dataset
+from ppuu.costs import PolicyCost, PolicyCostContinuous
+from ppuu import configs
+from ppuu.modeling import policy_models
+from ppuu.modeling.forward_models import ForwardModel
 
 
 def inject(cost_type=PolicyCost, fm_type=ForwardModel):
@@ -43,9 +43,9 @@ def inject(cost_type=PolicyCost, fm_type=ForwardModel):
 
             @dataclass
             class Config(configs.ConfigBase):
-                model_config: cls_.ModelConfig
-                cost_config: cost_type.Config
-                training_config: cls_.TrainingConfig
+                model_config: cls_.ModelConfig = cls_.ModelConfig()
+                cost_config: cost_type.Config = cost_type.Config()
+                training_config: cls_.TrainingConfig = cls_.TrainingConfig()
 
         Cls.Config.__qualname__ = config_name
         Cls.Config.__name__ = config_name

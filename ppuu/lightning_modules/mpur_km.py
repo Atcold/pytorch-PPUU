@@ -1,9 +1,9 @@
 """Train a policy / controller"""
 
 
-from lightning_modules.mpur import MPURModule, inject
-from costs.policy_costs_km import PolicyCostKM, PolicyCostKMSplit
-from modeling.forward_model_km import ForwardModelKM
+from ppuu.lightning_modules.mpur import MPURModule, inject
+from ppuu.costs.policy_costs_km import PolicyCostKM, PolicyCostKMSplit
+from ppuu.modeling.forward_model_km import ForwardModelKM
 
 
 @inject(cost_type=PolicyCostKM, fm_type=ForwardModelKM)

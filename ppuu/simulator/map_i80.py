@@ -240,7 +240,7 @@ class I80(Simulator):
     def _get_data_frame(self, time_slot, x_max, x_offset):
         if time_slot in self.cached_data_frames:
             return self.cached_data_frames[time_slot]
-        file_name = f'traffic-data/xy-trajectories/{time_slot}'
+        file_name = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
             print(f'Loading trajectories from {file_name}')

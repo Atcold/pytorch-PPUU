@@ -2,6 +2,8 @@ from typing import Union
 
 import torch
 
+import ppuu.modeling.models as models
+
 
 class ForwardModel(torch.nn.Module):
     def __init__(self, file_path):

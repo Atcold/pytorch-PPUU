@@ -2,9 +2,10 @@ import os
 import argparse
 import re
 import time
-import slurm
 import glob
-import eval_policy
+
+from ppuu import slurm
+from ppuu import eval_policy
 
 MODEL_REGEX = ".*policy_networks.*step\d+.model$"
 

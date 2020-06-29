@@ -2,7 +2,7 @@
 
 from torch import nn
 
-from modeling.common_models import Encoder
+from ppuu.modeling.common_models import Encoder
 
 
 class DeterministicPolicy(nn.Module):

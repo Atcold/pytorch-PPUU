@@ -61,6 +61,10 @@ class TrainingConfig(ConfigBase):
     run_eval: bool = field(default=False)
 
     def __post_init__(self):
+        self.set_dataset(self.dataset)
+
+    def set_dataset(self, dataset):
+        self.dataset = dataset
         if self.dataset in DATASET_PATHS_MAPPING:
             self.dataset = DATASET_PATHS_MAPPING[self.dataset]
 
@@ -72,6 +76,9 @@ class DataConfig(ConfigBase):
     """
 
     pass
+
+    def __post_init__(self):
+        pass
 
 
 class DataclassArgParser(argparse.ArgumentParser):

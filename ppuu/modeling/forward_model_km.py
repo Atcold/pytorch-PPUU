@@ -2,7 +2,7 @@ from typing import Union
 
 import torch
 
-from modeling.forward_models import ForwardModel
+from ppuu.modeling.forward_models import ForwardModel
 
 
 class ForwardModelKM(ForwardModel):

@@ -23,11 +23,11 @@ import torch.nn
 import torch.nn.parallel
 from torch.multiprocessing import Pool, set_start_method
 
-import configs
-import dataloader
-from lightning_modules.mpur import MPURModule
+from ppuu import configs
+from ppuu import dataloader
+from ppuu.lightning_modules.mpur import MPURModule
 
-from costs.policy_costs import PolicyCost
+from ppuu.costs.policy_costs import PolicyCost
 
 
 def get_optimal_pool_size():
@@ -51,7 +51,6 @@ class EvalConfig(configs.ConfigBase):
     return_episode_data: bool = False
 
     def __post_init__(self):
-        super().__post_init__()
         if self.num_processes == -1:
             self.num_processes = get_optimal_pool_size()
             logging.info(

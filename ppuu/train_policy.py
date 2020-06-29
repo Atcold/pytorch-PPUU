@@ -5,9 +5,10 @@ from collections import defaultdict
 
 import pytorch_lightning as pl
 
-import lightning_modules
-import slurm
-import eval_policy
+from ppuu import lightning_modules
+from ppuu import slurm
+from ppuu import eval_policy
+
 
 class CustomLogger(pl.loggers.TensorBoardLogger):
     def __init__(self, *args, json_filename="logs.json", **kwargs):
@@ -87,6 +88,7 @@ def main(config):
     else:
         model = module(config)
     trainer.fit(model)
+    return model
 
 
 if __name__ == "__main__":

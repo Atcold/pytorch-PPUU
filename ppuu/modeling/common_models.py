@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from torch import nn
 
-import configs
+from ppuu import configs
 
 
 class Encoder(nn.Module):

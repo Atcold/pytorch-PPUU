@@ -5,9 +5,9 @@ import torch
 import torch.nn.functional as F
 from dataclasses import dataclass, field
 
-from costs.policy_costs import PolicyCost
+from ppuu.costs.policy_costs import PolicyCost
 
-import configs
+from ppuu import configs
 
 
 class PolicyCostContinuous(PolicyCost):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import random
 
-from modeling.common_models import Encoder, UNetwork, Decoder
+from ppuu.modeling.common_models import Encoder, UNetwork, Decoder
 
 
 class encoder(nn.Module):
