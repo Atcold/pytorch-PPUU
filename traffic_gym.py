@@ -434,7 +434,7 @@ class Car:
         if state[2][1] and (state[2][1] - self)[0] < self.safe_distance: return False
         return True
 
-    def _get_observation_image(self, m, screen_surface, width_height, scale, global_frame):
+    def _get_observation_image(self, m, screen_surface, width_height, scale, global_frame, colored_lane=None):
         d = self._direction
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
@@ -459,17 +459,43 @@ class Car:
         new_w = int(scale*sub_rot_array.shape[1])
         sub_rot_array_scaled = np.array(PIL.Image.fromarray(sub_rot_array).resize((new_w, new_h), resample=2)) #bilinear
         sub_rot_array_scaled_up = np.rot90(sub_rot_array_scaled)  # facing upward, not flipped
-        sub_rot_array_scaled_up[:, :, 0] *= 4
+        if colored_lane is None:
+            sub_rot_array_scaled_up[:, :, 0] *= 4
         assert sub_rot_array_scaled_up.max() <= 255
 
         # Compute cost relative to position within the lane
         x = np.ceil((surf_w - self._length) / 2)
         y = np.ceil((surf_h - self.LANE_W) / 2)
-        neighbourhood = rot_surface.subsurface(x, y, self._length, self.LANE_W)
-        neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
-        lanes = neighbourhood_array[:, :, 0]
-        lane_mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
-        lane_cost = (lanes * lane_mask).max() / 255
+        if colored_lane is None:
+            neighbourhood = rot_surface.subsurface(x, y, self._length, self.LANE_W)
+            neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
+            lanes = neighbourhood_array[:, :, 0]
+            lane_mask = np.broadcast_to((1 - abs(np.linspace(-1, 1, self.LANE_W))).reshape(-1, 1), lanes.shape)
+            lane_cost = (lanes * lane_mask).max() / 255
+        else:
+            neighbourhood = rot_surface.subsurface(x, y, 3, 3)
+            neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
+            lanes_hsv = rgb_to_hsv(neighbourhood_array / 255)
+            h = np.mean(lanes_hsv[:, :, 0])
+            s = np.mean(lanes_hsv[:, :, 1])
+            v = np.mean(lanes_hsv[:, :, 2])
+            rad = math.atan(d[1] / (d[0] + 1e-6))
+            rad = (rad + math.pi / 2) / math.pi
+            if d[0] > 0:
+                h_self = rad * 0.5
+            else:
+                h_self = rad * 0.5 + 0.5
+            rotation=min(abs(h_self-h),abs(h-h_self))
+            if rotation < 5/360*math.pi:
+                rotation = 0
+            elif rotation > 30/360*math.pi:
+                rotation = 1
+            else:
+                rotation = (rotation-5/360*math.pi)/(25/360*math.pi)
+            orientation_cost = s*rotation
+            conf_cost = 1 - v
+            lane_cost=[conf_cost, orientation_cost]
+
 
         # Compute x/y minimum distance to other vehicles (pixel version)
         # Account for 1 metre overlap (low data accuracy)
@@ -1009,15 +1035,15 @@ class Simulator(core.Env):
                     if self.colored_lane is None:
                         vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
                     else:
-                        v.store('lane_image', (max_extension, lane_surface, width_height, scale, self.frame))
+                        v.store('lane_image', (max_extension, lane_surface, width_height, scale, self.frame, self.colored_lane))
                     # Empty ego-surface
                     ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
                     ego_rect = v.draw(ego_surface, mode='ego-car', offset=max_extension)
                     # Add me on top of others without shadowing
                     # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
-                    v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame))
-                    v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame))
+                    v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame, self.colored_lane))
+                    v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame, self.colored_lane))
                     # Store whole history, if requested
                     if self.store_sim_video:
                         if self.ghost:
