@@ -615,7 +615,7 @@ class Car:
             return
         im = transpose[0]
         if mode == 'tensor':
-            lane_cost = torch.Tensor(transpose[1])
+            lane_cost = torch.Tensor(lanes_transpose[1])
             pixel_proximity_cost = torch.Tensor(transpose[2])
             frames = np.array(transpose[3])
             zip_ = list(zip(*self._states))
