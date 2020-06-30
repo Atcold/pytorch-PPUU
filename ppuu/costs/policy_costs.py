@@ -521,7 +521,16 @@ class PolicyCost(PolicyCostBase):
 
     def calculate_cost(self, inputs, predictions):
         u_loss = self.calculate_uncertainty_cost(inputs, predictions)
-        loss_a = predictions["pred_actions"].norm(2, 2).pow(2).mean()
+        loss_a = (
+            (
+                predictions["pred_actions"][:, 1:]
+                - predictions["pred_actions"][:, :-1]
+            )
+            .norm(2, 2)
+            .pow(2)
+            .mean()
+        )
+
         state_losses = self.compute_state_costs_for_training(
             predictions["pred_images"],
             predictions["pred_states"],

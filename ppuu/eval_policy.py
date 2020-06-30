@@ -14,6 +14,7 @@ from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import json
 import os
+from typing import Optional
 
 import pandas as pd
 import numpy
@@ -35,6 +36,21 @@ def get_optimal_pool_size():
     # we can't use more than 10, as in that case we don't fit into Gpu.
     optimal_pool_size = min(10, available_processes)
     return optimal_pool_size
+
+
+# class PolicyEvaluator:
+#     def __init__(
+#         self,
+#         dataset: dataloader.EvaluationDataset,
+#         env_map: str,
+#         num_processes: int,
+#     ):
+#         self.dataset = dataset
+
+#     def evaluate(model: torch.Module, output_dir: Optional[str]):
+#         pass
+
+
 
 
 @dataclass

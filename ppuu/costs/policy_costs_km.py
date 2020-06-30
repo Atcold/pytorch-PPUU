@@ -2,7 +2,6 @@
 """
 
 import torch
-import torch.nn.functional as F
 from dataclasses import dataclass, field
 
 from ppuu.costs.policy_costs_continuous import PolicyCostContinuous
@@ -17,7 +16,7 @@ class PolicyCostKM(PolicyCostContinuous):
         u_reg: float = field(default=3.09)
         lambda_a: float = field(default=2.29)
         lambda_l: float = field(default=6.44)
-        lambda_o: float = field(default=5.0)
+        lambda_o: float = field(default=0.0)
         lambda_p: float = field(default=10.23)
 
         def __post_init__(self):

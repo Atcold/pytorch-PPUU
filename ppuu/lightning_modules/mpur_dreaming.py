@@ -25,7 +25,7 @@ class MPURDreamingModule(MPURModule):
             self.config.training_config.batch_size,
             self.config.model_config.n_pred,
             -1,
-        )
+        ).detach()
         z.requires_grad = True
         optimizer_z = self.get_z_optimizer(z)
 

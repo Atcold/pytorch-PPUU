@@ -34,27 +34,35 @@ def main():
         default=300,
         help="interval in seconds between checks for new results",
     )
+    parser.add_argument(
+        "--new_only",
+        action='store_true',
+        help="don't evaluate existing checkpoints",
+    )
     parser.add_argument("--cluster", type=str, default="slurm")
     opt = parser.parse_args()
 
     executor = slurm.get_executor(
         job_name="eval", cpus_per_task=8, cluster=opt.cluster
     )
-    self.executor.update_parameters(slurm_time="1:00:00")
+    executor.update_parameters(slurm_time="1:00:00")
 
     path_regex = os.path.join(opt.dir, "**/*.ckpt")
     print(path_regex)
 
+    first_run = True
     while True:
         checkpoints = glob.glob(path_regex, recursive=True)
         for checkpoint in checkpoints:
             if checkpoint not in already_run:
                 already_run.append(checkpoint)
-                job = submit(executor, checkpoint)
-                if job is not None and opt.cluster in ["local", "debug"]:
-                    print(job.result())
+                if not first_run or not opt.new_only:
+                    job = submit(executor, checkpoint)
+                    if job is not None and opt.cluster in ["local", "debug"]:
+                        print(job.result())
         print("done")
         time.sleep(opt.check_interval)
+        first_run = False
 
 
 if __name__ == "__main__":

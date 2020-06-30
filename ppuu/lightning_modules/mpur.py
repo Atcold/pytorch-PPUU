@@ -111,9 +111,11 @@ class MPURModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         predictions = self(batch)
         loss = self.policy_cost.calculate_cost(batch, predictions)
+        logs = loss.copy()
+        logs['action_norm'] = predictions['pred_actions'].norm(2, 2).pow(2).mean()
         return {
             "loss": loss["policy_loss"],
-            "log": loss,
+            "log": logs,
             "progress_bar": loss,
         }
 
