@@ -66,11 +66,18 @@ class DataLoader:
                     # if not(Ta == Tp == Tl): pdb.set_trace()
                     images.append(fd['images'])
                     actions.append(fd['actions'])
-                    costs.append(torch.cat((
-                        fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
-                        fd.get('lane_cost')[:Ta,0].unsqueeze(dim=1),
-                        fd.get('lane_cost')[:Ta,1].unsqueeze(dim=1),
-                    ), 1),)
+                    if use_colored_lane:
+                        costs.append(torch.cat((
+                            fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
+                            fd.get('lane_cost')[:Ta, 0].unsqueeze(dim=1),
+                            fd.get('lane_cost')[:Ta, 1].unsqueeze(dim=1),
+                        ), 1), )
+                    else:
+                        costs.append(torch.cat((
+                            fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
+                            fd.get('lane_cost')[:Ta].view(-1, 1),
+                            fd.get('lane_cost')[:Ta].view(-1, 1),
+                        ), 1),)
                     states.append(fd['states'])
                     ego_car_images.append(fd['ego_car'])
                     if use_colored_lane:
