@@ -92,25 +92,42 @@ def start(what, nbatches, npred):
     model.train()
     model.policy_net.train()
     n_updates, grad_norm = 0, 0
-    total_losses = dict(
-        proximity=0,
-        uncertainty=0,
-        lane=0,
-        offroad=0,
-        action=0,
-        policy=0,
-    )
+    if opt.use_colored_lane:
+        total_losses = dict(
+            proximity=0,
+            uncertainty=0,
+            confidence=0,
+            orientation=0,
+            action=0,
+            policy=0,
+        )
+    else:
+        total_losses = dict(
+            proximity=0,
+            uncertainty=0,
+            lane=0,
+            offroad=0,
+            action=0,
+            policy=0,
+        )
     for j in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
         pred, actions = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
-            n_updates_z=opt.z_updates, infer_z=opt.infer_z
+            n_updates_z=opt.z_updates, infer_z=opt.infer_z, use_colored_lane=opt.use_colored_lane
         )
-        pred['policy'] = pred['proximity'] + \
-                         opt.u_reg * pred['uncertainty'] + \
-                         opt.lambda_l * pred['lane'] + \
-                         opt.lambda_a * pred['action'] + \
-                         opt.lambda_o * pred['offroad']
+        if opt.use_colored_lane:
+            pred['policy'] = pred['proximity'] + \
+                             opt.u_reg * pred['uncertainty'] + \
+                             pred['orientation'] + \
+                             opt.lambda_a * pred['action'] + \
+                             pred['confidence']
+        else:
+            pred['policy'] = pred['proximity'] + \
+                             opt.u_reg * pred['uncertainty'] + \
+                             opt.lambda_l * pred['lane'] + \
+                             opt.lambda_a * pred['action'] + \
+                             opt.lambda_o * pred['offroad']
 
         if not math.isnan(pred['policy'].item()):
             if train:
@@ -142,14 +159,24 @@ def start(what, nbatches, npred):
 print('[training]')
 utils.log(opt.model_file + '.log', f'[job name: {opt.model_file}]')
 n_iter = 0
-losses = OrderedDict(
-    p='proximity',
-    l='lane',
-    o='offroad',
-    u='uncertainty',
-    a='action',
-    π='policy',
-)
+if opt.use_colored_lane:
+    losses = OrderedDict(
+        p='proximity',
+        c='confidence',
+        o='orientation',
+        u='uncertainty',
+        a='action',
+        π='policy',
+    )
+else:
+    losses = OrderedDict(
+        p='proximity',
+        l='lane',
+        o='offroad',
+        u='uncertainty',
+        a='action',
+        π='policy',
+    )
 
 writer = utils.create_tensorboard_writer(opt)
 

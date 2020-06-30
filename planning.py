@@ -266,7 +266,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
 
 
 def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampling_method='fp', lrt_z=0.1,
-                          n_updates_z=10, infer_z=False):
+                          n_updates_z=10, infer_z=False, use_colored_lane=False):
     input_images_orig, input_states_orig, input_ego_car_orig = inputs
     target_images, target_states, target_costs = targets
     ego_car_new_shape = [*input_images_orig.shape]
@@ -297,7 +297,11 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             z_t = model.reparameterize(mu, logvar, True)
         else:
             z_t = Z[t]
-        pred_image, pred_state = model.forward_single_step(input_images[:, :, :3].contiguous(), input_states, actions, z_t)
+        if use_colored_lane:
+            n_channels = 4
+        else:
+            n_channels = 3
+        pred_image, pred_state = model.forward_single_step(input_images[:, :, :n_channels].contiguous(), input_states, actions, z_t)
         # Auto regress: enqueue output as new element of the input
         pred_image = torch.cat((pred_image, input_ego_car[:, :1]), dim=2)
         input_images = torch.cat((input_images[:, 1:], pred_image), 1)

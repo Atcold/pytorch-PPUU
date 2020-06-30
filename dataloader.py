@@ -68,7 +68,8 @@ class DataLoader:
                     actions.append(fd['actions'])
                     costs.append(torch.cat((
                         fd.get('pixel_proximity_cost')[:Ta].view(-1, 1),
-                        fd.get('lane_cost')[:Ta].view(-1, 1),
+                        fd.get('lane_cost')[:Ta][0].view(-1, 1),
+                        fd.get('lane_cost')[:Ta][1].view(-1, 1),
                     ), 1),)
                     states.append(fd['states'])
                     ego_car_images.append(fd['ego_car'])

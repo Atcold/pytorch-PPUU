@@ -486,15 +486,15 @@ class Car:
             else:
                 h_self = rad * 0.5 + 0.5
             rotation=min(abs(h_self-h),abs(h-h_self))
-            if rotation < 5/360*math.pi:
+            if rotation < 5 / 360 * math.pi:
                 rotation = 0
-            elif rotation > 30/360*math.pi:
+            elif rotation > 30 / 360 * math.pi:
                 rotation = 1
             else:
-                rotation = (rotation-5/360*math.pi)/(25/360*math.pi)
-            orientation_cost = s*rotation
+                rotation = (rotation - 5 / 360 * math.pi)/(25 / 360 * math.pi)
+            orientation_cost = s * rotation
             conf_cost = 1 - v
-            lane_cost=[conf_cost, orientation_cost]
+            lane_cost = [conf_cost, orientation_cost]
 
 
         # Compute x/y minimum distance to other vehicles (pixel version)
