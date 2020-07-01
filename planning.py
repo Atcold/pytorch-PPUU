@@ -279,6 +279,11 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     npred = target_images.size(1)
     pred_images, pred_states, pred_costs, pred_actions = [], [], [], []
 
+    if use_colored_lane:
+        n_channels = 4
+    else:
+        n_channels = 3
+
     # total_ploss = torch.zeros(1).cuda()
     # Sample latent variables from a (fixed) prior
     Z = model.sample_z(npred * bsize, method=sampling_method)
@@ -287,7 +292,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     # get initial action sequence, for an episode long npred (= 20) steps
     model.eval()
     for t in range(npred):
-        actions, _, _, _ = model.policy_net(input_images, input_states)
+        actions, _, _, _ = model.policy_net(input_images, input_states, n_channels=n_channels+1)
         if infer_z:
             h_x = model.encoder(input_images, input_states)
             h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())
@@ -297,10 +302,6 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             z_t = model.reparameterize(mu, logvar, True)
         else:
             z_t = Z[t]
-        if use_colored_lane:
-            n_channels = 4
-        else:
-            n_channels = 3
         pred_image, pred_state = model.forward_single_step(input_images[:, :, :n_channels].contiguous(), input_states, actions, z_t)
         # Auto regress: enqueue output as new element of the input
         pred_image = torch.cat((pred_image, input_ego_car[:, :1]), dim=2)
@@ -327,7 +328,8 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
                                     z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
             pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
-                                                    s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+                                                        green_channel= 4 if use_colored_lane else 2,
+                                                        s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 
             if k < n_updates_z + 1:
                 _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
@@ -345,30 +347,44 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     gamma_mask = torch.tensor([0.99 ** t for t in range(npred + 1)]).cuda().unsqueeze(0)
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
-        proximity_cost, _ = utils.proximity_cost(pred_images[:, :, :3].contiguous(), pred_states.data, car_sizes, unnormalize=True,
-                                                 s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
+        proximity_cost, _ = utils.proximity_cost(pred_images[:, :, :n_channels].contiguous(), pred_states.data, car_sizes,
+                                                 green_channel= 4 if use_colored_lane else 2,
+                                                 unnormalize=True, s_mean=model.stats['s_mean'],
+                                                 s_std=model.stats['s_std'])
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
-        lane_cost, prox_map_l = utils.lane_cost(pred_images[:, :, :3].contiguous(), car_sizes)
-        offroad_cost = utils.offroad_cost(pred_images[:, :, :3].contiguous(), prox_map_l)
+        if use_colored_lane:
+            orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(pred_images[:, :, :4].contiguous(), car_sizes)
+        else:
+            lane_cost, prox_map_l = utils.lane_cost(pred_images[:, :, :3].contiguous(), car_sizes)
+            offroad_cost = utils.offroad_cost(pred_images[:, :, :3].contiguous(), prox_map_l)
         if hasattr(model, 'value_function'):
-            v = model.value_function(pred_images[:, -model.value_function.opt.ncond:, :3].contiguous(),
-                                     pred_states[:, -model.value_function.opt.ncond:].contiguous().data)
+            v = model.value_function(pred_images[:, -model.value_function.opt.ncond:, :n_channels].contiguous(),
+                                        pred_states[:, -model.value_function.opt.ncond:].contiguous().data)
         else:
             v = torch.zeros(bsize, 1).cuda()
     else:
-        pred_costs = model.cost(pred_images[:, :, :3].contiguous().view(-1, 3, 117, 24), pred_states.data.view(-1, 4))
+        pred_costs = model.cost(pred_images[:, :, :n_channels].contiguous().view(-1, 3, 117, 24), pred_states.data.view(-1, 4))
         pred_costs = pred_costs.view(bsize, npred, 2)
         proximity_cost = pred_costs[:, :, 0]
         lane_cost = pred_costs[:, :, 1]
 
     if hasattr(model, 'value_function'):
         proximity_loss = torch.mean(torch.cat((proximity_cost, v), 1) * gamma_mask)
-        lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+        if use_colored_lane:
+            orientation_loss = torch.mean(orientation_cost * gamma_mask[:, :npred])
+            confidence_loss = torch.mean(confidence_cost * gamma_mask[:, :npred])
+        else:
+            lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
     else:
-        lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
-        offroad_cost = torch.mean(offroad_cost * gamma_mask[:, :npred])
         proximity_loss = torch.mean(proximity_cost * gamma_mask[:, :npred])
+        if use_colored_lane:
+            orientation_loss = torch.mean(orientation_cost * gamma_mask[:, :npred])
+            confidence_loss = torch.mean(confidence_cost * gamma_mask[:, :npred])
+        else:
+            lane_loss = torch.mean(lane_cost * gamma_mask[:, :npred])
+            offroad_cost = torch.mean(offroad_cost * gamma_mask[:, :npred])
+
 
     _, _, _, _, _, _, total_u_loss = compute_uncertainty_batch(
         model, input_images, input_states, pred_actions, targets, car_sizes, npred=npred, n_models=n_models,
@@ -378,15 +394,26 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     loss_a = pred_actions.norm(2, 2).pow(2).mean()
 
     pred_images = pred_images[:, :, :3]
-    predictions = dict(
-        state_img=(pred_images + input_ego_car_orig[:, None].expand_as(pred_images)).clamp(max=1.),
-        state_vct=pred_states,
-        proximity=proximity_loss,
-        lane=lane_loss,
-        offroad=offroad_cost,
-        uncertainty=total_u_loss,
-        action=loss_a,
-    )
+    if use_colored_lane:
+        predictions = dict(
+            state_img=(pred_images + input_ego_car_orig[:, None].expand_as(pred_images)).clamp(max=1.),
+            state_vct=pred_states,
+            proximity=proximity_loss,
+            orientation=orientation_loss,
+            confidence=confidence_loss,
+            uncertainty=total_u_loss,
+            action=loss_a,
+        )
+    else:
+        predictions = dict(
+            state_img=(pred_images + input_ego_car_orig[:, None].expand_as(pred_images)).clamp(max=1.),
+            state_vct=pred_states,
+            proximity=proximity_loss,
+            lane=lane_loss,
+            offroad=offroad_cost,
+            uncertainty=total_u_loss,
+            action=loss_a,
+        )
 
     return predictions, pred_actions
 

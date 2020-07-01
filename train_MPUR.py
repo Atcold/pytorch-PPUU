@@ -119,9 +119,9 @@ def start(what, nbatches, npred):
         if opt.use_colored_lane:
             pred['policy'] = pred['proximity'] + \
                              opt.u_reg * pred['uncertainty'] + \
-                             pred['orientation'] + \
+                             0.5 * pred['orientation'] + \
                              opt.lambda_a * pred['action'] + \
-                             pred['confidence']
+                             0.5 * pred['confidence']
         else:
             pred['policy'] = pred['proximity'] + \
                              opt.u_reg * pred['uncertainty'] + \

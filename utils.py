@@ -11,6 +11,7 @@ from datetime import datetime
 from os import path
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
 import scipy
 import sklearn.manifold as manifold
 import torch
@@ -151,45 +152,44 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
 
-def orientation_cost(images, car_size):
+def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
-    safe_factor = 1.5
     bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
+    states = states.view(bsize * npred, 4).clone()
 
+    if unnormalize:
+        states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
+        states = states + s_mean.view(1, 4).expand(states.size()).cuda()
+
+    xy_speed = states[:, 2:] * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
-    # Create separable proximity mask
-    width.fill_(24 * SCALE / 2)
-
-    max_x = torch.ceil((crop_h - length) / 2)
-    #    max_y = torch.ceil((crop_w - width) / 2)
-    max_y = torch.ceil(torch.zeros(width.size()).fill_(crop_w) / 2)
-    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
-    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
-    min_x = max_x
-    min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
-    x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-
-    x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
-    x_filter = torch.min(x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size()))
-    x_filter = (x_filter == max_x.unsqueeze(1).expand(x_filter.size())).float()
-
-    y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
-    y_filter = y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
-    #    y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
-    y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
-    y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (max_y.view(bsize * npred, 1) - min_y.view(bsize * npred, 1))
-    x_filter = x_filter.cuda()
-    y_filter = y_filter.cuda()
-    proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
-    proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    costs = torch.max((proximity_mask * images[:, :, 0].float()).view(bsize, npred, -1), 2)[0]
-    return costs.view(bsize, npred), proximity_mask
+    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
+    lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
+    h = torch.mean(lanes_hsv[:, :, 0])
+    s = torch.mean(lanes_hsv[:, :, 1])
+    v = torch.mean(lanes_hsv[:, :, 2])
+    rad = math.atan(xy_speed[1] / (xy_speed[0] + 1e-6))
+    rad = (rad + math.pi / 2) / math.pi
+    if xy_speed[0] > 0:
+        h_self = rad * 0.5
+    else:
+        h_self = rad * 0.5 + 0.5
+    rotation = min(abs(h_self - h), abs(h - h_self))
+    if rotation < 5 / 360 * math.pi:
+        rotation = 0
+    elif rotation > 30 / 360 * math.pi:
+        rotation = 1
+    else:
+        rotation = (rotation - 5 / 360 * math.pi) / (25 / 360 * math.pi)
+    orientation_cost = s * rotation
+    conf_cost = 1 - v
+
+    return orientation_cost, conf_cost
 
 def parse_car_path(path):
     splits = path.split('/')
