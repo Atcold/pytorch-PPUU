@@ -243,11 +243,9 @@ class I80(Simulator):
         file_name = f'/misc/vlgscratch4/LecunGroup/nvidia-collab/traffic-data/xy-trajectories/{time_slot}'
         if isfile(file_name + '.pkl'):
             file_name += '.pkl'
-            print(f'Loading trajectories from {file_name}')
             df = pd.read_pickle(file_name)
         elif isfile(file_name + '.txt'):
             file_name += '.txt'
-            print(f'Loading trajectories from {file_name}')
             df = pd.read_csv(file_name, sep=r'\s+', header=None, names=(
                 'Vehicle ID',
                 'Frame ID',

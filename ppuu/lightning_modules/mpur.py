@@ -9,11 +9,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 
-from ppuu.dataloader import DataStore, Dataset
+from ppuu.dataloader import DataStore, Dataset, EvaluationDataset
 from ppuu.costs import PolicyCost, PolicyCostContinuous
 from ppuu import configs
 from ppuu.modeling import policy_models
 from ppuu.modeling.forward_models import ForwardModel
+from ppuu.eval import PolicyEvaluator
 
 
 def inject(cost_type=PolicyCost, fm_type=ForwardModel):
@@ -96,7 +97,7 @@ class MPURModule(pl.LightningModule):
     def set_hparams(self, hparams=None):
         if hparams is None:
             hparams = MPURModule.Config()
-        if type(hparams) is dict:
+        if isinstance(hparams, dict):
             self.hparams = hparams
             self.config = MPURModule.Config.parse_from_dict(hparams)
         else:
@@ -112,7 +113,9 @@ class MPURModule(pl.LightningModule):
         predictions = self(batch)
         loss = self.policy_cost.calculate_cost(batch, predictions)
         logs = loss.copy()
-        logs['action_norm'] = predictions['pred_actions'].norm(2, 2).pow(2).mean()
+        logs["action_norm"] = (
+            predictions["pred_actions"].norm(2, 2).pow(2).mean()
+        )
         return {
             "loss": loss["policy_loss"],
             "log": logs,
@@ -131,10 +134,14 @@ class MPURModule(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         tensorboard_logs = {"val_loss": avg_loss}
+        eval_results = self.evaluator.evaluate(self)
+        tensorboard_logs.update(eval_results["stats"])
         return {
             "val_loss": avg_loss,
             "log": tensorboard_logs,
-            "progress_bar": tensorboard_logs,
+            "progress_bar": {
+                "success_rate": eval_results["stats"]["success_rate"]
+            },
         }
 
     def configure_optimizers(self):
@@ -144,14 +151,25 @@ class MPURModule(pl.LightningModule):
         )
         return optimizer
 
+    @staticmethod
+    def _worker_init_fn(index):
+        info = torch.utils.data.get_worker_info()
+        info.dataset.random.seed(info.seed)
+
     def prepare_data(self):
         self.data_store = DataStore(self.config.training_config.dataset)
+        self.eval_dataset = EvaluationDataset.from_data_store(
+            self.data_store, split="val", size_cap=25
+        )
+        self.evaluator = PolicyEvaluator(
+            self.eval_dataset,
+            num_processes=5,
+            build_gradients=False,
+            return_episode_data=False,
+            enable_logging=False,
+        )
 
-        def worker_init_fn(index):
-            info = torch.utils.data.get_worker_info()
-            info.dataset.random.seed(info.seed)
-
-        self.worker_init_fn = worker_init_fn
+        self.worker_init_fn = MPURModule._worker_init_fn
 
         samples_in_epoch = (
             self.config.training_config.epoch_size
@@ -172,7 +190,7 @@ class MPURModule(pl.LightningModule):
         loader = DataLoader(
             self.train_dataset,
             batch_size=self.config.training_config.batch_size,
-            num_workers=8,
+            num_workers=1,
             worker_init_fn=self.worker_init_fn,
         )
         return loader
@@ -181,7 +199,7 @@ class MPURModule(pl.LightningModule):
         loader = DataLoader(
             self.val_dataset,
             batch_size=self.config.training_config.batch_size,
-            num_workers=8,
+            num_workers=1,
             worker_init_fn=self.worker_init_fn,
         )
         return loader

@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 
 import pytorch_lightning as pl
+from torch.multiprocessing import set_start_method
 
 from ppuu import lightning_modules
 from ppuu import slurm
@@ -56,6 +57,7 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
 
 def main(config):
+    set_start_method("spawn")
 
     module = lightning_modules.get_module(config.model_config.model_type)
 
@@ -72,12 +74,12 @@ def main(config):
         gpus=1,
         gradient_clip_val=50.0,
         max_epochs=config.training_config.n_epochs,
-        check_val_every_n_epoch=1,
+        check_val_every_n_epoch=period,
         num_sanity_val_steps=0,
         checkpoint_callback=ModelCheckpoint(
+            filepath=os.path.join(logger.log_dir, "checkpoints"),
             save_top_k=-1,
-            period=period,
-            # save_last=True,
+            save_last=True,
             run_eval=config.training_config.run_eval,
         ),
         logger=logger,

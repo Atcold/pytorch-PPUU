@@ -16,6 +16,7 @@ class DataStore:
         self.states = []
         self.ids = []
         self.ego_car_images = []
+        self.data_dir = data_dir
         data_files = next(os.walk(data_dir))[1]
         for df in data_files:
             combined_data_path = f"{data_dir}/{df}/all_data.pth"
@@ -65,24 +66,6 @@ class DataStore:
         time_slot = data_files[time_slot]
         return time_slot, car_id
 
-    def get_episode_car_info(self, episode):
-        splits = self.ids[episode].split("/")
-        time_slot_str = splits[-2]
-        car_id = int(re.findall(r"car(\d+).pkl", splits[-1])[0])
-        data_files_mapping = {
-            "trajectories-0400-0415": 0,
-            "trajectories-0500-0515": 1,
-            "trajectories-0515-0530": 2,
-        }
-        time_slot = data_files_mapping[time_slot_str]
-        car_size = self.car_sizes[time_slot_str][car_id]
-        result = dict(
-            time_slot=time_slot,
-            time_slot_str=time_slot_str,
-            car_id=car_id,
-            car_size=car_size,
-        )
-        return result
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -220,19 +203,87 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class EvaluationDataset(torch.utils.data.Dataset):
-    def __init__(self, data_store, split="test"):
+    def __init__(self, dataset, split="test", size_cap=None):
+        data_dir = dataset
+        splits_path = os.path.join(data_dir, "splits.pth")
+        if os.path.exists(splits_path):
+            logging.info(f"Loading splits {splits_path}")
+            splits = torch.load(splits_path)
+            self.splits = dict(
+                train=splits.get("train_indx"),
+                val=splits.get("valid_indx"),
+                test=splits.get("test_indx"),
+            )
+
+        car_sizes_path = os.path.join(data_dir, "car_sizes.pth")
+        self.car_sizes = torch.load(car_sizes_path)
         self.split = split
-        self.data_store = data_store
-        self.size = len(self.data_store.splits[self.split])
+        self.size = len(self.splits[self.split])
+        if size_cap is not None:
+            self.size = min(self.size, size_cap)
+
+        stats_path = os.path.join(data_dir, "data_stats.pth")
+        if os.path.isfile(stats_path):
+            logging.info(f"Loading data stata {stats_path}")
+            stats = torch.load(stats_path)
+            self.stats = stats
+            self.a_mean = stats.get("a_mean")
+            self.a_std = stats.get("a_std")
+            self.s_mean = stats.get("s_mean")
+            self.s_std = stats.get("s_std")
+
+        self.ids = []
+        data_files = next(os.walk(data_dir))[1]
+        for df in data_files:
+            combined_data_path = f"{data_dir}/{df}/all_data.pth"
+            if os.path.isfile(combined_data_path):
+                data = torch.load(combined_data_path)
+                self.ids += data.get("ids")
+
+    @classmethod
+    def from_data_store(cls, data_store, split="test", size_cap=None):
+        self = cls.__new__(cls)
+        self.splits = data_store.splits
+        self.car_sizes = data_store.car_sizes
+        self.split = split
+        self.size = len(self.splits[self.split])
+        if size_cap is not None:
+            self.size = min(self.size, size_cap)
+        self.stats = data_store.stats
+        self.ids = data_store.ids
+        return self
 
     def __len__(self):
         return self.size
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __getitem__(self, i):
-        car_info = self.data_store.get_episode_car_info(
-            self.data_store.splits[self.split][i]
+        car_info = self.get_episode_car_info(
+            self.splits[self.split][i]
         )
         return car_info
+
+    def get_episode_car_info(self, episode):
+        splits = self.ids[episode].split("/")
+        time_slot_str = splits[-2]
+        car_id = int(re.findall(r"car(\d+).pkl", splits[-1])[0])
+        data_files_mapping = {
+            "trajectories-0400-0415": 0,
+            "trajectories-0500-0515": 1,
+            "trajectories-0515-0530": 2,
+        }
+        time_slot = data_files_mapping[time_slot_str]
+        car_size = self.car_sizes[time_slot_str][car_id]
+        result = dict(
+            time_slot=time_slot,
+            time_slot_str=time_slot_str,
+            car_id=car_id,
+            car_size=car_size,
+        )
+        return result
 
 
 if __name__ == "__main__":

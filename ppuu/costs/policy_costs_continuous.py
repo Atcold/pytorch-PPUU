@@ -186,6 +186,7 @@ class PolicyCostContinuous(PolicyCost):
             .expand(bsize, npred)
             .contiguous()
             .view(bsize * npred)
+            .type(car_size.type())
             .cuda()
         )
         max_y = (
@@ -193,6 +194,7 @@ class PolicyCostContinuous(PolicyCost):
             .expand(bsize, npred)
             .contiguous()
             .view(bsize * npred)
+            .type(car_size.type())
             .cuda()
         )
 
@@ -207,9 +209,15 @@ class PolicyCostContinuous(PolicyCost):
             .view(bsize * npred)
             .cuda()
         )
+        torch.set_default_tensor_type(torch.FloatTensor)
 
         x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
-        x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
+        x_filter = (
+            x_filter.unsqueeze(0)
+            .expand(bsize * npred, crop_h)
+            .type(car_size.type())
+            .cuda()
+        )
         x_filter = torch.min(
             x_filter, max_x.view(bsize * npred, 1).expand(x_filter.size())
         )
@@ -220,15 +228,18 @@ class PolicyCostContinuous(PolicyCost):
         ).view(bsize * npred, 1)
         y_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_w))) * crop_w / 2
         y_filter = (
-            y_filter.view(1, crop_w).expand(bsize * npred, crop_w).cuda()
+            y_filter.view(1, crop_w)
+            .expand(bsize * npred, crop_w)
+            .type(car_size.type())
+            .cuda()
         )
         y_filter = torch.min(y_filter, max_y.view(bsize * npred, 1))
         y_filter = torch.max(y_filter, min_y.view(bsize * npred, 1))
         y_filter = (y_filter - min_y.view(bsize * npred, 1)) / (
             max_y.view(bsize * npred, 1) - min_y.view(bsize * npred, 1)
         )
-        x_filter = x_filter.cuda()
-        y_filter = y_filter.cuda()
+        x_filter = x_filter.type(car_size.type()).cuda()
+        y_filter = y_filter.type(car_size.type()).cuda()
         proximity_mask = torch.bmm(
             x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w)
         )

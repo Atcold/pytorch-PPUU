@@ -7,6 +7,20 @@ from dataclasses import dataclass, field
 from ppuu.costs.policy_costs_continuous import PolicyCostContinuous
 
 
+class AggregationFunction:
+    def __init__(self, s):
+        self.s = s
+
+    def __call__(self, *args, **kwargs):
+        if self.s == "sum":
+            return torch.sum(*args, **kwargs)
+        elif self.s.startswith("logsumexp"):
+            beta = float(self.s.split("-")[1])
+            return 1 / beta * torch.logsumexp(args[0] * beta, *args[1:])
+        else:
+            return torch.logsumexp(*args, **kwargs)
+
+
 class PolicyCostKM(PolicyCostContinuous):
     @dataclass
     class Config(PolicyCostContinuous.Config):
@@ -19,20 +33,9 @@ class PolicyCostKM(PolicyCostContinuous):
         lambda_o: float = field(default=0.0)
         lambda_p: float = field(default=10.23)
 
-        def __post_init__(self):
-            agg_func = torch.logsumexp
-            if self.agg_func_str == "sum":
-                agg_func = torch.sum
-            elif self.agg_func_str.startswith("logsumexp"):
-                beta = float(self.agg_func_str.split("-")[1])
-
-                def foo(*args):
-                    return (
-                        1 / beta * torch.logsumexp(args[0] * beta, *args[1:])
-                    )
-
-                agg_func = foo
-            self.agg_func = agg_func
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+        self.agg_func = AggregationFunction(config.agg_func_str)
 
     def get_masks(self, images, states, car_size, unnormalize):
         bsize, npred, nchannels, crop_h, crop_w = images.shape
@@ -153,7 +156,7 @@ class PolicyCostKM(PolicyCostContinuous):
         green_contours = self.compute_contours(images)
         green_contours = green_contours.view(bsize, npred, crop_h, crop_w)
         pre_max = proximity_masks * (green_contours ** 2)
-        costs = self.config.agg_func(pre_max.view(bsize, npred, -1), 2)
+        costs = self.agg_func(pre_max.view(bsize, npred, -1), 2)
 
         result = {}
         result["costs"] = costs
@@ -166,14 +169,14 @@ class PolicyCostKM(PolicyCostContinuous):
         bsize, npred = images.shape[0], images.shape[1]
         lanes = images[:, :, 0].float()
         costs = proximity_masks * (lanes ** 2)
-        costs_m = self.config.agg_func(costs.view(bsize, npred, -1), 2)
+        costs_m = self.agg_func(costs.view(bsize, npred, -1), 2)
         return costs_m.view(bsize, npred)
 
     def compute_offroad_cost_km(self, images, proximity_masks):
         bsize, npred = images.shape[0], images.shape[1]
         offroad = images[:, :, 2]
         costs = proximity_masks * (offroad ** 2)
-        costs_m = self.config.agg_func(costs.view(bsize, npred, -1), 2)
+        costs_m = self.agg_func(costs.view(bsize, npred, -1), 2)
         return costs_m.view(bsize, npred)
 
     def compute_state_costs_for_training(
