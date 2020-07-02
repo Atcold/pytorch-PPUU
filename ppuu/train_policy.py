@@ -94,6 +94,7 @@ def main(config):
 
 
 if __name__ == "__main__":
+    print('hasdfa aaaa'   )
     module = lightning_modules.get_module_from_command_line()
     config = module.Config.parse_from_command_line()
     use_slurm = slurm.parse_from_command_line()
