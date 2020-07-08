@@ -434,8 +434,7 @@ class Car:
         if state[2][1] and (state[2][1] - self)[0] < self.safe_distance: return False
         return True
 
-    def _get_observation_image(self, m, screen_surface, width_height, scale, global_frame, colored_lane=None,
-                               transform_hsv=False):
+    def _get_observation_image(self, m, screen_surface, width_height, scale, global_frame, colored_lane=None):
         d = self._direction
 
         x_y = np.ceil(np.array((abs(d) @ width_height, abs(d) @ width_height[::-1])))
@@ -541,8 +540,6 @@ class Car:
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
         # return state_image, lane_cost, proximity_cost, frame
-        if transform_hsv:
-            sub_rot_array_scaled_up=rgb_to_hsv(sub_rot_array_scaled_up.astype(float)/255.)
         # imsave('colored_lane.jpg',sub_rot_array_scaled_up)
         return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
 
@@ -1041,7 +1038,7 @@ class Simulator(core.Env):
                         vehicle_surface.blit(lane_surface, (0, 0), special_flags=pygame.BLEND_MAX)
                     else:
                         v.store('lane_image', (max_extension, lane_surface, width_height, scale, self.frame,
-                                               self.colored_lane, True))
+                                               self.colored_lane))
                     # Empty ego-surface
                     ego_surface.fill((0, 0, 0))
                     # Draw myself blue on the ego_surface
@@ -1049,9 +1046,9 @@ class Simulator(core.Env):
                     # Add me on top of others without shadowing
                     # vehicle_surface.blit(ego_surface, ego_rect, ego_rect, special_flags=pygame.BLEND_MAX)
                     v.store('state_image', (max_extension, vehicle_surface, width_height, scale, self.frame,
-                                            self.colored_lane, False))
+                                            self.colored_lane))
                     v.store('ego_car_image', (max_extension, ego_surface, width_height, scale, self.frame,
-                                              self.colored_lane, False))
+                                              self.colored_lane))
                     # Store whole history, if requested
                     if self.store_sim_video:
                         if self.ghost:

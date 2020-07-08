@@ -1,7 +1,7 @@
 import sys
 import numpy, random, pdb, math, pickle, glob, time, os, re
 import torch
-
+from matplotlib.colors import rgb_to_hsv
 
 class DataLoader:
     def __init__(self, fname, opt, dataset='simulator', single_shard=False, use_colored_lane=False):
@@ -210,6 +210,8 @@ class DataLoader:
         ego_cars = torch.stack(ego_cars)
         if self.use_colored_lane:
             lane_images = torch.stack(lane_images)
+            lane_images = self.normalise_state_image(lane_images)
+            lane_images = torch.from_numpy(rgb_to_hsv(lane_images.numpy()))
             vehicle_image = self.normalise_state_image(images[:,:,1,:,:]) # Only normalize vehicle_image
             images = torch.cat([lane_images,vehicle_image.unsqueeze(dim=2)],dim=2) # Only use green channel
             del lane_images, vehicle_image
