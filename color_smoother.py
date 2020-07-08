@@ -8,4 +8,4 @@ trajectory_image[:, :, 0] = cv2.GaussianBlur(trajectory_image[:, :, 0], kernel_s
 trajectory_image[:, :, 1] = cv2.GaussianBlur(trajectory_image[:, :, 1], kernel_size, 2.33)
 trajectory_image[:, :, 2] = cv2.GaussianBlur(trajectory_image[:, :, 2], kernel_size, 2.33)
 trajectory_image = hsv_to_rgb(trajectory_image)
-Image.imsave("5gtrajectory.jpg", trajectory_image)
+Image.imsave("7gtrajectory.jpg", trajectory_image)
