@@ -210,15 +210,17 @@ class DataLoader:
         ego_cars = torch.stack(ego_cars)
         if self.use_colored_lane:
             lane_images = torch.stack(lane_images)
-            images = torch.cat([lane_images,images[:,:,1,:,:].unsqueeze(dim=2)],dim=2) # Only use green channel
-            del lane_images
+            vehicle_image = self.normalise_state_image(images[:,:,1,:,:]) # Only normalize vehicle_image
+            images = torch.cat([lane_images,vehicle_image.unsqueeze(dim=2)],dim=2) # Only use green channel
+            del lane_images, vehicle_image
 
 
         # Normalise actions, state_vectors, state_images
         if not self.opt.debug:
             actions = self.normalise_action(actions)
             states = self.normalise_state_vector(states)
-        images = self.normalise_state_image(images)
+        if not self.use_colored_lane:
+            images = self.normalise_state_image(images)
         ego_cars = self.normalise_state_image(ego_cars)
 
         costs = torch.stack(costs)
