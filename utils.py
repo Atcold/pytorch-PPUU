@@ -179,15 +179,12 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
         h_self = rad * 0.5
     else:
         h_self = rad * 0.5 + 0.5
-    rotation = min(abs(h_self - h), abs(h - h_self))
-    if rotation < 5 / 360 * math.pi:
-        rotation = 0
-    elif rotation > 30 / 360 * math.pi:
-        rotation = 1
+    if h_self > h:
+        rotation = max(min((h_self - h) ** 2, (h_self - h - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
     else:
-        rotation = (rotation - 5 / 360 * math.pi) / (25 / 360 * math.pi)
+        rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
     orientation_cost = s * rotation
-    conf_cost = 1 - v
+    conf_cost = (1 - v) ** 2
 
     return orientation_cost, conf_cost
 

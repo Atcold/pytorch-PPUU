@@ -11,8 +11,8 @@ parser.add_argument('-store', type=int, default=0)
 parser.add_argument('-nb_episodes', type=int, default=1)
 parser.add_argument('-fps', type=int, default=1e3)
 parser.add_argument('-delta_t', type=float, default=0.1)
-parser.add_argument('-colored_lane', type=str, default=None)
-
+parser.add_argument('-draw_colored_lane', type=bool, default=False)
+parser.add_argument('-draw_speed_map', type=bool, default=False)
 opt = parser.parse_args()
 
 kwargs = {

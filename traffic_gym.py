@@ -485,15 +485,12 @@ class Car:
                 h_self = rad * 0.5
             else:
                 h_self = rad * 0.5 + 0.5
-            rotation=min(abs(h_self-h),abs(h-h_self))
-            if rotation < 5 / 360 * math.pi:
-                rotation = 0
-            elif rotation > 30 / 360 * math.pi:
-                rotation = 1
+            if h_self > h:
+                rotation = max(min((h_self - h) ** 2, (h_self - h - 1) ** 2) - (5 / 180 * math.pi)**2 , 0.)
             else:
-                rotation = (rotation - 5 / 360 * math.pi)/(25 / 360 * math.pi)
+                rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi)**2 , 0.)
             orientation_cost = s * rotation
-            conf_cost = 1 - v
+            conf_cost = (1 - v)**2
             lane_cost = [conf_cost, orientation_cost]
 
 
@@ -615,7 +612,7 @@ class Car:
             return
         im = transpose[0]
         if mode == 'tensor':
-            lane_cost = torch.Tensor(lanes_transpose[1])
+            lane_cost = torch.Tensor(lanes_transpose[1] if colored_lane is not None else transpose[1])
             pixel_proximity_cost = torch.Tensor(transpose[2])
             frames = np.array(transpose[3])
             zip_ = list(zip(*self._states))
@@ -674,7 +671,7 @@ class Simulator(core.Env):
     def __init__(self, display=True, nb_lanes=4, fps=30, delta_t=None, traffic_rate=15, state_image=False, store=False,
                  policy_type='hardcoded', nb_states=0, data_dir='', normalise_action=False, normalise_state=False,
                  return_reward=False, gamma=0.99, show_frame_count=True, store_simulator_video=False,
-                 draw_colored_lane=False, colored_lane=None):
+                 draw_colored_lane=False, colored_lane=None, draw_speed_map=False, speed_map=None):
 
         # Observation spaces definition
         self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
@@ -711,6 +708,7 @@ class Simulator(core.Env):
 
         self.display = display
         self.trajectory_image = None
+        self.speed_map = None
         self.observed_car = list()
         if self.display:  # if display is required
             pygame.init()  # init PyGame
@@ -732,6 +730,8 @@ class Simulator(core.Env):
         self.store_sim_video = store_simulator_video
         self.draw_colored_lane = draw_colored_lane
         self.colored_lane = colored_lane
+        self.draw_speed_map = draw_speed_map
+        self.speed_map = speed_map
 
     def seed(self, seed=None):
         self.random.seed(seed)
@@ -978,6 +978,7 @@ class Simulator(core.Env):
                         self.observed_car.append(v)
                         self.draw_trajectory(v)
 
+
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2), font=self.font[30])
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2), font=self.font[30])
             draw_text(self.screen, f'fps: {self.mean_fps:.0f}', (270, 2), font=self.font[30])
@@ -1082,6 +1083,8 @@ class Simulator(core.Env):
         pad = 0
         if self.trajectory_image is None:
             self.trajectory_image = np.zeros((self.screen_size[0], self.screen_size[1], 4))
+        if self.draw_speed_map:
+            self.speed_map = np.zeros((self.screen_size[0], self.screen_size[1], 1))
         trajectory = v._trajectory
         # remove nan
         real_len = 0
