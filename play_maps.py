@@ -22,7 +22,8 @@ kwargs = {
     'state_image': opt.state_image,
     'store': opt.store,
     'delta_t': opt.delta_t,
-    'colored_lane': opt.colored_lane
+    'draw_colored_lane': opt.draw_colored_lane,
+    'draw_speed_map': opt.draw_speed_map
 }
 
 gym.envs.registration.register(

@@ -474,25 +474,14 @@ class Car:
             lane_cost = (lanes * lane_mask).max() / 255
         else:
             neighbourhood = rot_surface.subsurface(x, y, 3, 3)
-            neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2)  # flip x and y
-            lanes_hsv = rgb_to_hsv(neighbourhood_array / 255)
-            h = np.mean(lanes_hsv[:, :, 0])
-            s = np.mean(lanes_hsv[:, :, 1])
-            v = np.mean(lanes_hsv[:, :, 2])
-            rad = math.atan(d[1] / (d[0] + 1e-6))
-            rad = (rad + math.pi / 2) / math.pi
-            if d[0] > 0:
-                h_self = rad * 0.5
-            else:
-                h_self = rad * 0.5 + 0.5
-            if h_self > h:
-                rotation = max(min((h_self - h) ** 2, (h_self - h - 1) ** 2) - (5 / 180 * math.pi)**2 , 0.)
-            else:
-                rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi)**2 , 0.)
-            orientation_cost = s * rotation
-            conf_cost = (1 - v)**2
+            neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2) / 255. # flip x and y
+            dmap = np.array([np.mean(2*(neighbourhood_array[:, :, 0]-0.5)), np.mean(2*(neighbourhood_array[:,:,1]-0.5))])
+            v = np.mean(neighbourhood_array[:, :, 2])
+            s = np.linalg.norm(dmap)
+            cosinerot = np.dot(d,dmap)/(np.linalg.norm(d)*np.linalg.norm(dmap))
+            orientation_cost = s * (max(-cosinerot+np.cos(5/180*np.pi), 0)/2)**2
+            conf_cost = (1 - v) ** 2
             lane_cost = [orientation_cost, conf_cost]
-
 
         # Compute x/y minimum distance to other vehicles (pixel version)
         # Account for 1 metre overlap (low data accuracy)
@@ -540,7 +529,7 @@ class Car:
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
         # return state_image, lane_cost, proximity_cost, frame
-        # imsave('colored_lane.jpg',sub_rot_array_scaled_up)
+        imsave('colored_lane.jpg',sub_rot_array_scaled_up)
         return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
 
     def store(self, object_name, object_):
@@ -675,7 +664,8 @@ class Simulator(core.Env):
                  draw_colored_lane=False, colored_lane=None, draw_speed_map=False, speed_map=None):
 
         # Observation spaces definition
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(nb_states, STATE_D + STATE_C * STATE_H * STATE_W),
+                                            dtype=np.float32)
 
         self.offset = int(1.5 * self.LANE_W)
         self.screen_size = (80 * self.LANE_W, nb_lanes * self.LANE_W + self.offset + self.LANE_W // 2)
@@ -968,7 +958,7 @@ class Simulator(core.Env):
                     self.screen.blit(self.photos[i], self.photos_rect[i])
 
             # draw lanes
-            self._draw_lanes(self.screen, colored_lane=self.colored_lane)
+            self._draw_lanes(self.screen)
 
             for v in self.vehicles:
                 v.draw(self.screen)
@@ -978,7 +968,6 @@ class Simulator(core.Env):
                     if v not in self.observed_car:
                         self.observed_car.append(v)
                         self.draw_trajectory(v)
-
 
             draw_text(self.screen, f'# cars: {len(self.vehicles)}', (10, 2), font=self.font[30])
             draw_text(self.screen, f'frame #: {self.frame}', (120, 2), font=self.font[30])
@@ -1086,7 +1075,7 @@ class Simulator(core.Env):
     def draw_trajectory(self, v):
         pad = 0
         if self.trajectory_image is None:
-            self.trajectory_image = np.zeros((self.screen_size[0], self.screen_size[1], 4))
+            self.trajectory_image = np.zeros((self.screen_size[0], self.screen_size[1], 3))
         if self.draw_speed_map:
             self.speed_map = np.zeros((self.screen_size[0], self.screen_size[1], 1))
         trajectory = v._trajectory
@@ -1111,34 +1100,45 @@ class Simulator(core.Env):
             x, y = points[i, 0], points[i, 1]
             p = (int(x), int(y))
             d = points[i + 1, :] - points[i, :]
-            # HSV 2 RGB
-            rad = math.atan(d[1] / (d[0] + 1e-6))
-            rad = (rad + math.pi / 2) / math.pi
-            if d[0] > 0:
-                H = rad * 0.5
-            else:
-                H = rad * 0.5 + 0.5
-            S = 1
-            V = 1
-            RGBcolor = hsv_to_rgb((H, S, V))
-            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 0] += RGBcolor[0]
-            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 1] += RGBcolor[1]
-            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 2] += RGBcolor[2]
-            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 3] += 1
+            # # HSV 2 RGB
+            # rad = math.atan(d[1] / (d[0] + 1e-6))
+            # rad = (rad + math.pi / 2) / math.pi
+            # if d[0] > 0:
+            #     H = rad * 0.5
+            # else:
+            #     H = rad * 0.5 + 0.5
+            # S = 1
+            # V = 1
+            # RGBcolor = hsv_to_rgb((H, S, V))
+
+            d = d / np.linalg.norm(d)
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 0] += d[0]
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 1] += d[1]
+            self.trajectory_image[p[0] - pad:p[0] + pad + 1, p[1] - pad:p[1] + pad + 1, 2] += 1
 
     def get_final_trajectory(self):
-        threshold = 0.95
-        self.trajectory_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 3] + 1e-6,
-                                                                                  axis=2)
-        hsv = rgb_to_hsv(self.trajectory_image)
-        s = hsv[:, :, 1]
-        s[s < threshold] = 0
-        hsv[:, :, 1] = s
-        v = hsv[:, :, 2]
-        v[v > 0] = 1
-        hsv[:, :, 2] = v
-        self.trajectory_image = hsv_to_rgb(hsv)
-        plt.imsave("trajectory.jpg", np.transpose(self.trajectory_image, (1, 0, 2)))
+
+        # threshold = 0.95
+        # self.trajectory_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 3] + 1e-6,
+        #                                                                           axis=2)
+        # hsv = rgb_to_hsv(self.trajectory_image)
+        # s = hsv[:, :, 1]
+        # s[s < threshold] = 0
+        # hsv[:, :, 1] = s
+        # v = hsv[:, :, 2]
+        # v[v > 0] = 1
+        # hsv[:, :, 2] = v
+        # self.trajectory_image = hsv_to_rgb(hsv)
+        # plt.imsave("trajectory.jpg", np.transpose(self.trajectory_image, (1, 0, 2)))
+
+        soft_threshold = 0.85
+        lane_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 2] + 1e-6, axis=2)
+        d = lane_image[:, :, 0:2]
+        phi = np.linalg.norm(d, axis=2)
+        phi = 1. / (1. + np.exp(-50 * (phi - soft_threshold)))
+        lane_image[:, :, 0] = (d[:, :, 0] * phi) * 0.5 + 0.5
+        lane_image[:, :, 1] = (d[:, :, 1] * phi) * 0.5 + 0.5
+        plt.imsave("trajectory.jpg", np.transpose(lane_image, (1, 0, 2)))
 
     def _pause(self):
         pause = True
