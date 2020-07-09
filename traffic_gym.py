@@ -529,7 +529,7 @@ class Car:
         # self._colour = (255 * lane_cost, 0, 255 * (1 - lane_cost))
 
         # return state_image, lane_cost, proximity_cost, frame
-        imsave('colored_lane.jpg',sub_rot_array_scaled_up)
+        # imsave('colored_lane.jpg',sub_rot_array_scaled_up)
         return torch.from_numpy(sub_rot_array_scaled_up.copy()), lane_cost, proximity_cost, global_frame
 
     def store(self, object_name, object_):

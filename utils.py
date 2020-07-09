@@ -162,29 +162,36 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
         states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
         states = states + s_mean.view(1, 4).expand(states.size()).cuda()
 
-    xy_speed = states[:, 2:] * SCALE  # pixel/s
+    d = states[:, 2:] * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
-    lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
-    h = torch.mean(lanes_hsv[:, :, 0])
-    s = torch.mean(lanes_hsv[:, :, 1])
-    v = torch.mean(lanes_hsv[:, :, 2])
-    rad = math.atan(xy_speed[1] / (xy_speed[0] + 1e-6))
-    rad = (rad + math.pi / 2) / math.pi
-    if xy_speed[0] > 0:
-        h_self = rad * 0.5
-    else:
-        h_self = rad * 0.5 + 0.5
-    if h_self > h:
-        rotation = max(min((h_self - h) ** 2, (h_self - h - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
-    else:
-        rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
-    orientation_cost = s * rotation
+    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]/255.
+    dmap = torch.as_tensor([torch.mean(2 * (neighbourhood_array[:, :, 0] - 0.5)),
+                            torch.mean(2 * (neighbourhood_array[:, :, 1] - 0.5))])
+    v = torch.mean(neighbourhood_array[:, :, 2])
+    s = torch.norm(dmap)
+    cosinerot = torch.dot(d, dmap) / (torch.norm(d) * torch.norm(dmap))
+    orientation_cost = s * (max(-cosinerot + math.cos(5 / 180 * math.pi), 0) / 2) ** 2
     conf_cost = (1 - v) ** 2
+    # lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
+    # h = torch.mean(lanes_hsv[:, :, 0])
+    # s = torch.mean(lanes_hsv[:, :, 1])
+    # v = torch.mean(lanes_hsv[:, :, 2])
+    # rad = math.atan(xy_speed[1] / (xy_speed[0] + 1e-6))
+    # rad = (rad + math.pi / 2) / math.pi
+    # if xy_speed[0] > 0:
+    #     h_self = rad * 0.5
+    # else:
+    #     h_self = rad * 0.5 + 0.5
+    # if h_self > h:
+    #     rotation = max(min((h_self - h) ** 2, (h_self - h - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
+    # else:
+    #     rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
+    # orientation_cost = s * rotation
+    # conf_cost = (1 - v) ** 2
 
     return orientation_cost, conf_cost
 
