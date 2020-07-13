@@ -475,7 +475,7 @@ class Car:
         else:
             neighbourhood = rot_surface.subsurface(x, y, 3, 3)
             neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2) / 255. # flip x and y
-            dmap = np.array([np.mean(2*(neighbourhood_array[:, :, 0]-0.5)), np.mean(2*(neighbourhood_array[:,:,1]-0.5))])
+            dmap = np.array([np.mean(2*(neighbourhood_array[:, :, 0]-0.5)), np.mean(2*(neighbourhood_array[:, :, 1]-0.5))])
             v = np.mean(neighbourhood_array[:, :, 2])
             s = np.linalg.norm(dmap)
             cosinerot = np.dot(d,dmap)/(np.linalg.norm(d)*np.linalg.norm(dmap))

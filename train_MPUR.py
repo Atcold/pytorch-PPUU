@@ -47,10 +47,9 @@ elif path.exists(opt.mfile):
 else:
     raise runtime_error(f'couldn\'t find file {opt.mfile}')
 
+if type(model) is dict: model = model['model']
 if not hasattr(model.encoder, 'n_channels'):
     model.encoder.n_channels = 3
-
-if type(model) is dict: model = model['model']
 model.opt.lambda_l = opt.lambda_l  # used by planning.py/compute_uncertainty_batch
 model.opt.lambda_o = opt.lambda_o  # used by planning.py/compute_uncertainty_batch
 if opt.value_model != '':
