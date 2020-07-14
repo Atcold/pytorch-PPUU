@@ -135,7 +135,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
 def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
     u_images, u_states, u_costs, u_values, speeds = [], [], [], [], []
     data_bsize = dataloader.opt.batch_size
-    dataloader.opt.batch_size = 2
+    dataloader.opt.batch_size = 8
     for i in range(n_batches):
         print(f'[estimating normal uncertainty ranges: {i / n_batches:2.1%}]', end='\r')
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
