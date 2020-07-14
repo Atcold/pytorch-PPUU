@@ -311,7 +311,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     # get initial action sequence, for an episode long npred (= 20) steps
     model.eval()
     for t in range(npred):
-        actions, _, _, _ = model.policy_net(input_images, input_states, n_channels=n_channels+1)
+        actions, _, _, _ = model.policy_net(input_images, input_states)
         if infer_z:
             h_x = model.encoder(input_images, input_states)
             h_y = model.y_encoder(target_images[:, t].unsqueeze(1).contiguous())

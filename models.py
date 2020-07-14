@@ -879,8 +879,12 @@ class DeterministicPolicy(nn.Module):
     def __init__(self, opt, context_dim=0, output_dim=None, n_channels=4):
         super().__init__()
         self.opt = opt
-        self.n_channels = n_channels
-        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond, n_channels=n_channels)
+        if opt.use_colored_lane:
+            self.n_channels = 5
+        else:
+            self.n_channels = 4
+        # self.n_channels = n_channels
+        self.encoder = encoder(opt, a_size=0, n_inputs=opt.ncond, n_channels=self.n_channels)
         self.n_outputs = opt.n_actions if output_dim is None else output_dim
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
