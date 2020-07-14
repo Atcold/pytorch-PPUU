@@ -225,6 +225,7 @@ def parse_args():
     parser.add_argument('-save_grad_vid',
                         action='store_true',
                         help='save gradients wrt states')
+    parser.add_argument('-use_colored_lane', type=bool, default=False)
 
     opt = parser.parse_args()
     opt.save_dir = path.join(opt.model_dir, 'planning_results')
@@ -298,7 +299,8 @@ def process_one_episode(opt,
                 save_opt_stats=(opt.bprop_save_opt_stats == 1),
                 nexec=opt.nexec,
                 lambda_l=opt.lambda_l,
-                lambda_o=opt.lambda_o
+                lambda_o=opt.lambda_o,
+                use_colored_lane=opt.use_colored_lane
             )
         elif opt.method == 'policy-IL':
             _, _, _, a = policy_network_il(

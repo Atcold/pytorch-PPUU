@@ -35,7 +35,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     input_states = input_states.unsqueeze(0)
     actions      = actions.     unsqueeze(0)
     Z_rep        = Z.           unsqueeze(0)
-    input_images = input_images.expand(n_models, bsize, model.opt.ncond, 3, model.opt.height, model.opt.width)
+    input_images = input_images.expand(n_models, bsize, model.opt.ncond, model.encoder.n_channels, model.opt.height, model.opt.width)
     input_states = input_states.expand(n_models, bsize, model.opt.ncond, 4)
     actions      = actions.     expand(n_models, bsize, npred, 2)
     Z_rep        = Z_rep.       expand(n_models, bsize, npred, -1)
@@ -43,7 +43,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     input_states = input_states.contiguous()
     actions      = actions.     contiguous()
     Z_rep        = Z_rep.       contiguous()
-    input_images = input_images.view(bsize * n_models, model.opt.ncond, 3, model.opt.height, model.opt.width)
+    input_images = input_images.view(bsize * n_models, model.opt.ncond, model.encoder.n_channels, model.opt.height, model.opt.width)
     input_states = input_states.view(bsize * n_models, model.opt.ncond, 4)
     actions      = actions.     view(bsize * n_models, npred, 2)
     Z_rep        = Z_rep.       view(n_models * bsize, npred, -1)
@@ -95,7 +95,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
     pred_states_var = torch.var(pred_states, 0).mean(2)
     pred_costs_var  = torch.var(pred_costs,  0).mean(2)
     pred_costs_mean = torch.mean(pred_costs, 0)
-    pred_images = pred_images.view(n_models * bsize, npred, 3, model.opt.height, model.opt.width)
+    pred_images = pred_images.view(n_models * bsize, npred, model.encoder.n_channels, model.opt.height, model.opt.width)
     pred_states = pred_states.view(n_models * bsize, npred, 4)
 
     if hasattr(model, 'value_function'):
@@ -171,13 +171,16 @@ def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
 
 def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50, n_futures=5, normalize=True,
                           bprop_niter=5, bprop_lrt=1.0, u_reg=0.0, actions=None, use_action_buffer=True, n_models=10,
-                          save_opt_stats=True, nexec=1, lambda_l=0.0, lambda_o=0.0):
+                          save_opt_stats=True, nexec=1, lambda_l=0.0, lambda_o=0.0, use_colored_lane=False):
     if use_action_buffer:
         actions = torch.cat((model.actions_buffer[nexec:, :], torch.zeros(nexec, model.opt.n_actions).cuda()), 0).cuda()
     elif actions is None:
         actions = torch.zeros(npred, model.opt.n_actions).cuda()
 
-    model.encoder.n_channels = 3
+    if use_colored_lane:
+        model.encoder.n_channels = 4
+    else:
+        model.encoder.n_channels = 3
 
     if normalize:
         input_images = input_images.clone().float().div_(255.0)
@@ -186,9 +189,9 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
         input_images = input_images.cuda().unsqueeze(0)
         input_states = input_states.cuda().unsqueeze(0)
 
-    input_images = input_images.expand(n_futures, model.opt.ncond, 3, model.opt.height, model.opt.width)
+    input_images = input_images.expand(n_futures, model.opt.ncond, model.encoder.n_channels, model.opt.height, model.opt.width)
     input_states = input_states.expand(n_futures, model.opt.ncond, 4)
-    input_images = input_images.contiguous().view(n_futures, model.opt.ncond, 3, model.opt.height, model.opt.width)
+    input_images = input_images.contiguous().view(n_futures, model.opt.ncond, model.encoder.n_channels, model.opt.height, model.opt.width)
     input_states = input_states.contiguous().view(n_futures, model.opt.ncond, 4)
 
     Z = model.sample_z(n_futures * npred, method='fp')
