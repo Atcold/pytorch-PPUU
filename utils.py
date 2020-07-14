@@ -132,10 +132,10 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
 
     # transform type
-    max_x = torch.tensor(max_x, dtype=torch.float32).cuda()
-    max_y = torch.tensor(max_y, dtype=torch.float32).cuda()
-    min_x = torch.tensor(min_x, dtype=torch.float32).cuda()
-    min_y = torch.tensor(min_y, dtype=torch.float32).cuda()
+    max_x = max_x.float()
+    max_y = max_y.float()
+    min_x = min_x.float()
+    min_y = min_y.float()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
     x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()

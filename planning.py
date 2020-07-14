@@ -83,9 +83,14 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
             car_sizes_temp,
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std']
         )
-        lane_cost, prox_map_l = utils.lane_cost(pred_images, car_sizes_temp)
-        offroad_cost = utils.offroad_cost(pred_images, prox_map_l)
-        pred_costs += model.opt.lambda_l * lane_cost + model.opt.lambda_o * offroad_cost
+        if model.opt.use_colored_lane:
+            orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(
+                pred_images[:, :, :model.encoder.n_channels].contiguous(), car_sizes)
+            pred_costs += 0.5 * orientation_cost + 0.5 * confidence_cost
+        else:
+            lane_cost, prox_map_l = utils.lane_cost(pred_images, car_sizes_temp)
+            offroad_cost = utils.offroad_cost(pred_images, prox_map_l)
+            pred_costs += model.opt.lambda_l * lane_cost + model.opt.lambda_o * offroad_cost
 
     pred_images = pred_images.view(n_models, bsize, npred, -1)
     pred_states = pred_states.view(n_models, bsize, npred, -1)
@@ -357,7 +362,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         if n_updates_z > 0:
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
         if use_colored_lane:
-            orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(pred_images[:, :, :4].contiguous(), car_sizes)
+            orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(pred_images[:, :, :n_channels].contiguous(), car_sizes)
         else:
             lane_cost, prox_map_l = utils.lane_cost(pred_images[:, :, :3].contiguous(), car_sizes)
             offroad_cost = utils.offroad_cost(pred_images[:, :, :3].contiguous(), prox_map_l)
@@ -367,7 +372,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
         else:
             v = torch.zeros(bsize, 1).cuda()
     else:
-        pred_costs = model.cost(pred_images[:, :, :n_channels].contiguous().view(-1, 3, 117, 24), pred_states.data.view(-1, 4))
+        pred_costs = model.cost(pred_images[:, :, :n_channels].contiguous().view(-1, n_channels, 117, 24), pred_states.data.view(-1, 4))
         pred_costs = pred_costs.view(bsize, npred, 2)
         proximity_cost = pred_costs[:, :, 0]
         lane_cost = pred_costs[:, :, 1]
