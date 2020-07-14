@@ -80,7 +80,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         car_sizes_temp = car_sizes.unsqueeze(0).expand(n_models, bsize, 2).contiguous().view(n_models * bsize, 2)
         pred_costs, _ = utils.proximity_cost(
             pred_images, pred_states.data,
-            car_sizes_temp, green_channel=4 if model.opt.use_colored_lane else 2,
+            car_sizes_temp, green_channel=3 if model.opt.use_colored_lane else 1,
             unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
         if model.opt.use_colored_lane:
             orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(
@@ -135,7 +135,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
 def estimate_uncertainty_stats(model, dataloader, n_batches=100, npred=200):
     u_images, u_states, u_costs, u_values, speeds = [], [], [], [], []
     data_bsize = dataloader.opt.batch_size
-    dataloader.opt.batch_size = 8
+    dataloader.opt.batch_size = 2
     for i in range(n_batches):
         print(f'[estimating normal uncertainty ranges: {i / n_batches:2.1%}]', end='\r')
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm('train', npred)
@@ -347,7 +347,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             pred, _ = model.forward([input_images, input_states], pred_actions, None, save_z=False,
                                     z_dropout=0.0, z_seq=Z_adv, sampling='fixed')
             pred_cost_adv, _ = utils.proximity_cost(pred[0], pred[1].data, car_sizes, unnormalize=True,
-                                                        green_channel= 4 if model.opt.use_colored_lane else 2,
+                                                        green_channel= 3 if model.opt.use_colored_lane else 1,
                                                         s_mean=model.stats['s_mean'], s_std=model.stats['s_std'])
 
             if k < n_updates_z + 1:
@@ -367,7 +367,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
     if not hasattr(model, 'cost'):
         # ipdb.set_trace()
         proximity_cost, _ = utils.proximity_cost(pred_images[:, :, :n_channels].contiguous(), pred_states.data, car_sizes,
-                                                 green_channel=4 if model.opt.use_colored_lane else 2,
+                                                 green_channel= 3 if model.opt.use_colored_lane else 1,
                                                  unnormalize=True, s_mean=model.stats['s_mean'],
                                                  s_std=model.stats['s_std'])
         if n_updates_z > 0:
