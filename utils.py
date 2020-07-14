@@ -124,12 +124,18 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
 
     max_x = torch.ceil((crop_h - torch.clamp(length - alpha, min=0)) / 2)
     max_y = torch.ceil((crop_w - torch.clamp(width - alpha, min=0)) / 2)
-    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
-    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
+    max_x = max_x.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred)
+    max_y = max_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred)
 
     min_x = torch.clamp(max_x - safe_distance, min=0)
     min_y = torch.ceil(crop_w / 2 - width)  # assumes other._width / 2 = self._width / 2
-    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred).cuda()
+    min_y = min_y.view(bsize, 1).expand(bsize, npred).contiguous().view(bsize * npred)
+
+    # transform type
+    max_x = torch.tensor(max_x, dtype=torch.float32).cuda()
+    max_y = torch.tensor(max_y, dtype=torch.float32).cuda()
+    min_x = torch.tensor(min_x, dtype=torch.float32).cuda()
+    min_y = torch.tensor(min_y, dtype=torch.float32).cuda()
 
     x_filter = (1 - torch.abs(torch.linspace(-1, 1, crop_h))) * crop_h / 2
     x_filter = x_filter.unsqueeze(0).expand(bsize * npred, crop_h).cuda()
