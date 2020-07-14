@@ -113,14 +113,13 @@ def start(what, nbatches, npred):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
         pred, actions = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
-            n_updates_z=opt.z_updates, infer_z=opt.infer_z, use_colored_lane=opt.use_colored_lane
-        )
+            n_updates_z=opt.z_updates, infer_z=opt.infer_z)
         if opt.use_colored_lane:
             pred['policy'] = pred['proximity'] + \
                              opt.u_reg * pred['uncertainty'] + \
-                             0.5 * pred['orientation'] + \
+                             opt.lambda_o * pred['orientation'] + \
                              opt.lambda_a * pred['action'] + \
-                             0.5 * pred['confidence']
+                             opt.lambda_l * pred['confidence']
         else:
             pred['policy'] = pred['proximity'] + \
                              opt.u_reg * pred['uncertainty'] + \

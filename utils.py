@@ -168,7 +168,7 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
         states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
         states = states + s_mean.view(1, 4).expand(states.size()).cuda()
 
-    d = states[:, 2:] * SCALE  # pixel/s
+    speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
@@ -179,7 +179,7 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
                             torch.mean(2 * (neighbourhood_array[:, :, 1] - 0.5))])
     v = torch.mean(neighbourhood_array[:, :, 2])
     s = torch.norm(dmap)
-    cosinerot = torch.dot(d, dmap) / (torch.norm(d) * torch.norm(dmap))
+    cosinerot = torch.dot(speed, dmap) / (torch.norm(speed) * torch.norm(dmap))
     orientation_cost = s * (max(-cosinerot + math.cos(5 / 180 * math.pi), 0) / 2) ** 2
     conf_cost = (1 - v) ** 2
     # lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
@@ -567,7 +567,6 @@ def parse_command_line(parser=None):
     parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
-    parser.add_argument('-use_colored_lane', type=bool, default=False, help='use colored lanes for forward model')
 
 
     opt = parser.parse_args()
