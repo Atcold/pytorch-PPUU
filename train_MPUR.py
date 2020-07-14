@@ -79,7 +79,7 @@ if opt.learned_cost:
     print('[loading cost regressor]')
     model.cost = torch.load(path.join(opt.model_dir, opt.mfile + '.cost.model'))['model']
 
-dataloader = DataLoader(None, opt, opt.dataset, use_colored_lane=opt.use_colored_lane)
+dataloader = DataLoader(None, opt, opt.dataset, use_colored_lane=model.opt.use_colored_lane)
 model.train()
 model.opt.u_hinge = opt.u_hinge
 planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)

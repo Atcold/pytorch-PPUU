@@ -567,6 +567,7 @@ def parse_command_line(parser=None):
     parser.add_argument('-tensorboard_dir', type=str, default='models/policy_networks',
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
+    parser.add_argument('-use_colored_lane', type=bool, default=False, help='use colored lanes for forward model')
 
 
     opt = parser.parse_args()
