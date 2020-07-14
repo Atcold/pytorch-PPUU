@@ -168,19 +168,20 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
         states = states * (1e-8 + s_std.view(1, 4).expand(states.size())).cuda()
         states = states + s_mean.view(1, 4).expand(states.size()).cuda()
 
-    speed = states[:, 2:].norm(2, 1) * SCALE  # pixel/s
+    speed = states[:, 2:] * SCALE  # pixel/s
     width, length = car_size[:, 0], car_size[:, 1]  # feet
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]/255.
-    dmap = torch.as_tensor([torch.mean(2 * (neighbourhood_array[:, :, 0] - 0.5)),
-                            torch.mean(2 * (neighbourhood_array[:, :, 1] - 0.5))])
-    v = torch.mean(neighbourhood_array[:, :, 2])
-    s = torch.norm(dmap)
-    cosinerot = torch.dot(speed, dmap) / (torch.norm(speed) * torch.norm(dmap))
-    orientation_cost = s * (max(-cosinerot + math.cos(5 / 180 * math.pi), 0) / 2) ** 2
+    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
+    dmap = torch.stack([torch.mean(torch.mean(2 * (neighbourhood_array[:, :, 0] - 0.5), dim=-1), dim=-1),
+                            torch.mean(torch.mean(2 * (neighbourhood_array[:, :, 1] - 0.5), dim=-1), dim=-1)], dim=2).view(-1,2).cuda()
+    v = torch.mean(torch.mean(neighbourhood_array[:, :, 2], dim=-1), dim=-1)
+    s = dmap.norm(2, 1)
+    cosinerot = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1))
+    orientation_cost = s * (torch.max(torch.stack([-cosinerot + math.cos(5 / 180 * math.pi), torch.zeros_like(cosinerot)], dim=1), dim=1)[0] / 2) ** 2
+    orientation_cost = orientation_cost.view(bsize, npred)
     conf_cost = (1 - v) ** 2
     # lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
     # h = torch.mean(lanes_hsv[:, :, 0])
