@@ -475,6 +475,7 @@ def main():
             delta_t=0.1,
             store_simulator_video=opt.save_sim_video,
             show_frame_count=False,
+            colored_lane = opt.colored_lane
         )
     )
 
