@@ -225,7 +225,7 @@ def parse_args():
     parser.add_argument('-save_grad_vid',
                         action='store_true',
                         help='save gradients wrt states')
-    parser.add_argument('-use_colored_lane', type=bool, default=False)
+    parser.add_argument('-colored_lane', type=str, default=None)
 
     opt = parser.parse_args()
     opt.save_dir = path.join(opt.model_dir, 'planning_results')
@@ -300,7 +300,6 @@ def process_one_episode(opt,
                 nexec=opt.nexec,
                 lambda_l=opt.lambda_l,
                 lambda_o=opt.lambda_o,
-                use_colored_lane=opt.use_colored_lane
             )
         elif opt.method == 'policy-IL':
             _, _, _, a = policy_network_il(
@@ -448,7 +447,7 @@ def main():
 
     data_path = 'traffic-data/state-action-cost/data_i80_v0'
 
-    dataloader = DataLoader(None, opt, 'i80')
+    dataloader = DataLoader(None, opt, 'i80', use_colored_lane=True if opt.colored_lane is not None else False)
     (
         forward_model,
         value_function,
