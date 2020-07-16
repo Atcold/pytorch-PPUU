@@ -61,9 +61,9 @@ def load_models(opt, data_path, device='cuda'):
 
     model_path = path.join(opt.model_dir, opt.mfile)
     if path.exists(model_path):
-        forward_model = torch.load(model_path, map_location=torch.device(device))
+        forward_model = torch.load(model_path)
     elif path.exists(opt.mfile):
-        forward_model = torch.load(opt.mfile, map_location=torch.device(device))
+        forward_model = torch.load(opt.mfile)
     else:
         raise runtime_error(f'couldn\'t find file {opt.mfile}')
 
@@ -91,7 +91,7 @@ def load_models(opt, data_path, device='cuda'):
         forward_model.policy_net.stats = stats
         forward_model.policy_net.actor_critic = False
     if opt.method == 'policy-MPUR':
-        checkpoint = torch.load(model_path, map_location=torch.device(device))
+        checkpoint = torch.load(model_path)
         policy_network_mpur = checkpoint['model']
         policy_network_mpur.stats = stats
         forward_model.policy_net = policy_network_mpur.policy_net
