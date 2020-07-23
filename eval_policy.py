@@ -366,7 +366,10 @@ def process_one_episode(opt,
 
             images.append(input_images[-1])
             states.append(input_states[-1])
-            costs.append([cost['pixel_proximity_cost'], cost['lane_cost']])
+            if opt.colored_lane is not None:
+                costs.append([cost['pixel_proximity_cost'], cost['orientation_cost'], cost['confidence_cost']])
+            else:
+                costs.append([cost['pixel_proximity_cost'], cost['lane_cost']])
             cost_sequence.append(cost)
             if opt.mfile == 'no-action':
                 actions.append(a[t])

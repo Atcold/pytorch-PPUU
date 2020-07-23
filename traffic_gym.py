@@ -569,13 +569,22 @@ class Car:
             state_images = state_images.float().div(255)  # [0, 1] range
         observation = dict(context=state_images, state=states)
 
-        cost = dict(
-            proximity_cost=self._states[-1][2],
-            lane_cost=self._states_image[-1][1],
-            pixel_proximity_cost=self._states_image[-1][2],
-            collisions_per_frame=self.collisions_per_frame,
-            arrived_to_dst=self.arrived_to_dst,
-        )
+        if colored_lane is not None:
+            cost = dict(
+                orientation_cost=self._states_image[-1][1][0],
+                confidence_cost=self._states_image[-1][1][1],
+                pixel_proximity_cost=self._states_image[-1][2],
+                collisions_per_frame=self.collisions_per_frame,
+                arrived_to_dst=self.arrived_to_dst,
+            )
+        else:
+            cost = dict(
+                proximity_cost=self._states[-1][2],
+                lane_cost=self._states_image[-1][1],
+                pixel_proximity_cost=self._states_image[-1][2],
+                collisions_per_frame=self.collisions_per_frame,
+                arrived_to_dst=self.arrived_to_dst,
+            )
 
         if return_reward:  # if we're playing with model free RL, have fun with reward shaping
             arrived = self.arrived_to_dst
