@@ -400,7 +400,9 @@ def process_one_episode(opt,
         grads = torch.cat(grad_list)
 
     if len(images) > 3:
-        images_3_channels = (images[:, :3] + images[:, 3:]).clamp(max=255)
+        images[:, 1] += images[:, 4]
+        images[:, 2] += images[:, 5]
+        images_3_channels = (images[:, :3]).clamp(max=255)
         utils.save_movie(path.join(movie_dir, 'ego'),
                          images_3_channels.float() / 255.0,
                          states,
