@@ -478,6 +478,7 @@ class I80(Simulator):
                 norm_state=self.normalise_state and self.data_stats,
                 return_reward=self.return_reward,
                 gamma=self.gamma,
+                colored_lane=self.colored_lane
             )
             if return_: return return_
 

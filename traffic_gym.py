@@ -544,13 +544,19 @@ class Car:
         elif object_name == 'lane_image':
             self._lanes_image.append(self._get_observation_image(*object_))
 
-    def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99):
+    def get_last(self, n, done, norm_state=False, return_reward=False, gamma=0.99, colored_lane=None):
         if len(self._states_image) < n: return None  # no enough samples
         # n × (state_image, lane_cost, proximity_cost, frame) ->
         # -> (n × state_image, n × lane_cost, n × proximity_cost, n × frame)
         transpose = list(zip(*self._states_image))
         state_images = transpose[0]
         state_images = torch.stack(state_images).permute(0, 3, 1, 2)[-n:]
+        if colored_lane is not None:
+            transpose = list(zip(*self._lanes_image))
+            lane_images = transpose[0]
+            lane_images = torch.stack(lane_images).permute(0, 3, 1, 2)[-n:]
+            state_images = torch.cat([lane_images,state_images[:,1,:,:].unsqueeze(dim=1)],dim=1) # Only use green channel
+            del lane_images
         ego_car_new_shape = list(state_images.shape)
         ego_car_new_shape[1] = 1
         ego_car_channel = self._ego_car_image[:, :, 2][None, None, :].expand(ego_car_new_shape)
