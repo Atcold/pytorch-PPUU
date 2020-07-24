@@ -400,20 +400,23 @@ def process_one_episode(opt,
         grads = torch.cat(grad_list)
 
     if len(images) > 3:
-        vehicle_mask = images[:, 3] > 0
-        ego_mask = images[:, 4] > 0
-        vehicle_value = images[:, 3]
-        ego_value = images[:, 4]
-        image_red = images[:, 0]
-        image_green = images[:, 1]
-        image_blue = images[:, 2]
-        image_green[vehicle_mask] = vehicle_value[vehicle_mask]
-        image_red[vehicle_mask] = 0
-        image_blue[vehicle_mask] = 0
-        image_green[ego_mask] = 0
-        image_red[ego_mask] = 0
-        image_blue[ego_mask] = ego_value[ego_mask]
-        images_3_channels = torch.stack([image_red,image_green,image_blue],dim=1)
+        if opt.colored_lane is not None:
+            vehicle_mask = images[:, 3] > 0
+            ego_mask = images[:, 4] > 0
+            vehicle_value = images[:, 3]
+            ego_value = images[:, 4]
+            image_red = images[:, 0]
+            image_green = images[:, 1]
+            image_blue = images[:, 2]
+            image_green[vehicle_mask] = vehicle_value[vehicle_mask]
+            image_red[vehicle_mask] = 0
+            image_blue[vehicle_mask] = 0
+            image_green[ego_mask] = 0
+            image_red[ego_mask] = 0
+            image_blue[ego_mask] = ego_value[ego_mask]
+            images_3_channels = torch.stack([image_red,image_green,image_blue],dim=1)
+        else:
+            images_3_channels = (images[:, :3] + images[:, 3:]).clamp(max=255)
         utils.save_movie(path.join(movie_dir, 'ego'),
                          images_3_channels.float() / 255.0,
                          states,
