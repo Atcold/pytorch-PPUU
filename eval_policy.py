@@ -516,8 +516,8 @@ def main():
 
     n_test = len(splits['test_indx'])
 
-    #set_start_method('spawn')
-    #pool = Pool(opt.num_processes)
+    set_start_method('spawn')
+    pool = Pool(opt.num_processes)
 
     async_results = []
 
@@ -532,8 +532,8 @@ def main():
                         timeslot]][car_id]
                 )[None, :]
         async_results.append(
-            #pool.apply_async(
-                process_one_episode(
+            pool.apply_async(
+                process_one_episode, (
                     opt,
                     env,
                     car_path,
@@ -544,12 +544,11 @@ def main():
                     j,
                     car_sizes
                 )
-            #)
+            )
         )
 
     for j in range(n_test):
-        #simulation_result = async_results[j].get()
-        simulation_result = async_results[j]
+        simulation_result = async_results[j].get()
 
         time_travelled.append(simulation_result.time_travelled)
         distance_travelled.append(simulation_result.distance_travelled)
@@ -588,8 +587,8 @@ def main():
             writer.add_scalar('ByEpisode/Distance',
                               simulation_result.distance_travelled, j)
 
-    #pool.close()
-    #pool.join()
+    pool.close()
+    pool.join()
 
     diff_time = time.time() - time_started
     print('avg time travelled per second is', total_images / diff_time)
