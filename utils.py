@@ -153,7 +153,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = torch.bmm(x_filter.view(-1, crop_h, 1), y_filter.view(-1, 1, crop_w))
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
+    costs = -torch.log(1-torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0])
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs, proximity_mask
@@ -179,10 +179,10 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
                             torch.mean(torch.mean(2 * (neighbourhood_array[:, :, 1] - 0.5), dim=-1), dim=-1)], dim=2).view(-1,2).cuda()
     v = torch.mean(torch.mean(neighbourhood_array[:, :, 2], dim=-1), dim=-1)
     s = dmap.norm(2, 1)
-    cosinerot = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1))
-    orientation_cost = s * (torch.max(torch.stack([-cosinerot + math.cos(5 / 180 * math.pi), torch.zeros_like(cosinerot)], dim=1), dim=1)[0] / 2) ** 2
+    cosdis = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1) + 1e-6)
+    orientation_cost = -torch.log(1 - s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0]))
     orientation_cost = orientation_cost.view(bsize, npred)
-    conf_cost = (1 - v) ** 2
+    conf_cost = -torch.log(v)  # (1-v)**2
     # lanes_hsv = torch.as_tensor(rgb_to_hsv(neighbourhood_array)).cuda()
     # h = torch.mean(lanes_hsv[:, :, 0])
     # s = torch.mean(lanes_hsv[:, :, 1])
