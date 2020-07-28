@@ -9,6 +9,7 @@ import sys, pickle
 # from skimage import measure, transform
 # from matplotlib.image import imsave
 import PIL
+from PIL import Image
 from custom_graphics import draw_dashed_line, draw_text, draw_rect
 from gym import core, spaces
 import os
