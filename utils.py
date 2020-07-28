@@ -173,13 +173,14 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     width = width * SCALE * (0.3048 * 24 / 3.7)  # pixels
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
-    images = images.view(bsize, npred, nchannels, crop_h, crop_w)
-    neighbourhood_array = images[:, :, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
-    dmap = torch.stack([2 * (neighbourhood_array[:, :, 0] - 0.5),
-                             2 * (neighbourhood_array[:, :, 1] - 0.5)], dim=2).permute(0,1,3,4,2).contiguous().view(-1,2).cuda()
-    v = neighbourhood_array[:, :, 2]
+    images = images.view(bsize * npred, nchannels, crop_h, crop_w)
+    neighbourhood_array = images[:, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
+    dmap = torch.stack([2 * (neighbourhood_array[:, 0] - 0.5),
+                             2 * (neighbourhood_array[:, 1] - 0.5)], dim=1).permute(0,2,3,1).contiguous().view(-1,2).cuda()
+    v = neighbourhood_array[:, 2]
     s = dmap.norm(2, -1)
-    cosdis = (speed[:, 0] * dmap[:, 0] + speed[:, 1] * dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1) + 1e-6)
+    speed = speed.unsqueeze(dim=1).unsqueeze(dim=1)
+    cosdis = (speed[..., 0] * dmap[..., 0] + speed[..., 1] * dmap[..., 1]) / (speed.norm(2, -1) * dmap.norm(2, -1) + 1e-6)
     orientation_cost = torch.mean(s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2)**2)
     conf_cost = torch.mean((1-v)**2)
     # cosdis = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1) + 1e-6)
