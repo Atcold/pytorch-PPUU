@@ -190,7 +190,7 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     # orientation_cost = -torch.mean(torch.mean(torch.log(1 - s * (
     #             torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi)/2, torch.zeros_like(cosdis)], dim=2),
     #                       dim=2)[0])), dim=-1), dim=-1)
-    # conf_cost = -torch.mean(torch.mean(torch.log(v), dim=-1), dim=-1)
+    # conf_cost = -torch.mean(torch.mean(torch.log(torch.max(torch.stack([v,torch.zeros_like(v)+1e-6, dim=2), dim=2), dim=-1), dim=-1)
 
     # orientation_cost = -torch.log(1 - s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2))
     # orientation_cost = orientation_cost.view(bsize, npred)
