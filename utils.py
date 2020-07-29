@@ -154,7 +154,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     proximity_mask = proximity_mask.view(bsize, npred, crop_h, crop_w)
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    # costs = -torch.log(1-torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0])
+    # costs = -torch.log(torch.max(torch.stack([1 - costs, torch.zeros_like(costs) + 1e-6], dim=-1), dim=-1)[0])
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs.view(bsize, npred), proximity_mask
@@ -187,9 +187,9 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
                           dim=2)[0])**2, dim=-1), dim=-1)
     conf_cost = torch.mean(torch.mean((1-v)**2, dim=-1), dim=-1)
 
-    # orientation_cost = -torch.mean(torch.mean(torch.log(1 - s * (
+    # orientation_cost = -torch.mean(torch.mean(torch.log(torch.max(torch.stack([1 - s * (
     #             torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi)/2, torch.zeros_like(cosdis)], dim=2),
-    #                       dim=2)[0])), dim=-1), dim=-1)
+    #                       dim=2)[0]), torch.zeros_like(cosdis)+1e-6], dim=2), dim=2)[0]), dim=-1), dim=-1)
     # conf_cost = -torch.mean(torch.mean(torch.log(torch.max(torch.stack([v, torch.zeros_like(v)+1e-6], dim=2), dim=2)[0]), dim=-1), dim=-1)
 
     # orientation_cost = -torch.log(1 - s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2))
