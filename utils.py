@@ -158,7 +158,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs.view(bsize, npred), proximity_mask
 
-def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None):
+def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None, pad=1):
     SCALE = 0.25
     bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
@@ -174,9 +174,9 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     length = length * SCALE * (0.3048 * 24 / 3.7)  # pixels
 
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
-    neighbourhood_array = images[:, :3, crop_h//2-1:crop_h//2+2, crop_w//2-1:crop_w//2+2]
+    neighbourhood_array = images[:, :3, crop_h//2-pad:crop_h//2+pad+1, crop_w//2-pad:crop_w//2+pad+1]
     dmap = torch.stack([2 * (neighbourhood_array[:, 0] - 0.5),
-                             2 * (neighbourhood_array[:, 1] - 0.5)], dim=1).permute(0,2,3,1).contiguous().view(-1,2).cuda()
+                             2 * (neighbourhood_array[:, 1] - 0.5)], dim=1).permute(0,2,3,1).contiguous().view(-1,2*pad+1,2*pad+1,2).cuda()
     v = neighbourhood_array[:, 2]
     s = dmap.norm(2, -1)
     speed = speed.unsqueeze(dim=1).unsqueeze(dim=1)
