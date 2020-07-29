@@ -254,7 +254,10 @@ def log(fname, s):
     if not os.path.isdir(os.path.dirname(fname)):
         os.system(f'mkdir -p {os.path.dirname(fname)}')
     f = open(fname, 'a')
-    f.write(f'{str(datetime.now())}: {s}\n')
+    try:
+        f.write(f'{str(datetime.now())}: {s}\n')
+    except Exception:
+        f.write('Print error\n')
     f.close()
 
 
