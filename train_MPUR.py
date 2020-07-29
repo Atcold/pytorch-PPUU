@@ -210,7 +210,11 @@ for i in range(500):
     log_string = f'step {n_iter} | '
     log_string += 'train: [' + ', '.join(f'{k}: {train_losses[v]:.4f}' for k, v in losses.items()) + '] | '
     log_string += 'valid: [' + ', '.join(f'{k}: {valid_losses[v]:.4f}' for k, v in losses.items()) + ']'
-    print(log_string)
+    try:
+        print(log_string)
+    except Exception:
+        print("Print error")
+
     utils.log(opt.model_file + '.log', log_string)
 
 if writer is not None:
