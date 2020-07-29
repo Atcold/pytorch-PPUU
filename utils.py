@@ -181,10 +181,10 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     s = dmap.norm(2, -1)
     speed = speed.unsqueeze(dim=1).unsqueeze(dim=1)
     cosdis = (speed[..., 0] * dmap[..., 0] + speed[..., 1] * dmap[..., 1]) / (speed.norm(2, -1) * dmap.norm(2, -1) + 1e-6)
-    orientation_cost = torch.mean(torch.log(1 - s * (
+    orientation_cost = torch.mean(torch.mean(torch.log(1 - s * (
                 torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=-1),
-                          dim=-1)[0] / 2)))
-    conf_cost = torch.mean(torch.log(v))
+                          dim=-1)[0] / 2)), dim=-1), dim=-1)
+    conf_cost = torch.mean(torch.mean(torch.log(v), dim=-1), dim=-1)
     # orientation_cost = torch.mean(s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2)**2)
     # conf_cost = torch.mean((1-v)**2)
     # cosdis = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1) + 1e-6)
@@ -215,7 +215,7 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     #     rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
     # orientation_cost = s * rotation
     # conf_cost = (1 - v) ** 2
-    return orientation_cost, conf_cost
+    return orientation_cost.view(bsize, npred), conf_cost.view(bsize, npred)
 
 def parse_car_path(path):
     splits = path.split('/')
