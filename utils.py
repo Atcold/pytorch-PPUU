@@ -177,22 +177,21 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     images = images.view(bsize, npred, nchannels, crop_h, crop_w)
     neighbourhood_array = images[:, :, :3, crop_h//2-pad:crop_h//2+pad+1, crop_w//2-pad:crop_w//2+pad+1]
     dmap = torch.stack([2 * (neighbourhood_array[:, :, 0] - 0.5),
-                             2 * (neighbourhood_array[:, :, 1] - 0.5)], dim=1).cuda()
+                             2 * (neighbourhood_array[:, :, 1] - 0.5)], dim=2).cuda()
     v = neighbourhood_array[:, :, 2]
     s = dmap.norm(2, 2)
-    speed = speed.unsqueeze(dim=1).unsqueeze(dim=1)
-    cosdis = (speed[..., 0] * dmap[..., 0] + speed[..., 1] * dmap[..., 1]) / (2 * speed.norm(2, -1) * dmap.norm(2, 2) + 1e-6)
+    speed = speed.view(bsize, npred, 2).unsqueeze(dim=-1).unsqueeze(dim=-1)
+    cosdis = (speed[:, :, 0] * dmap[:, :, 0] + speed[:, :, 1] * dmap[:, :, 1]) / (2 * speed.norm(2, 2) * dmap.norm(2, 2) + 1e-6)
     orientation_cost = torch.mean(torch.mean(s * (
-                torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=-1),
-                          dim=-1)[0])**2, dim=-1), dim=-1)
+                torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi)/2, torch.zeros_like(cosdis)], dim=2),
+                          dim=2)[0])**2, dim=-1), dim=-1)
     conf_cost = torch.mean(torch.mean((1-v)**2, dim=-1), dim=-1)
+
     # orientation_cost = -torch.mean(torch.mean(torch.log(1 - s * (
-    #             torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=-1),
-    #                       dim=-1)[0] / 2)), dim=-1), dim=-1)
+    #             torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi)/2, torch.zeros_like(cosdis)], dim=2),
+    #                       dim=2)[0])), dim=-1), dim=-1)
     # conf_cost = -torch.mean(torch.mean(torch.log(v), dim=-1), dim=-1)
-    # orientation_cost = torch.mean(s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2)**2)
-    # conf_cost = torch.mean((1-v)**2)
-    # cosdis = (speed[:, 0]*dmap[:, 0]+speed[:, 1]*dmap[:, 1]) / (speed.norm(2, 1) * dmap.norm(2, 1) + 1e-6)
+
     # orientation_cost = -torch.log(1 - s * (torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=1), dim=1)[0] / 2))
     # orientation_cost = orientation_cost.view(bsize, npred)
     # conf_cost = -torch.log(v)  # (1-v)**2
