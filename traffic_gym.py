@@ -1147,13 +1147,18 @@ class Simulator(core.Env):
         # plt.imsave("trajectory.jpg", np.transpose(self.trajectory_image, (1, 0, 2)))
 
         soft_threshold = 0.85
-        lane_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 2] + 1e-6, axis=2)
+        #lane_image = self.trajectory_image[:, :, 0:3] / np.expand_dims(self.trajectory_image[:, :, 2] + 1e-6, axis=2)
+        lane_image = self.trajectory_image[:, :, 0:3]
+        conf_threshold = 5
+        lane_image[:, :, 0:2] /= np.expand_dims(self.trajectory_image[:, :, 2] + 1e-6, axis=2)
+        lane_image[:, :, 2] = np.min(np.stack([lane_image[:, :, 2], np.ones_like(lane_image[:, :, 2])*conf_threshold],
+                                              axis=-1), axis=-1)[0] / conf_threshold
         d = lane_image[:, :, 0:2]
         phi = np.linalg.norm(d, axis=2)
         phi = 1. / (1. + np.exp(-50 * (phi - soft_threshold)))
         lane_image[:, :, 0] = (d[:, :, 0] * phi) * 0.5 + 0.5
         lane_image[:, :, 1] = (d[:, :, 1] * phi) * 0.5 + 0.5
-        plt.imsave("trajectory.jpg", np.transpose(lane_image, (1, 0, 2)))
+        plt.imsave("actrajectory.jpg", np.transpose(lane_image, (1, 0, 2)))
 
     def _pause(self):
         pause = True
