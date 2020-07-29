@@ -156,7 +156,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     costs = -torch.log(1-torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0])
     #    costs = torch.sum((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
-    return costs, proximity_mask
+    return costs.view(bsize, npred), proximity_mask
 
 def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
@@ -215,7 +215,7 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     #     rotation = max(min((h - h_self) ** 2, (h - h_self - 1) ** 2) - (5 / 180 * math.pi) ** 2, 0.)
     # orientation_cost = s * rotation
     # conf_cost = (1 - v) ** 2
-    return orientation_cost.view(bsize, npred), conf_cost.view(bsize, npred)
+    return orientation_cost, conf_cost
 
 def parse_car_path(path):
     splits = path.split('/')
