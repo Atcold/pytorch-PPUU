@@ -181,10 +181,10 @@ def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnorm
     v = neighbourhood_array[:, 2]
     s = dmap.norm(2, -1)
     speed = speed.unsqueeze(dim=1).unsqueeze(dim=1)
-    cosdis = (speed[..., 0] * dmap[..., 0] + speed[..., 1] * dmap[..., 1]) / (speed.norm(2, -1) * dmap.norm(2, -1) + 1e-6)
-    orientation_cost = torch.mean(torch.mean(1 - s * (
+    cosdis = (speed[..., 0] * dmap[..., 0] + speed[..., 1] * dmap[..., 1]) / (2 * speed.norm(2, -1) * dmap.norm(2, -1) + 1e-6)
+    orientation_cost = torch.mean(torch.mean(s * (
                 torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=-1),
-                          dim=-1)[0] / 2), dim=-1), dim=-1)
+                          dim=-1)[0])**2, dim=-1), dim=-1)
     conf_cost = torch.mean(torch.mean((1-v)**2, dim=-1), dim=-1)
     # orientation_cost = -torch.mean(torch.mean(torch.log(1 - s * (
     #             torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi), torch.zeros_like(cosdis)], dim=-1),
