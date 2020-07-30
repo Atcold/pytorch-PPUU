@@ -475,12 +475,16 @@ class Car:
         else:
             neighbourhood = rot_surface.subsurface(x, y, 3, 3)
             neighbourhood_array = pygame.surfarray.array3d(neighbourhood).transpose(1, 0, 2) / 255. # flip x and y
-            dmap = np.array([np.mean(2*(neighbourhood_array[:, :, 0]-0.5)), np.mean(2*(neighbourhood_array[:, :, 1]-0.5))])
-            v = np.mean(neighbourhood_array[:, :, 2])
-            s = np.linalg.norm(dmap)
-            cosinerot = np.dot(d,dmap)/(np.linalg.norm(d)*np.linalg.norm(dmap))
-            orientation_cost = s * (max(-cosinerot+np.cos(5/180*np.pi), 0)/2)**2
-            conf_cost = (1 - v) ** 2
+            dmap = torch.stack([2 * (neighbourhood_array[:, :, 0] - 0.5),
+                                2 * (neighbourhood_array[:, :, 1] - 0.5)], dim=2).cuda()
+            v = neighbourhood_array[:, :, 2]
+            s = dmap.norm(2, 2)
+            cosdis = (d[:, :, 0] * dmap[:, :, 0] + d[:, :, 1] * dmap[:, :, 1]) / (
+                        2 * d.norm(2, 2) * dmap.norm(2, 2) + 1e-6)
+            orientation_cost = torch.mean(s * (
+                torch.max(torch.stack([-cosdis + math.cos(5 / 180 * math.pi) / 2, torch.zeros_like(cosdis)], dim=2),
+                          dim=2)[0]) ** 2)
+            conf_cost = torch.mean((1 - v) ** 2)
             lane_cost = [orientation_cost, conf_cost]
 
         # Compute x/y minimum distance to other vehicles (pixel version)
