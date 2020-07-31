@@ -885,6 +885,9 @@ class DeterministicPolicy(nn.Module):
         self.hsize = opt.nfeature * self.opt.h_height * self.opt.h_width
         self.proj = nn.Linear(self.hsize, opt.n_hidden)
         self.context_dim = context_dim
+        if opt.track_grad_norm:
+            self.a_grad_list = []
+            self.register_backward_hook(self.hook_fn_backward)
 
         self.fc = nn.Sequential(
             nn.Linear(opt.n_hidden, opt.n_hidden),
@@ -924,7 +927,6 @@ class DeterministicPolicy(nn.Module):
             assert(context is not None)
             h = h + self.context_encoder(context)
         a = self.fc(h).view(bsize, self.n_outputs)
-
         if normalize_outputs:  # done only at inference time, if only "volatile" was still a thing...
             a = a.data
             a.clamp_(-3, 3)
@@ -933,6 +935,11 @@ class DeterministicPolicy(nn.Module):
 
         return a, None, None, None  # Returning a tuple of 4, for consistency with the stochastic policy
 
+    def hook_fn_backward(self, module, grad_input, grad_output):
+        self.a_grad_list.append(grad_output)
+
+    def clean_a_grad_list(self):
+        self.a_grad_list = []
 
 class ValueFunction(nn.Module):
     def __init__(self, opt):

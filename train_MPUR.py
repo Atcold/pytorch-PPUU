@@ -86,11 +86,13 @@ planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.n
 model.eval()
 
 
-def start(what, nbatches, npred):
+def start(what, nbatches, npred, track=False):
     train = True if what is 'train' else False
     model.train()
     model.policy_net.train()
     n_updates, grad_norm = 0, 0
+    if opt.track_grad_norm:
+        a_grad_norm = [0, 0, 0]
     if opt.use_colored_lane:
         total_losses = dict(
             proximity=0,
@@ -100,6 +102,12 @@ def start(what, nbatches, npred):
             action=0,
             policy=0,
         )
+        if opt.track_grad_norm:
+            total_grads = dict(
+                proximity_confidence_orientation=0,
+                confidence=0,
+                orientation=0,
+            )
     else:
         total_losses = dict(
             proximity=0,
@@ -109,6 +117,11 @@ def start(what, nbatches, npred):
             action=0,
             policy=0,
         )
+        if opt.track_grad_norm:
+            total_grads = dict(
+                proximity_lane=0,
+                lane=0,
+            )
     for j in range(nbatches):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
         pred, actions = planning.train_policy_net_mpur(
@@ -134,6 +147,34 @@ def start(what, nbatches, npred):
                 grad_norm += utils.grad_norm(model.policy_net).item()
                 torch.nn.utils.clip_grad_norm_(model.policy_net.parameters(), opt.grad_clip)
                 optimizer.step()
+            elif track:
+                if opt.use_colored_lane:
+                    optimizer.zero_grad()
+                    pred['policy'] = opt.lambda_o * pred['orientation']
+                    pred['policy'].backward()  # back-propagation through time!
+                    a_grad_norm[0] += utils.a_grad_norm(model.policy_net).item()
+                    optimizer.zero_grad()
+                    pred['policy'] = opt.lambda_l * pred['confidence']
+                    pred['policy'].backward()  # back-propagation through time!
+                    a_grad_norm[1] += utils.a_grad_norm(model.policy_net).item()
+                    optimizer.zero_grad()
+                    pred['policy'] = pred['proximity'] + opt.lambda_o * pred['orientation'] + opt.lambda_l * pred['confidence']
+                    pred['policy'].backward()  # back-propagation through time!
+                    a_grad_norm[2] += utils.a_grad_norm(model.policy_net).item()
+                    total_grads['orientation'] += a_grad_norm[0]
+                    total_grads['confidence'] += a_grad_norm[1]
+                    total_grads['proximity_confidence_orientation'] += a_grad_norm[2]
+                else:
+                    optimizer.zero_grad()
+                    pred['policy'] = opt.lambda_l * pred['lane']
+                    pred['policy'].backward()  # back-propagation through time!
+                    a_grad_norm[0] += utils.a_grad_norm(model.policy_net).item()
+                    optimizer.zero_grad()
+                    pred['policy'] = pred['proximity'] + opt.lambda_l * pred['lane']
+                    pred['policy'].backward()  # back-propagation through time!
+                    a_grad_norm[1] += utils.a_grad_norm(model.policy_net).item()
+                    total_grads['lane'] += a_grad_norm[0]
+                    total_grads['proximity_lane'] += a_grad_norm[1]
             for loss in total_losses: total_losses[loss] += pred[loss].item()
             n_updates += 1
         else:
@@ -149,7 +190,11 @@ def start(what, nbatches, npred):
 
         del inputs, actions, targets, pred
 
-    for loss in total_losses: total_losses[loss] /= n_updates
+    for loss in total_losses:
+        total_losses[loss] /= n_updates
+    if track:
+        for grad in total_grads:
+            total_grads[grad] /= n_updates
     if train: print(f'[avg grad norm: {grad_norm / n_updates:.4f}]')
     return total_losses
 
@@ -166,6 +211,12 @@ if opt.use_colored_lane:
         a='action',
         π='policy',
     )
+    if opt.track_grad_norm:
+        grads = OrderedDict(
+        p='proximity_confidence_orientation',
+        c='confidence',
+        o='orientation',
+    )
 else:
     losses = OrderedDict(
         p='proximity',
@@ -175,13 +226,22 @@ else:
         a='action',
         π='policy',
     )
+    if opt.track_grad_norm:
+        grads = OrderedDict(
+        p='proximity_lane',
+        l='lane',
+    )
 
 writer = utils.create_tensorboard_writer(opt)
 
 for i in range(500):
     train_losses = start('train', opt.epoch_size, opt.npred)
-    with torch.no_grad():  # Torch, please please please, do not track computations :)
-        valid_losses = start('valid', opt.epoch_size // 2, opt.npred)
+    a_grad = []
+    if opt.track_grad_norm:
+        valid_losses = start('valid', opt.epoch_size // 2, opt.npred, track=True)
+    else:
+        with torch.no_grad():  # Torch, please please please, do not track computations :)
+            valid_losses = start('valid', opt.epoch_size // 2, opt.npred)
 
     if writer is not None:
         for key in train_losses:
@@ -210,6 +270,8 @@ for i in range(500):
     log_string = f'step {n_iter} | '
     log_string += 'train: [' + ', '.join(f'{k}: {train_losses[v]:.4f}' for k, v in losses.items()) + '] | '
     log_string += 'valid: [' + ', '.join(f'{k}: {valid_losses[v]:.4f}' for k, v in losses.items()) + ']'
+    if opt.track_grad_norm:
+        log_string += ' | grad: [' + ', '.join(f'{k}: {a_grad[v]:.4f}' for k, v in grads.items()) + ']'
     print(str(train_losses) + '\n' + str(valid_losses))
     try:
         print(log_string)

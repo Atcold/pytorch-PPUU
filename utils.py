@@ -396,6 +396,14 @@ def grad_norm(net):
     total_norm = total_norm ** (1. / 2)
     return total_norm
 
+def a_grad_norm(net):
+    total_norm = 0
+    for p in net.a_grad_list:
+        param_norm = p.data.norm(2)
+        total_norm += param_norm ** 2
+    total_norm = total_norm ** (1. / 2)
+    net.clean_a_grad_list()
+    return total_norm
 
 def read_config(file_path):
     """Read JSON config."""
@@ -591,7 +599,7 @@ def parse_command_line(parser=None):
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
     parser.add_argument('-use_colored_lane', type=bool, default=False, help='use colored lanes for forward model')
-
+    parser.add_argument('-track_grad_norm', type=bool, default=False, help='track grad norm for costs in validation steps')
 
     opt = parser.parse_args()
     opt.n_inputs = 4
