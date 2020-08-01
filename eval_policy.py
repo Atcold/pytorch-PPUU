@@ -226,6 +226,7 @@ def parse_args():
                         action='store_true',
                         help='save gradients wrt states')
     parser.add_argument('-colored_lane', type=str, default=None)
+    parser.add_argument('-pad', type=int, default=1)
 
     opt = parser.parse_args()
     opt.save_dir = path.join(opt.model_dir, 'planning_results')
@@ -300,6 +301,7 @@ def process_one_episode(opt,
                 nexec=opt.nexec,
                 lambda_l=opt.lambda_l,
                 lambda_o=opt.lambda_o,
+                pad=opt.pad
             )
         elif opt.method == 'policy-IL':
             _, _, _, a = policy_network_il(
@@ -482,7 +484,7 @@ def main():
         if hasattr(forward_model, 'value_function'):
             forward_model.value_function.train()
         planning.estimate_uncertainty_stats(
-            forward_model, dataloader, n_batches=50, npred=opt.npred)
+            forward_model, dataloader, n_batches=50, npred=opt.npred, pad=opt.pad)
 
     gym.envs.registration.register(
         id='I-80-v1',
@@ -542,7 +544,7 @@ def main():
                     data_stats,
                     plan_file,
                     j,
-                    car_sizes
+                    car_sizes,
                 )
             )
         )

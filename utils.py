@@ -159,7 +159,7 @@ def proximity_cost(images, states, car_size=(6.4, 14.3), green_channel=1, unnorm
     #    costs = torch.max((proximity_mask * images[:, :, green_channel].float()).view(bsize, npred, -1), 2)[0]
     return costs.view(bsize, npred), proximity_mask
 
-def orientation_and_confidence_cost(images, states, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None, pad=1):
+def orientation_and_confidence_cost(images, states, pad, car_size=(6.4, 14.3), unnormalize=False, s_mean=None, s_std=None):
     SCALE = 0.25
     bsize, npred, nchannels, crop_h, crop_w = images.size()
     images = images.view(bsize * npred, nchannels, crop_h, crop_w)
@@ -599,6 +599,7 @@ def parse_command_line(parser=None):
                         help='path to the directory where to save tensorboard log. If passed empty path' \
                              ' no logs are saved.')
     parser.add_argument('-use_colored_lane', type=bool, default=False, help='use colored lanes for forward model')
+    parser.add_argument('-pad', type=int, default=1, help='p for neighborhood region')
     parser.add_argument('-track_grad_norm', type=bool, default=False, help='track grad norm for costs in validation steps')
 
     opt = parser.parse_args()

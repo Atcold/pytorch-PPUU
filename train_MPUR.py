@@ -82,11 +82,11 @@ if opt.learned_cost:
 dataloader = DataLoader(None, opt, opt.dataset, use_colored_lane=model.opt.use_colored_lane)
 model.train()
 model.opt.u_hinge = opt.u_hinge
-planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred)
+planning.estimate_uncertainty_stats(model, dataloader, n_batches=50, npred=opt.npred, pad=opt.pad)
 model.eval()
 
 
-def start(what, nbatches, npred, track=False):
+def start(what, nbatches, npred, track=False, pad=1):
     train = True if what is 'train' else False
     model.train()
     model.policy_net.train()
@@ -126,7 +126,7 @@ def start(what, nbatches, npred, track=False):
         inputs, actions, targets, ids, car_sizes = dataloader.get_batch_fm(what, npred)
         pred, actions = planning.train_policy_net_mpur(
             model, inputs, targets, car_sizes, n_models=10, lrt_z=opt.lrt_z,
-            n_updates_z=opt.z_updates, infer_z=opt.infer_z)
+            n_updates_z=opt.z_updates, infer_z=opt.infer_z, pad=pad)
         if opt.use_colored_lane:
             pred['policy'] = pred['proximity'] + \
                              opt.u_reg * pred['uncertainty'] + \
@@ -235,13 +235,13 @@ else:
 writer = utils.create_tensorboard_writer(opt)
 
 for i in range(500):
-    train_losses = start('train', opt.epoch_size, opt.npred)
+    train_losses = start('train', opt.epoch_size, opt.npred, pad=opt.pad)
     a_grad = []
     if opt.track_grad_norm:
-        valid_losses = start('valid', opt.epoch_size // 2, opt.npred, track=True)
+        valid_losses = start('valid', opt.epoch_size // 2, opt.npred, track=True, pad=opt.pad)
     else:
         with torch.no_grad():  # Torch, please please please, do not track computations :)
-            valid_losses = start('valid', opt.epoch_size // 2, opt.npred)
+            valid_losses = start('valid', opt.epoch_size // 2, opt.npred, pad=opt.pad)
 
     if writer is not None:
         for key in train_losses:
