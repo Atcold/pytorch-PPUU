@@ -634,6 +634,8 @@ def build_model_file_name(opt):
     opt.model_file += f'-inferz={opt.infer_z}'
     opt.model_file += f'-learnedcost={opt.learned_cost}'
     opt.model_file += f'-seed={opt.seed}'
+    if opt.use_colored_lane:
+        opt.model_file += f'-pad={opt.pad}'
     if opt.value_model == '':
         opt.model_file += '-novalue'
 
