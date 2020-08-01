@@ -480,7 +480,7 @@ class Car:
             v = neighbourhood_array[:, :, 2]
             s = np.linalg.norm(dmap, 2, 2)
             cosdis = (d[0] * dmap[:, :, 0] + d[1] * dmap[:, :, 1]) / (
-                        2 * np.linalg.norm(d, 2, 2) * np.linalg.norm(dmap, 2, 2) + 1e-6)
+                        2 * np.linalg.norm(d, 2, 0) * np.linalg.norm(dmap, 2, 2) + 1e-6)
             orientation_cost = np.mean(s * (
                 np.max(np.stack([-cosdis + math.cos(5 / 180 * math.pi) / 2, torch.zeros_like(cosdis)], axis=2),
                           axis=2)[0]) ** 2)
