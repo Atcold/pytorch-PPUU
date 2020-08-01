@@ -85,7 +85,7 @@ def compute_uncertainty_batch(model, input_images, input_states, actions, target
         if model.opt.use_colored_lane:
             orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(
                 pred_images, pred_states.data,
-                car_sizes_temp,
+                car_size=car_sizes_temp,
                 unnormalize=True, s_mean=model.stats['s_mean'], s_std=model.stats['s_std'], pad=pad)
             pred_costs += model.opt.lambda_o * orientation_cost + model.opt.lambda_l * confidence_cost
         else:
@@ -251,7 +251,7 @@ def plan_actions_backprop(model, input_images, input_states, car_sizes, npred=50
 
         if model.opt.use_colored_lane is True:
             orientation_loss, confidence_loss = utils.orientation_and_confidence_cost(pred_images, pred_states.data,
-                                                                                      car_sizes.expand(n_futures, 2),
+                                                                                      car_size=car_sizes.expand(n_futures, 2),
                                                                                       unnormalize=True,
                                                                                       s_mean=model.stats['s_mean'],
                                                                                       s_std=model.stats['s_std'],
@@ -376,7 +376,7 @@ def train_policy_net_mpur(model, inputs, targets, car_sizes, n_models=10, sampli
             proximity_cost = 0.5 * proximity_cost + 0.5 * pred_cost_adv.squeeze()
         if model.opt.use_colored_lane:
             orientation_cost, confidence_cost = utils.orientation_and_confidence_cost(
-                                                pred_images[:, :, :n_channels].contiguous(), pred_states.data, car_sizes,
+                                                pred_images[:, :, :n_channels].contiguous(), pred_states.data, car_size=car_sizes,
                                                 unnormalize=True, s_mean=model.stats['s_mean'],
                                                 s_std=model.stats['s_std'], pad=pad)
         else:
