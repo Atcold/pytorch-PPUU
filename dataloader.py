@@ -54,6 +54,7 @@ class DataLoader:
                 ids = glob.glob(f'{data_dir}/{df}/car*.pkl')
                 ids.sort()
                 ego_car_images = []
+                lane_images = None
                 if use_colored_lane:
                     lane_images = []
                 for f in ids:
