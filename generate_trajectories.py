@@ -87,7 +87,7 @@ env = gym.make(env_names[opt.map])
 env.reset(frame=0, time_slot=opt.time_slot)
 done = False
 while not done:
-    observation, reward, done, info = env.step()
+    observation, reward, done, info = env.step(np.zeros((2,)))
     env.render()
 
 print(f'Data generation for <{opt.map}, time slot {opt.time_slot}> completed')
